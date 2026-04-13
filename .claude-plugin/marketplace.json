@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "claude-slim",
-      "source": ".",
+      "source": "./",
       "description": "Analyze and reduce Claude Code token overhead",
       "keywords": ["token", "optimization", "cleanup", "skills"]
     }
