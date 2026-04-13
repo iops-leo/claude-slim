@@ -1,11 +1,18 @@
 {
   "name": "claude-slim",
-  "description": "Analyze and reduce Claude Code token overhead",
+  "owner": {
+    "name": "iops-leo"
+  },
+  "metadata": {
+    "description": "Analyze and reduce Claude Code token overhead",
+    "version": "1.0.0"
+  },
   "plugins": [
     {
       "name": "claude-slim",
+      "source": ".",
       "description": "Analyze and reduce Claude Code token overhead",
-      "path": "."
+      "keywords": ["token", "optimization", "cleanup", "skills"]
     }
   ]
 }
