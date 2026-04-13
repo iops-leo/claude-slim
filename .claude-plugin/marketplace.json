@@ -1,0 +1,11 @@
+{
+  "name": "claude-slim",
+  "description": "Analyze and reduce Claude Code token overhead",
+  "plugins": [
+    {
+      "name": "claude-slim",
+      "description": "Analyze and reduce Claude Code token overhead",
+      "path": "."
+    }
+  ]
+}
