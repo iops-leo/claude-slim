@@ -63,7 +63,8 @@
 ## 安装
 
 ```bash
-claude install gh:iops-leo/claude-slim
+claude plugin marketplace add iops-leo/claude-slim
+claude plugin install claude-slim
 ```
 
 ## 使用方法

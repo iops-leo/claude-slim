@@ -20,12 +20,7 @@ Analyze the user's Claude Code environment for token waste and perform non-destr
 Run the scanner script to collect environment data:
 
 ```bash
-bash "$(dirname "$0")/scripts/scan.sh"
-```
-
-If the script path cannot be resolved, locate it via:
-```bash
-find ~/.claude/plugins -path "*/claude-slim/scripts/scan.sh" 2>/dev/null | head -1
+bash "$(find ~/.claude -path "*/claude-slim/scripts/scan.sh" -type f 2>/dev/null | head -1)"
 ```
 
 The script outputs structured lines in `KEY:value` format. Parse the output to build the before snapshot.

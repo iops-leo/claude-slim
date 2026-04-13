@@ -10,7 +10,7 @@ PROJECTS_DIR="${CLAUDE_DIR}/projects"
 echo "=== LOCAL SKILLS ==="
 local_count=0
 local_total_bytes=0
-if [ -d "$SKILLS_DIR" ]; then
+if [ -d "$SKILLS_DIR" ] && [ "$(ls -A "$SKILLS_DIR" 2>/dev/null)" ]; then
   for dir in "$SKILLS_DIR"/*/; do
     [ -d "$dir" ] || continue
     name=$(basename "$dir")
@@ -83,7 +83,7 @@ echo ""
 echo "=== ISSUES ==="
 
 # Broken symlinks
-find "$SKILLS_DIR" -type l ! -exec test -e {} \; -print 2>/dev/null | while read -r link; do
+[ -d "$SKILLS_DIR" ] && find "$SKILLS_DIR" -type l ! -exec test -e {} \; -print 2>/dev/null | while read -r link; do
   dir=$(dirname "$link")
   name=$(basename "$dir")
   target=$(readlink "$link" 2>/dev/null || echo "unknown")
@@ -102,7 +102,7 @@ if [ -d "$SKILLS_DIR" ] && [ -d "$PLUGINS_DIR" ]; then
 fi
 
 # Empty/template skills
-for dir in "$SKILLS_DIR"/*/; do
+[ -d "$SKILLS_DIR" ] && for dir in "$SKILLS_DIR"/*/; do
   [ -d "$dir" ] || continue
   if [ -f "${dir}SKILL.md" ]; then
     if grep -q "Replace with description" "${dir}SKILL.md" 2>/dev/null; then
@@ -112,14 +112,14 @@ for dir in "$SKILLS_DIR"/*/; do
 done
 
 # .skill duplicate directories
-for dir in "$SKILLS_DIR"/*.skill/; do
+[ -d "$SKILLS_DIR" ] && for dir in "$SKILLS_DIR"/*.skill/; do
   [ -d "$dir" ] || continue
   base=$(basename "$dir" .skill)
   [ -d "${SKILLS_DIR}/${base}" ] && echo "ISSUE:skill_dup:${base}"
 done
 
 # Oversized skill files (>10KB)
-for dir in "$SKILLS_DIR"/*/; do
+[ -d "$SKILLS_DIR" ] && for dir in "$SKILLS_DIR"/*/; do
   [ -d "$dir" ] || continue
   if [ -f "${dir}SKILL.md" ]; then
     name=$(basename "$dir")
@@ -129,7 +129,7 @@ for dir in "$SKILLS_DIR"/*/; do
 done
 
 # Oversized memory files (>5KB)
-find "$PROJECTS_DIR" -path "*/memory/*.md" -type f -size +5k 2>/dev/null | while read -r f; do
+[ -d "$PROJECTS_DIR" ] && find "$PROJECTS_DIR" -path "*/memory/*.md" -type f -size +5k 2>/dev/null | while read -r f; do
   size=$(wc -c < "$f" | tr -d ' ')
   project=$(echo "$f" | sed "s|${PROJECTS_DIR}/||" | cut -d/ -f1)
   fname=$(basename "$f")

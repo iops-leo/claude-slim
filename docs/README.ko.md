@@ -63,7 +63,8 @@ Claude Code는 세션이 시작될 때마다 등록된 스킬 설명, 메모리 
 ## 설치
 
 ```bash
-claude install gh:iops-leo/claude-slim
+claude plugin marketplace add iops-leo/claude-slim
+claude plugin install claude-slim
 ```
 
 ## 사용법

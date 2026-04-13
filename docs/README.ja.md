@@ -63,7 +63,8 @@ Claude Codeはセッション開始時に、登録されたすべてのスキル
 ## インストール
 
 ```bash
-claude install gh:iops-leo/claude-slim
+claude plugin marketplace add iops-leo/claude-slim
+claude plugin install claude-slim
 ```
 
 ## 使い方

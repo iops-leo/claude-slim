@@ -63,7 +63,8 @@ You choose what to disable. Enter to accept defaults, or pick specific items.
 ## Install
 
 ```bash
-claude install gh:iops-leo/claude-slim
+claude plugin marketplace add iops-leo/claude-slim
+claude plugin install claude-slim
 ```
 
 ## Usage
