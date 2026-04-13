@@ -122,6 +122,3 @@ claude-slim扫描以下位置：
 
 MIT
 
----
-
-Built with [Claude Code](https://claude.ai/claude-code)

@@ -122,6 +122,3 @@ claude-slimは以下の場所をスキャンします：
 
 MIT
 
----
-
-Built with [Claude Code](https://claude.ai/claude-code)

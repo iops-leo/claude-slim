@@ -122,6 +122,3 @@ This tool was born from a real cleanup session where the environment had accumul
 
 MIT
 
----
-
-Built with [Claude Code](https://claude.ai/claude-code)
