@@ -106,6 +106,10 @@ When `/claude-slim restore` is invoked:
 
 ---
 
+## Language
+
+Detect the user's language from their most recent message. Present all reports, prompts, and explanations in that language. The scan script output is machine-readable — translate only the user-facing report, not the raw data.
+
 ## Rules
 
 1. **Never delete.** Always move to `~/.claude/skills.disabled/`.
