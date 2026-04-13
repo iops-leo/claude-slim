@@ -2,21 +2,23 @@
 
 Reduce Claude Code token overhead in 60 seconds.
 
+[한국어](./docs/README.ko.md) | [日本語](./docs/README.ja.md) | [中文](./docs/README.zh.md)
+
 ## Problem
 
-As you install plugins, skills, and MCP servers in Claude Code, your system prompt grows silently. Each session starts by loading **every** registered skill description, memory file, and tool list — even ones you never use.
-
-A typical bloated setup:
+Every Claude Code session starts by loading your full environment into the system prompt: skill descriptions, memory files, tool lists, and plugin instructions. As you install more skills and plugins over time, this overhead grows silently.
 
 | Source | Example overhead |
 |--------|-----------------|
-| 60+ skills (gstack, OMC, custom) | ~3,000 tokens |
+| 60+ registered skills | ~3,000 tokens |
 | CLAUDE.md (plugin instructions) | ~5,000 tokens |
 | Memory files | ~2,500 tokens |
 | Deferred tools list | ~1,500 tokens |
 | **Total** | **~12,000 tokens/session** |
 
 That's 12K tokens taxed on every single message — before you even say "hello."
+
+This happens with **any** combination of plugins and skills: community skill packs, custom team skills, marketplace plugins, or hand-installed tools. The more you add, the heavier it gets.
 
 ## What claude-slim Does
 
@@ -29,18 +31,19 @@ A 4-phase pipeline that finds and removes token waste:
 **1. Scan** — Measures all token overhead sources: local skills, plugin skills, CLAUDE.md, memory files, MCP servers.
 
 **2. Analyze** — Detects issues automatically:
+
 | Detection | Example |
 |-----------|---------|
-| Broken symlinks | Leftover links after removing a skill pack |
-| Duplicate skills | Same skill from local install AND a plugin |
+| Broken symlinks | Leftover links from uninstalled skill packs |
+| Duplicate skills | Same skill registered from multiple sources |
 | Empty templates | Placeholder skills with no real content |
 | Oversized files | SKILL.md files over 10KB |
 | Stale memory | Large memory files loaded every session |
 
 **3. Propose** — Shows a categorized report with three tiers:
 - **Auto** — Safe to remove (broken symlinks, empty templates). Pre-selected.
-- **Recommended** — Likely unused (duplicates). Suggested.
-- **Optional** — Your call (oversized skills). Listed for awareness.
+- **Recommended** — Likely unused (duplicates, stale files). Suggested.
+- **Optional** — Your call (oversized skills, rarely used items). Listed for awareness.
 
 You choose what to disable. Enter to accept defaults, or pick specific items.
 
@@ -83,22 +86,37 @@ claude install gh:iops-leo/claude-slim
 - Modify your CLAUDE.md (managed by plugins — editing it breaks things)
 - Disable plugins or MCP servers (too risky — manage those yourself)
 - Delete anything (always moves to `.disabled`)
-- Run without your approval (Phase 3 requires explicit confirmation)
+- Run without your approval (requires explicit confirmation)
 
-## Real-World Example
+## How It Works
 
-This tool was born from a real cleanup session. The setup had:
-- **gstack** installed with 191 skill files, most as symlinks
-- **35 broken symlinks** left after partial removal
-- **Duplicate skills** registered from both local install and a plugin
-- **10KB memory file** loaded into every session
+claude-slim scans these locations:
 
-After running claude-slim: system prompt skills dropped from **~80 to ~48**, local skills from **65 to 15**, saving an estimated **~4,000 tokens per session**.
+| Location | What's there |
+|----------|-------------|
+| `~/.claude/skills/` | User-installed local skills |
+| `~/.claude/plugins/cache/` | Installed plugin skills |
+| `~/.claude/CLAUDE.md` | Plugin-injected instructions |
+| `~/.claude/projects/*/memory/` | Auto-memory files |
+| `~/.claude/settings.json` | MCP server count (read-only) |
+
+It works regardless of which plugins you use. No plugin-specific logic — just filesystem analysis.
+
+## Real-World Results
+
+This tool was born from a real cleanup session where the environment had accumulated skills from multiple sources over months of use:
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Local skills | 65 | 15 |
+| System prompt skills | ~80 | ~48 |
+| Memory files | 15KB | 2KB |
+| **Est. token savings** | | **~4,300/session** |
 
 ## Requirements
 
 - Claude Code CLI
-- macOS or Linux (uses standard POSIX tools)
+- macOS or Linux
 
 ## License
 
