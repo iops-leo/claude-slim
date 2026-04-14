@@ -5,16 +5,17 @@ const HOME_PREFIX = homedir().replace(/\//g, '-').replace(/\./g, '-').replace(/^
 const SESSIONS_PER_DAY_DEFAULT = 2;
 const PRICE_PER_1K_TOKENS = 0.003; // Claude Sonnet input price
 export function calculateReport(scanBefore, scanAfter, movedEntries, sessionsPerDay = SESSIONS_PER_DAY_DEFAULT) {
-    const savedTokens = movedEntries.reduce((sum, e) => sum + (e.tokenCount || 0), 0);
     const before = scanBefore.totalTokensBefore;
-    const after = scanAfter ? scanAfter.totalTokensBefore : before - savedTokens;
-    const percent = before > 0 ? (savedTokens / before) * 100 : 0;
+    const after = scanAfter ? scanAfter.totalTokensBefore : before;
+    // Use actual scan difference for accurate savings, not SKILL.md file sizes
+    const saved = before - after;
+    const percent = before > 0 ? (saved / before) * 100 : 0;
     const topOffenders = movedEntries
         .filter((e) => (e.tokenCount || 0) > 0)
         .sort((a, b) => (b.tokenCount || 0) - (a.tokenCount || 0))
         .slice(0, 5)
         .map((e) => ({ name: e.name, tokens: e.tokenCount || 0 }));
-    const monthlySavings = (savedTokens / 1000) * PRICE_PER_1K_TOKENS * sessionsPerDay * 30;
+    const monthlySavings = (saved / 1000) * PRICE_PER_1K_TOKENS * sessionsPerDay * 30;
     // Breakdown rows
     const localBefore = scanBefore.localSkills.length;
     const localAfter = scanAfter ? scanAfter.localSkills.length : localBefore - movedEntries.filter((e) => e.type !== 'oversized_memory').length;
@@ -55,7 +56,7 @@ export function calculateReport(scanBefore, scanAfter, movedEntries, sessionsPer
     return {
         before,
         after,
-        saved: savedTokens,
+        saved,
         percent,
         topOffenders,
         monthlySavings,

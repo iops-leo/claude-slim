@@ -181,10 +181,21 @@ program
     }
 
     const sessionsPerDay = parseInt(opts.sessionsPerDay, 10) || 2;
-    // For report, "before" = current + what was removed
-    const totalBefore = result.totalTokensBefore + movedEntries.reduce((s, e) => s + (e.tokenCount || 0), 0);
-    const pseudoScan = { ...result, totalTokensBefore: totalBefore };
-    const reportData = calculateReport(pseudoScan, result, movedEntries, sessionsPerDay);
+    // Reconstruct "before" state: current + what was removed
+    const removedSkillCount = movedEntries.filter((e) => e.type !== 'oversized_memory').length;
+    const totalBefore = result.totalTokensBefore + removedSkillCount * 30;
+    const pseudoBefore: ScanResult = {
+      ...result,
+      totalTokensBefore: totalBefore,
+      localSkills: [
+        ...result.localSkills,
+        // Add placeholder entries for removed skills to fix breakdown counts
+        ...movedEntries
+          .filter((e) => e.type !== 'oversized_memory')
+          .map((e) => ({ name: e.name, path: e.from, sizeBytes: 0, tokens: e.tokenCount || 0, source: 'local' as const })),
+      ],
+    };
+    const reportData = calculateReport(pseudoBefore, result, movedEntries, sessionsPerDay);
 
     console.log('');
     console.log(formatReportBox(reportData));
