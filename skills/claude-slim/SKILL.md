@@ -11,6 +11,7 @@ Analyze the user's Claude Code environment for token waste and perform non-destr
 
 - `/claude-slim` or `/claude-slim run` → full pipeline (scan → propose → execute → report)
 - `/claude-slim scan` → report only, no changes
+- `/claude-slim scan --json` → raw JSON output from the scanner
 - `/claude-slim restore` → restore previously disabled items
 
 ---
@@ -27,6 +28,12 @@ If `CLAUDE_PLUGIN_ROOT` is not set, locate the script via:
 ```bash
 bash "$(find ~/.claude/plugins -path "*/claude-slim/scripts/scan.sh" -type f 2>/dev/null | head -1)"
 ```
+
+For `--json` mode, pass `json` as the first argument:
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/skills/claude-slim/scripts/scan.sh" json
+```
+This outputs a single JSON object. Present it directly to the user without further formatting.
 
 The script outputs structured lines in `KEY:value` format. Parse the output to build the before snapshot.
 

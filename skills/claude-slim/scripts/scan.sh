@@ -2,6 +2,52 @@
 # claude-slim scanner — detects token overhead in Claude Code environments
 set -euo pipefail
 
+OUTPUT_FORMAT="${1:-text}"  # text (default) or json
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# JSON mode: re-run in text mode, pipe through converter
+if [ "$OUTPUT_FORMAT" = "json" ]; then
+  bash "${SCRIPT_DIR}/scan.sh" text | python3 -c "
+import json, sys
+
+data = {}
+for line in sys.stdin:
+    line = line.strip()
+    if not line or line.startswith('==='):
+        continue
+    parts = line.split(':')
+    key = parts[0]
+    if key == 'SKILL':
+        data.setdefault('skills', []).append({'name': parts[1], 'size': int(parts[2])})
+    elif key == 'BROKEN_SYMLINK':
+        data.setdefault('broken_symlinks', []).append({'name': parts[1], 'target': ':'.join(parts[2:])})
+    elif key == 'LOCAL_SUMMARY':
+        data['local_count'] = int(parts[1])
+        data['local_total_bytes'] = int(parts[2])
+    elif key == 'PLUGIN':
+        data.setdefault('plugins', []).append({'name': parts[1], 'skill_count': int(parts[2])})
+    elif key == 'PLUGIN_SKILL':
+        data.setdefault('plugin_skills', []).append({'plugin': parts[1], 'name': parts[2]})
+    elif key == 'CLAUDE_MD':
+        data['claude_md_bytes'] = int(parts[1])
+    elif key == 'MEMORY':
+        data.setdefault('memory_files', []).append({'project': parts[1], 'name': parts[2], 'size': int(parts[3])})
+    elif key == 'MEMORY_SUMMARY':
+        data['memory_count'] = int(parts[1])
+        data['memory_total_bytes'] = int(parts[2])
+    elif key == 'MCP':
+        data['mcp_servers'] = int(parts[1])
+    elif key == 'ISSUE':
+        issue = {'type': parts[1], 'name': parts[2]}
+        if len(parts) > 3:
+            issue['detail'] = ':'.join(parts[3:])
+        data.setdefault('issues', []).append(issue)
+
+print(json.dumps(data, indent=2))
+"
+  exit 0
+fi
+
 CLAUDE_DIR="${HOME}/.claude"
 SKILLS_DIR="${CLAUDE_DIR}/skills"
 PLUGINS_DIR="${CLAUDE_DIR}/plugins/cache"
