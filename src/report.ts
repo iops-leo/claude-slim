@@ -175,28 +175,66 @@ export function formatScanSummary(result: ScanResult): string {
   const lines: string[] = [];
 
   lines.push('');
-  lines.push('\x1b[1mclaude-slim scan\x1b[0m');
-  lines.push('');
+  lines.push('\x1b[1m=== claude-slim scan ===\x1b[0m');
 
-  // Snapshot
-  lines.push(`  Local skills:     ${result.localSkills.length}`);
-  lines.push(`  Plugin skills:    ${result.pluginSkills.length}`);
-  lines.push(`  Plugins:          ${result.plugins.length}`);
-  lines.push(`  CLAUDE.md:        ${(result.claudeMdBytes / 1024).toFixed(1)}KB (${result.claudeMdTokens.toLocaleString()} tok)`);
-  lines.push(`  Memory files:     ${result.memoryFiles.length} (${(result.memoryFiles.reduce((s, m) => s + m.sizeBytes, 0) / 1024).toFixed(1)}KB)`);
-  lines.push(`  MCP servers:      ${result.mcpServers}`);
-  lines.push(`  Est. overhead:    ~${result.totalTokensBefore.toLocaleString()} tokens`);
+  // --- LOCAL SKILLS ---
+  lines.push('');
+  lines.push(`\x1b[1m  LOCAL SKILLS\x1b[0m (${result.localSkills.length})`);
+  const sortedLocal = [...result.localSkills].sort((a, b) => b.sizeBytes - a.sizeBytes);
+  for (const skill of sortedLocal) {
+    const kb = (skill.sizeBytes / 1024).toFixed(1);
+    const tok = skill.tokens.toLocaleString();
+    lines.push(`    ${skill.name.padEnd(28)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok`);
+  }
+  const localTotal = result.localSkills.reduce((s, sk) => s + sk.sizeBytes, 0);
+  const localTokTotal = result.localSkills.reduce((s, sk) => s + sk.tokens, 0);
+  lines.push(`    ${'─'.repeat(50)}`);
+  lines.push(`    ${'Total'.padEnd(28)} ${(localTotal / 1024).toFixed(1).padStart(6)}KB  ${localTokTotal.toLocaleString().padStart(7)} tok`);
+
+  // --- PLUGINS ---
+  lines.push('');
+  lines.push(`\x1b[1m  PLUGINS\x1b[0m (${result.plugins.length} plugins, ${result.pluginSkills.length} skills)`);
+  const sortedPlugins = [...result.plugins].sort((a, b) => b.skillCount - a.skillCount);
+  for (const plugin of sortedPlugins) {
+    lines.push(`    ${plugin.name.padEnd(28)} ${String(plugin.skillCount).padStart(3)} skills`);
+  }
+
+  // --- CLAUDE.MD ---
+  lines.push('');
+  lines.push(`\x1b[1m  CLAUDE.MD\x1b[0m`);
+  lines.push(`    Size: ${(result.claudeMdBytes / 1024).toFixed(1)}KB (${result.claudeMdTokens.toLocaleString()} tok)`);
+
+  // --- MEMORY FILES ---
+  lines.push('');
+  const memTotal = result.memoryFiles.reduce((s, m) => s + m.sizeBytes, 0);
+  const memTokTotal = result.memoryFiles.reduce((s, m) => s + m.tokens, 0);
+  lines.push(`\x1b[1m  MEMORY FILES\x1b[0m (${result.memoryFiles.length} files, ${(memTotal / 1024).toFixed(1)}KB)`);
+  const sortedMem = [...result.memoryFiles].sort((a, b) => b.sizeBytes - a.sizeBytes);
+  for (const mem of sortedMem) {
+    const kb = (mem.sizeBytes / 1024).toFixed(1);
+    const tok = mem.tokens.toLocaleString();
+    const label = `${mem.project}/${mem.name}`;
+    lines.push(`    ${label.length > 40 ? label.slice(-40) : label.padEnd(40)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok`);
+  }
+
+  // --- MCP SERVERS ---
+  lines.push('');
+  lines.push(`\x1b[1m  MCP SERVERS\x1b[0m: ${result.mcpServers}`);
+
+  // --- SUMMARY ---
+  lines.push('');
+  lines.push(`\x1b[1m  ESTIMATED OVERHEAD\x1b[0m: ~${result.totalTokensBefore.toLocaleString()} tokens at session start`);
 
   if (isUsingFallback()) {
     lines.push(`  \x1b[33m\u26a0 Using bytes/4 approximation (js-tiktoken unavailable)\x1b[0m`);
   }
 
+  // --- ISSUES ---
   lines.push('');
-
   if (result.issues.length === 0) {
     lines.push('  \x1b[32mAlready slim!\x1b[0m No issues found.');
   } else {
-    lines.push(`  \x1b[1mFound ${result.issues.length} issues:\x1b[0m`);
+    lines.push(`\x1b[1m  ISSUES\x1b[0m (${result.issues.length} found)`);
     lines.push('');
 
     const tierLabels: Record<number, string> = { 1: 'Auto', 2: 'Recommended', 3: 'Optional' };
