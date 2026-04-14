@@ -20,7 +20,7 @@ Every session loads *every* skill, memory file, and plugin instruction into the 
   │██████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░│ Before claude-slim
   │ 12K tokens consumed ↑    your actual work ↑      │
   ├──────────────────────────────────────────────────┤
-  │██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│ After claude-slim
+  │██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │ After claude-slim
   │ 5K ↑            more room for your work ↑        │
   └──────────────────────────────────────────────────┘
 ```
