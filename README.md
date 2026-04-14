@@ -1,53 +1,79 @@
+<div align="center">
+
 # claude-slim
 
-Reduce Claude Code token overhead in 60 seconds.
+**Your Claude Code is burning tokens before you even say "hello."**
+
+Every session loads *every* skill, memory file, and plugin instruction into the system prompt — even the ones you never use. claude-slim finds and removes that waste.
 
 [한국어](./docs/README.ko.md) | [日本語](./docs/README.ja.md) | [中文](./docs/README.zh.md)
 
-## Problem
+</div>
 
-Every Claude Code session starts by loading your full environment into the system prompt: skill descriptions, memory files, tool lists, and plugin instructions. As you install more skills and plugins over time, this overhead grows silently.
+---
 
-| Source | Example overhead |
-|--------|-----------------|
+### The problem, visualized
+
+```
+  Session start token budget
+  ┌──────────────────────────────────────────────────┐
+  │██████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░│ Before claude-slim
+  │ 12K tokens consumed ↑    your actual work ↑      │
+  ├──────────────────────────────────────────────────┤
+  │██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│ After claude-slim
+  │ 5K ↑            more room for your work ↑        │
+  └──────────────────────────────────────────────────┘
+```
+
+Where the bloat hides:
+
+| Source | Typical overhead |
+|--------|:---:|
 | 60+ registered skills | ~3,000 tokens |
 | CLAUDE.md (plugin instructions) | ~5,000 tokens |
 | Memory files | ~2,500 tokens |
 | Deferred tools list | ~1,500 tokens |
-| **Total** | **~12,000 tokens/session** |
+| **Total** | **~12,000 tokens** |
 
-That's 12K tokens taxed on every single message — before you even say "hello."
+---
 
-This happens with **any** combination of plugins and skills: community skill packs, custom team skills, marketplace plugins, or hand-installed tools. The more you add, the heavier it gets.
-
-## What claude-slim Does
+## One command. Four phases.
 
 ```
 /claude-slim
 ```
 
-A 4-phase pipeline that finds and removes token waste:
+```
+ ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
+ │  Scan   │ →  │ Analyze │ →  │ Propose │ →  │ Report  │
+ │         │    │         │    │         │    │         │
+ │ measure │    │ broken  │    │ you     │    │ before  │
+ │ every   │    │ dupes   │    │ choose  │    │ vs      │
+ │ source  │    │ bloat   │    │ what    │    │ after   │
+ └─────────┘    └─────────┘    └─────────┘    └─────────┘
+```
 
-**1. Scan** — Measures all token overhead sources: local skills, plugin skills, CLAUDE.md, memory files, MCP servers.
+**Scan** — Measures everything: local skills, plugin skills, CLAUDE.md, memory files, MCP servers.
 
-**2. Analyze** — Detects issues automatically:
+**Analyze** — Finds the waste automatically:
 
-| Detection | Example |
-|-----------|---------|
-| Broken symlinks | Leftover links from uninstalled skill packs |
-| Duplicate skills | Same skill registered from multiple sources |
-| Empty templates | Placeholder skills with no real content |
-| Oversized files | SKILL.md files over 10KB |
+| | What it catches |
+|---|---|
+| Broken symlinks | Dead links from uninstalled skill packs |
+| Duplicates | Same skill registered from multiple sources |
+| Empty templates | Placeholder skills with no content |
+| Oversized files | SKILL.md over 10KB |
 | Stale memory | Large memory files loaded every session |
 
-**3. Propose** — Shows a categorized report with three tiers:
-- **Auto** — Safe to remove (broken symlinks, empty templates). Pre-selected.
-- **Recommended** — Likely unused (duplicates, stale files). Suggested.
-- **Optional** — Your call (oversized skills, rarely used items). Listed for awareness.
+**Propose** — Three tiers, you decide:
 
-You choose what to disable. Enter to accept defaults, or pick specific items.
+| Tier | Action | Example |
+|------|--------|---------|
+| **Auto** | Pre-selected | Broken symlinks, empty templates |
+| **Recommended** | Suggested | Duplicates, stale memory |
+| **Optional** | Your call | Oversized skills you might still use |
 
-**4. Report** — Before/after comparison with estimated token savings.
+**Report** — Shows exactly what changed:
 
 ```
 ┌────────────────┬──────────┬──────────┬────────────┐
@@ -60,6 +86,8 @@ You choose what to disable. Enter to accept defaults, or pick specific items.
 └────────────────┴──────────┴──────────┴────────────┘
 ```
 
+---
+
 ## Install
 
 ```bash
@@ -70,49 +98,53 @@ claude plugin install claude-slim
 ## Usage
 
 ```bash
-/claude-slim              # Full pipeline: scan → propose → execute → report
+/claude-slim              # Full pipeline
 /claude-slim scan         # Report only, no changes
-/claude-slim restore      # Undo: restore previously disabled items
+/claude-slim restore      # Undo everything
 ```
 
-## Safety
+---
 
-- **Non-destructive.** Nothing is ever deleted. Disabled items are moved to `~/.claude/skills.disabled/`.
-- **Reversible.** Run `/claude-slim restore` to bring anything back.
-- **User-controlled.** Always asks before making changes. You pick exactly what to disable.
-- **Hands off the danger zone.** Never touches CLAUDE.md, settings.json, or plugin configurations.
+## Safety first
 
-## What It Won't Do
+| | |
+|---|---|
+| **Non-destructive** | Nothing is ever deleted. Disabled items move to `~/.claude/skills.disabled/` |
+| **Reversible** | `/claude-slim restore` brings anything back |
+| **User-controlled** | Always asks before making changes |
+| **Hands off** | Never touches CLAUDE.md, settings.json, or plugin configs |
 
-- Modify your CLAUDE.md (managed by plugins — editing it breaks things)
-- Disable plugins or MCP servers (too risky — manage those yourself)
-- Delete anything (always moves to `.disabled`)
-- Run without your approval (requires explicit confirmation)
+---
 
-## How It Works
+## How it works
 
-claude-slim scans these locations:
+claude-slim scans these locations. No plugin-specific logic — pure filesystem analysis.
 
-| Location | What's there |
-|----------|-------------|
-| `~/.claude/skills/` | User-installed local skills |
-| `~/.claude/plugins/cache/` | Installed plugin skills |
-| `~/.claude/CLAUDE.md` | Plugin-injected instructions |
-| `~/.claude/projects/*/memory/` | Auto-memory files |
-| `~/.claude/settings.json` | MCP server count (read-only) |
+```
+~/.claude/
+├── skills/                  ← user-installed skills
+├── plugins/cache/           ← plugin skills
+├── CLAUDE.md                ← plugin instructions (read-only)
+├── projects/*/memory/       ← auto-memory files
+└── settings.json            ← MCP server count (read-only)
+```
 
-It works regardless of which plugins you use. No plugin-specific logic — just filesystem analysis.
+Works with any plugin combination: OMC, gstack, custom skills, marketplace plugins, or none at all.
 
-## Real-World Results
+---
 
-This tool was born from a real cleanup session where the environment had accumulated skills from multiple sources over months of use:
+## Real-world results
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Local skills | 65 | 15 |
-| System prompt skills | ~80 | ~48 |
-| Memory files | 15KB | 2KB |
-| **Est. token savings** | | **~4,300/session** |
+From a real cleanup session where skills accumulated over months:
+
+| Metric | Before | After | |
+|--------|:------:|:-----:|---|
+| Local skills | 65 | 15 | **-77%** |
+| System prompt skills | ~80 | ~48 | **-40%** |
+| Memory files | 15KB | 2KB | **-87%** |
+| **Est. token savings** | | **~4,300/session** | |
+
+---
 
 ## Requirements
 
@@ -122,4 +154,3 @@ This tool was born from a real cleanup session where the environment had accumul
 ## License
 
 MIT
-
