@@ -1,5 +1,9 @@
+import { homedir } from 'node:os';
 import type { ScanResult, Issue, ManifestEntry } from './types.js';
 import { isUsingFallback } from './tokenizer.js';
+
+// Claude Code encodes /Users/leo.new/foo as -Users-leo-new-foo
+const HOME_PREFIX = homedir().replace(/\//g, '-').replace(/\./g, '-').replace(/^-/, '-');
 
 const SESSIONS_PER_DAY_DEFAULT = 2;
 const PRICE_PER_1K_TOKENS = 0.003; // Claude Sonnet input price
@@ -213,8 +217,14 @@ export function formatScanSummary(result: ScanResult): string {
   for (const mem of sortedMem) {
     const kb = (mem.sizeBytes / 1024).toFixed(1);
     const tok = mem.tokens.toLocaleString();
-    const label = `${mem.project}/${mem.name}`;
-    lines.push(`    ${label.length > 40 ? label.slice(-40) : label.padEnd(40)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok`);
+    // Strip home directory prefix, keep rest as project identifier
+    let project = mem.project;
+    if (project.startsWith(HOME_PREFIX)) {
+      const rest = project.slice(HOME_PREFIX.length).replace(/^-/, '/');
+      project = rest ? '~' + rest : '~';
+    }
+    const label = `${project}/${mem.name}`;
+    lines.push(`    ${label.padEnd(52)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok`);
   }
 
   // --- MCP SERVERS ---
