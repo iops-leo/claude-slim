@@ -11,6 +11,7 @@ echo "=== LOCAL SKILLS ==="
 local_count=0
 local_total_bytes=0
 if [ -d "$SKILLS_DIR" ] && [ "$(ls -A "$SKILLS_DIR" 2>/dev/null)" ]; then
+  # Top-level skills
   for dir in "$SKILLS_DIR"/*/; do
     [ -d "$dir" ] || continue
     name=$(basename "$dir")
@@ -21,6 +22,18 @@ if [ -d "$SKILLS_DIR" ] && [ "$(ls -A "$SKILLS_DIR" 2>/dev/null)" ]; then
       local_count=$((local_count + 1))
     elif [ -L "${dir}SKILL.md" ] && [ ! -e "${dir}SKILL.md" ]; then
       echo "BROKEN_SYMLINK:${name}:$(readlink "${dir}SKILL.md" 2>/dev/null || echo unknown)"
+    fi
+  done
+  # Nested skills (e.g., @internal-sys/commit-guide/)
+  for dir in "$SKILLS_DIR"/*/*/; do
+    [ -d "$dir" ] || continue
+    if [ -f "${dir}SKILL.md" ]; then
+      parent=$(basename "$(dirname "$dir")")
+      name="${parent}/$(basename "$dir")"
+      size=$(wc -c < "${dir}SKILL.md" | tr -d ' ')
+      echo "SKILL:${name}:${size}"
+      local_total_bytes=$((local_total_bytes + size))
+      local_count=$((local_count + 1))
     fi
   done
 fi
@@ -72,11 +85,11 @@ echo "MEMORY_SUMMARY:${mem_count}:${mem_total}"
 echo ""
 echo "=== MCP SERVERS ==="
 mcp_count=$(python3 -c "
-import json
-with open('${CLAUDE_DIR}/settings.json') as f:
+import json, sys
+with open(sys.argv[1]) as f:
     d = json.load(f)
 print(len(d.get('mcpServers', {})))
-" 2>/dev/null || echo "0")
+" "${CLAUDE_DIR}/settings.json" 2>/dev/null || echo "0")
 echo "MCP:${mcp_count}"
 
 echo ""
@@ -97,7 +110,7 @@ if [ -d "$SKILLS_DIR" ] && [ -d "$PLUGINS_DIR" ]; then
     [ -d "$dir" ] || continue
     name=$(basename "$dir")
     [ -f "${dir}SKILL.md" ] || continue
-    echo "$plugin_skill_names" | grep -qx "$name" 2>/dev/null && echo "ISSUE:duplicate:${name}:local+plugin"
+    echo "$plugin_skill_names" | grep -qxF "$name" 2>/dev/null && echo "ISSUE:duplicate:${name}:local+plugin"
   done
 fi
 

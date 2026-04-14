@@ -20,7 +20,12 @@ Analyze the user's Claude Code environment for token waste and perform non-destr
 Run the scanner script to collect environment data:
 
 ```bash
-bash "$(find ~/.claude -path "*/claude-slim/scripts/scan.sh" -type f 2>/dev/null | head -1)"
+bash "${CLAUDE_PLUGIN_ROOT}/skills/claude-slim/scripts/scan.sh"
+```
+
+If `CLAUDE_PLUGIN_ROOT` is not set, locate the script via:
+```bash
+bash "$(find ~/.claude/plugins -path "*/claude-slim/scripts/scan.sh" -type f 2>/dev/null | head -1)"
 ```
 
 The script outputs structured lines in `KEY:value` format. Parse the output to build the before snapshot.
@@ -49,10 +54,10 @@ Present a compact table showing the current snapshot (skill counts, CLAUDE.md si
 
 ### Token estimation
 
-System prompt token overhead per skill ≈ 30 tokens (name + one-line description). Estimate total as:
-- Skills: `(local_count + plugin_skill_count) × 30`
-- CLAUDE.md: `bytes / 4`
-- Memory: `total_memory_bytes / 4`
+System prompt loads skill listings (name + one-line description) at session start, not SKILL.md content. Estimate as:
+- Skill listings: `(local_count + plugin_skill_count) × 30` tokens
+- CLAUDE.md: `bytes / 4` tokens (loaded in full every session)
+- Memory: `total_memory_bytes / 4` tokens (loaded per project)
 
 ### User interaction
 
@@ -72,8 +77,8 @@ Run only after user confirmation.
 
 1. `mkdir -p ~/.claude/skills.disabled`
 2. Move each selected local skill to `~/.claude/skills.disabled/`
-3. Remove directories containing only broken symlinks
-4. Clean empty directories: `find ~/.claude/skills -type d -empty -delete 2>/dev/null`
+3. Delete individual broken symlinks: `find ~/.claude/skills -type l ! -exec test -e {} \; -delete 2>/dev/null`
+4. Clean empty directories left behind: `find ~/.claude/skills -type d -empty -delete 2>/dev/null`
 5. If memory files were selected, remove their references from the relevant MEMORY.md
 6. Write a manifest line to `~/.claude/skills.disabled/.claude-slim-manifest.jsonl`:
    ```
@@ -97,7 +102,7 @@ When `/claude-slim restore` is invoked:
 2. Show numbered list of previously disabled items with dates
 3. Ask user which to restore (all or specific numbers)
 4. Move selected items back to their original location
-5. Append a restore entry to the manifest: `{"date":"<ISO>","name":"<skill>","action":"restored"}`
+5. Append a restore entry to the manifest: `{"date":"<ISO>","name":"<skill>","from":"<path>","action":"restored"}`
 
 ---
 

@@ -37,20 +37,20 @@ Where the bloat hides:
 
 ---
 
-## One command. Four phases.
+## One command. Five steps.
 
 ```
 /claude-slim
 ```
 
 ```
- ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
- │  Scan   │ →  │ Analyze │ →  │ Propose │ →  │ Report  │
- │         │    │         │    │         │    │         │
- │ measure │    │ broken  │    │ you     │    │ before  │
- │ every   │    │ dupes   │    │ choose  │    │ vs      │
- │ source  │    │ bloat   │    │ what    │    │ after   │
- └─────────┘    └─────────┘    └─────────┘    └─────────┘
+ ┌────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌────────┐
+ │  Scan  │ → │ Analyze │ → │ Propose │ → │ Execute │ → │ Report │
+ │        │   │         │   │         │   │         │   │        │
+ │measure │   │ broken  │   │  you    │   │  move   │   │before  │
+ │ every  │   │ dupes   │   │ choose  │   │  to     │   │  vs    │
+ │source  │   │ bloat   │   │  what   │   │.disabled│   │ after  │
+ └────────┘   └─────────┘   └─────────┘   └─────────┘   └────────┘
 ```
 
 **Scan** — Measures everything: local skills, plugin skills, CLAUDE.md, memory files, MCP servers.
@@ -72,6 +72,8 @@ Where the bloat hides:
 | **Auto** | Pre-selected | Broken symlinks, empty templates |
 | **Recommended** | Suggested | Duplicates, stale memory |
 | **Optional** | Your call | Oversized skills you might still use |
+
+**Execute** — Moves selected items to `~/.claude/skills.disabled/`. Nothing is deleted.
 
 **Report** — Shows exactly what changed:
 
@@ -150,6 +152,7 @@ From a real cleanup session where skills accumulated over months:
 
 - Claude Code CLI
 - macOS or Linux
+- python3 (for MCP server count; falls back gracefully if absent)
 
 ## License
 
