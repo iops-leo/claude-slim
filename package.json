@@ -1,0 +1,40 @@
+{
+  "name": "claude-slim",
+  "version": "2.0.0",
+  "description": "Analyze and reduce Claude Code token overhead",
+  "type": "module",
+  "bin": {
+    "claude-slim": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "token",
+    "optimization",
+    "cleanup",
+    "skills",
+    "plugin"
+  ],
+  "author": "iops-leo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iops-leo/claude-slim.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^13.0.0",
+    "js-tiktoken": "^1.0.18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

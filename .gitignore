@@ -1,0 +1,8 @@
+.DS_Store
+*.swp
+*.swo
+*~
+.omc/
+node_modules/
+dist/
+.token-cache.json
