@@ -11,116 +11,61 @@ Analyze the user's Claude Code environment for token waste and perform non-destr
 
 - `/claude-slim` or `/claude-slim run` → full pipeline (scan → propose → execute → report)
 - `/claude-slim scan` → report only, no changes
-- `/claude-slim scan --json` → raw JSON output from the scanner
+- `/claude-slim scan --json` → raw JSON output
 - `/claude-slim restore` → restore previously disabled items
 
 ---
 
-## Phase 1 — Scan
+## Execution
 
-Run the scanner script to collect environment data:
+Run the CLI via Node.js. The CLI handles all scanning, classification, user interaction, and cleanup.
 
+```bash
+cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js <subcommand>
+```
+
+If `CLAUDE_PLUGIN_ROOT` is not set, locate it via:
+```bash
+PLUGIN_DIR=$(find ~/.claude/plugins -path "*/claude-slim/dist/cli.js" -type f 2>/dev/null | head -1 | xargs dirname | xargs dirname)
+node "${PLUGIN_DIR}/dist/cli.js" <subcommand>
+```
+
+Subcommand mapping:
+- `/claude-slim` or `/claude-slim run` → `node dist/cli.js clean`
+- `/claude-slim scan` → `node dist/cli.js scan`
+- `/claude-slim scan --json` → `node dist/cli.js scan --json`
+- `/claude-slim restore` → `node dist/cli.js restore`
+
+If `node` is not available, fall back to the legacy bash scanner:
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/skills/claude-slim/scripts/scan.sh"
 ```
 
-If `CLAUDE_PLUGIN_ROOT` is not set, locate the script via:
-```bash
-bash "$(find ~/.claude/plugins -path "*/claude-slim/scripts/scan.sh" -type f 2>/dev/null | head -1)"
-```
-
-For `--json` mode, pass `json` as the first argument:
-```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/claude-slim/scripts/scan.sh" json
-```
-This outputs a single JSON object. Present it directly to the user without further formatting.
-
-The script outputs structured lines in `KEY:value` format. Parse the output to build the before snapshot.
-
 ---
 
-## Phase 2 — Analyze & Propose
+## What the CLI does
 
-Categorize issues from the scan into three tiers:
+**Scan**: Measures local skills, plugin skills, CLAUDE.md, memory files, MCP servers. Uses js-tiktoken for token counting (falls back to bytes/4 if unavailable).
 
-**Tier 1 — Auto (pre-selected, safe to remove):**
-- `broken_symlink` — dead links left from uninstalled skill packs
-- `template` — placeholder skills with "Replace with description"
-- `skill_dup` — `.skill/` directories when the base directory exists
+**Clean**: Shows issues in 3 tiers, then asks the user to confirm:
+- **Tier 1 (Auto)**: Broken symlinks, empty templates, .skill/ duplicates — pre-selected
+- **Tier 2 (Recommended)**: Local/plugin duplicates, oversized memory — suggested
+- **Tier 3 (Optional)**: Oversized skills — informational
 
-**Tier 2 — Recommended (suggested, not pre-selected):**
-- `duplicate` — local skill that a plugin already provides
-- `oversized_memory` — memory files >5KB loaded every session
+After cleanup, shows a savings report box with before/after token counts and monthly savings estimate.
 
-**Tier 3 — Optional (listed for awareness):**
-- `oversized_skill` — SKILL.md >10KB (high token cost)
-
-### Report format
-
-Present a compact table showing the current snapshot (skill counts, CLAUDE.md size, memory size, estimated overhead), followed by numbered findings grouped by tier. Use `✓` for pre-selected items and `○` for unselected items.
-
-### Token estimation
-
-System prompt loads skill listings (name + one-line description) at session start, not SKILL.md content. Estimate as:
-- Skill listings: `(local_count + plugin_skill_count) × 30` tokens
-- CLAUDE.md: `bytes / 4` tokens (loaded in full every session)
-- Memory: `total_memory_bytes / 4` tokens (loaded per project)
-
-### User interaction
-
-Ask user which items to disable:
-- Enter → accept defaults (Tier 1 only)
-- Numbers (e.g., `3,5,7`) → toggle specific items
-- `all` → select everything
-- `none` → cancel
-
-If subcommand is `scan`, stop here.
-
----
-
-## Phase 3 — Execute
-
-Run only after user confirmation.
-
-1. `mkdir -p ~/.claude/skills.disabled`
-2. Move each selected local skill to `~/.claude/skills.disabled/`
-3. Delete individual broken symlinks: `find ~/.claude/skills -type l ! -exec test -e {} \; -delete 2>/dev/null`
-4. Clean empty directories left behind: `find ~/.claude/skills -type d -empty -delete 2>/dev/null`
-5. If memory files were selected, remove their references from the relevant MEMORY.md
-6. Write a manifest line to `~/.claude/skills.disabled/.claude-slim-manifest.jsonl`:
-   ```
-   {"date":"<ISO>","name":"<skill>","from":"<path>","type":"<issue_type>"}
-   ```
-   One JSON object per line (JSONL format) — append-safe, no parsing of existing content needed.
-
----
-
-## Phase 4 — Report
-
-Re-run the scan script, then present a before/after comparison table showing: local skills, system prompt skill count, memory files, and estimated token savings. End with the recovery path (`~/.claude/skills.disabled/`) and the restore command.
-
----
-
-## Restore
-
-When `/claude-slim restore` is invoked:
-
-1. Read `~/.claude/skills.disabled/.claude-slim-manifest.jsonl`
-2. Show numbered list of previously disabled items with dates
-3. Ask user which to restore (all or specific numbers)
-4. Move selected items back to their original location
-5. Append a restore entry to the manifest: `{"date":"<ISO>","name":"<skill>","from":"<path>","action":"restored"}`
+**Restore**: Reads the JSONL manifest and lets the user restore previously disabled items.
 
 ---
 
 ## Language
 
-Detect the user's language from their most recent message. Present all reports, prompts, and explanations in that language. The scan script output is machine-readable — translate only the user-facing report, not the raw data.
+Detect the user's language from their most recent message. Present all prompts and explanations in that language.
 
 ## Rules
 
-1. **Never delete.** Always move to `~/.claude/skills.disabled/`.
+1. **Never delete.** The CLI moves items to `~/.claude/skills.disabled/`.
 2. **Never modify CLAUDE.md or settings.json.**
-3. **Never disable plugin-managed skills.** Report only — user manages plugins themselves.
-4. **Always confirm before executing.**
+3. **Never disable plugin-managed skills.** Report only.
+4. **Always confirm before executing.** Use `--dry-run` to preview changes.
 5. **If nothing to clean:** respond "Already slim!" and exit.

@@ -3,3 +3,6 @@
 *.swo
 *~
 .omc/
+node_modules/
+dist/
+.token-cache.json

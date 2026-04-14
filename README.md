@@ -2,9 +2,13 @@
 
 # claude-slim
 
-**Your Claude Code is burning tokens before you even say "hello."**
+**You're burning thousands of tokens before you even say "hello."**
 
 Every session loads *every* skill, memory file, and plugin instruction into the system prompt — even the ones you never use. claude-slim finds and removes that waste.
+
+```
+/claude-slim
+```
 
 [한국어](./docs/README.ko.md) | [日本語](./docs/README.ja.md) | [中文](./docs/README.zh.md)
 
@@ -20,7 +24,7 @@ Every session loads *every* skill, memory file, and plugin instruction into the 
   │██████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░│ Before claude-slim
   │ 12K tokens consumed ↑    your actual work ↑      │
   ├──────────────────────────────────────────────────┤
-  │██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │ After claude-slim
+  │██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│ After claude-slim
   │ 5K ↑            more room for your work ↑        │
   └──────────────────────────────────────────────────┘
 ```
@@ -35,6 +39,8 @@ Where the bloat hides:
 | Deferred tools list | ~1,500 tokens |
 | **Total** | **~12,000 tokens** |
 
+That's slower responses. Hitting your usage cap faster. Paying for context you're not using.
+
 ---
 
 ## One command. Five steps.
@@ -44,18 +50,18 @@ Where the bloat hides:
 ```
 
 ```
- ┌────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌────────┐
- │  Scan  │ → │ Analyze │ → │ Propose │ → │ Execute │ → │ Report │
- │        │   │         │   │         │   │         │   │        │
- │measure │   │ broken  │   │  you    │   │  move   │   │before  │
- │ every  │   │ dupes   │   │ choose  │   │  to     │   │  vs    │
- │source  │   │ bloat   │   │  what   │   │.disabled│   │ after  │
- └────────┘   └─────────┘   └─────────┘   └─────────┘   └────────┘
+ ┌────────┐   ┌──────────┐   ┌─────────┐   ┌─────────┐   ┌────────┐
+ │  Scan  │ → │ Classify │ → │ Propose │ → │  Clean  │ → │ Report │
+ │        │   │          │   │         │   │         │   │        │
+ │measure │   │ broken   │   │  you    │   │ move to │   │before  │
+ │ every  │   │ dupes    │   │ choose  │   │.disabled│   │  vs    │
+ │source  │   │ bloat    │   │  what   │   │  dir    │   │ after  │
+ └────────┘   └──────────┘   └─────────┘   └─────────┘   └────────┘
 ```
 
-**Scan** — Measures everything: local skills, plugin skills, CLAUDE.md, memory files, MCP servers.
+**Scan** — Measures everything: local skills, plugin skills, CLAUDE.md, memory files, MCP servers. Token counts are measured with [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken), not guessed.
 
-**Analyze** — Finds the waste automatically:
+**Classify** — Finds the waste automatically:
 
 | | What it catches |
 |---|---|
@@ -73,36 +79,73 @@ Where the bloat hides:
 | **Recommended** | Suggested | Duplicates, stale memory |
 | **Optional** | Your call | Oversized skills you might still use |
 
-**Execute** — Moves selected items to `~/.claude/skills.disabled/`. Nothing is deleted.
+**Clean** — Moves selected items to `~/.claude/skills.disabled/`. **Nothing is deleted. Ever.**
 
 **Report** — Shows exactly what changed:
 
 ```
-┌────────────────┬──────────┬──────────┬────────────┐
-│                │  Before  │  After   │  Saved     │
-├────────────────┼──────────┼──────────┼────────────┤
-│ Local skills   │    65    │    15    │  -50       │
-│ System prompt  │   ~80    │   ~48    │  -32       │
-│ Memory files   │   15KB   │    2KB   │  -13KB     │
-│ Est. tokens    │  ~8,500  │  ~4,200  │  ~4,300    │
-└────────────────┴──────────┴──────────┴────────────┘
+╭──────────────────────────────────────────╮
+│  claude-slim report                      │
+│                                          │
+│  Before: 14,510 tokens at startup        │
+│  After:   5,181 tokens at startup        │
+│  Saved:   9,329 tokens (64.3%)           │
+│                                          │
+│  Top offenders removed:                  │
+│  • office-hours              23,008 tok  │
+│  • harness                    7,902 tok  │
+│  • manpower                   4,764 tok  │
+│                                          │
+│  Est. monthly savings: ~$1.68            │
+│  (2 sessions/day × $0.003/1K tok)        │
+╰──────────────────────────────────────────╯
+
+  ┌──────────────────┬──────────┬──────────┬────────────┐
+  │                  │  Before  │  After   │  Saved     │
+  ├──────────────────┼──────────┼──────────┼────────────┤
+  │ Local skills     │    14    │     4    │  -10       │
+  │ System prompt    │   ~124   │   ~114   │  -10       │
+  │ Memory files     │  19.5KB  │   5.7KB  │  -13.8KB   │
+  │ Est. tokens      │ ~14,510  │  ~5,181  │  ~9,329    │
+  └──────────────────┴──────────┴──────────┴────────────┘
 ```
 
 ---
 
-## Install
+## Install (10 seconds)
 
 ```bash
 claude plugin marketplace add iops-leo/claude-slim
 claude plugin install claude-slim
 ```
 
+Then just type `/claude-slim` in any session.
+
+Or use the standalone CLI:
+
+```bash
+npx claude-slim scan
+```
+
+---
+
 ## Usage
 
 ```bash
-/claude-slim              # Full pipeline
+/claude-slim              # Full pipeline: scan → propose → clean → report
 /claude-slim scan         # Report only, no changes
-/claude-slim restore      # Undo everything
+/claude-slim scan --json  # Machine-readable JSON output
+/claude-slim restore      # Bring back anything you disabled
+```
+
+CLI equivalents:
+
+```bash
+npx claude-slim clean             # Full pipeline
+npx claude-slim clean --dry-run   # See what would happen (no changes)
+npx claude-slim scan              # Report only
+npx claude-slim restore           # Undo
+npx claude-slim report            # Show savings from last clean
 ```
 
 ---
@@ -112,8 +155,8 @@ claude plugin install claude-slim
 | | |
 |---|---|
 | **Non-destructive** | Nothing is ever deleted. Disabled items move to `~/.claude/skills.disabled/` |
-| **Reversible** | `/claude-slim restore` brings anything back |
-| **User-controlled** | Always asks before making changes |
+| **Reversible** | `/claude-slim restore` brings anything back, any time |
+| **User-controlled** | Always asks before making changes. `--dry-run` to preview. |
 | **Hands off** | Never touches CLAUDE.md, settings.json, or plugin configs |
 
 ---
@@ -126,18 +169,18 @@ claude-slim scans these locations. No plugin-specific logic — pure filesystem 
 ~/.claude/
 ├── skills/                  ← user-installed skills
 ├── plugins/cache/           ← plugin skills
-├── CLAUDE.md                ← plugin instructions (read-only)
+├── CLAUDE.md                ← system instructions (read-only)
 ├── projects/*/memory/       ← auto-memory files
 └── settings.json            ← MCP server count (read-only)
 ```
 
-Works with any plugin combination: OMC, gstack, custom skills, marketplace plugins, or none at all.
+Works with any setup: OMC, gstack, marketplace plugins, custom skills, or vanilla Claude Code.
 
 ---
 
 ## Real-world results
 
-From a real cleanup session where skills accumulated over months:
+From a real cleanup session:
 
 | Metric | Before | After | |
 |--------|:------:|:-----:|---|
@@ -148,11 +191,23 @@ From a real cleanup session where skills accumulated over months:
 
 ---
 
+## v2.0 — What's new
+
+- **TypeScript CLI** — Rewritten from bash. Faster, more accurate, extensible.
+- **Accurate token counting** — [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) instead of bytes/4 guessing.
+- **Savings report box** — Visual before/after with breakdown table and monthly savings estimate.
+- **`--dry-run`** — Preview changes without making them.
+- **`--json`** — Machine-readable output for automation.
+- **Token cache** — Instant repeat scans.
+- **Standalone CLI** — `npx claude-slim` works outside Claude Code.
+
+---
+
 ## Requirements
 
-- Claude Code CLI
+- Node.js 18+
 - macOS or Linux
-- python3 (for MCP server count; falls back gracefully if absent)
+- Claude Code CLI
 
 ## License
 
