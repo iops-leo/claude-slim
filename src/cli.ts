@@ -5,7 +5,7 @@ import { Command } from 'commander';
 import { initTokenizer, flushCache } from './tokenizer.js';
 import { scan } from './scanner.js';
 import { cleanIssues, restoreItem } from './cleaner.js';
-import { readManifest, getDisabledDir } from './manifest.js';
+import { readManifest } from './manifest.js';
 import {
   formatScanSummary,
   formatReportBox,
@@ -42,70 +42,14 @@ program
   .command('clean')
   .description('Interactive cleanup of detected issues')
   .option('--dry-run', 'Show what would happen without making changes')
+  .option('--auto', 'Non-interactive: auto-select Tier 1 items only')
   .option('--sessions-per-day <n>', 'Sessions per day for savings estimate', '2')
   .action(async (opts) => {
-    await initTokenizer();
-    const result = await scan();
-
-    if (result.issues.length === 0) {
-      console.log('\n  \x1b[32mAlready slim!\x1b[0m No issues found.\n');
-      await flushCache();
-      return;
-    }
-
-    console.log(formatScanSummary(result));
-    console.log('  Actions:');
-    console.log('    Enter    \u2192 accept pre-selected (Tier 1 only)');
-    console.log('    1,3,5    \u2192 toggle specific items');
-    console.log('    all      \u2192 select everything');
-    console.log('    none     \u2192 cancel');
-    console.log('');
-
-    const selection = await askUser('  Your choice: ');
-    const selectedIssues = resolveSelection(selection, result.issues);
-
-    if (selectedIssues.length === 0) {
-      console.log('\n  Cancelled. No changes made.\n');
-      await flushCache();
-      return;
-    }
-
-    if (opts.dryRun) {
-      console.log('\n  \x1b[33m[DRY RUN]\x1b[0m Would disable:');
-      for (const issue of selectedIssues) {
-        console.log(`    \u2022 ${issue.name} (${issue.type})`);
-      }
-      console.log(`\n  Estimated token savings: ~${selectedIssues.reduce((s, i) => s + i.tokens, 0).toLocaleString()}`);
-      console.log('');
-      await flushCache();
-      return;
-    }
-
-    console.log('');
-    const cleanResult = await cleanIssues(selectedIssues);
-
-    // Re-scan after cleanup for accurate breakdown
-    const afterResult = await scan();
-
-    // Generate report
-    const sessionsPerDay = parseInt(opts.sessionsPerDay, 10) || 2;
-    const reportData = calculateReport(result, afterResult, cleanResult.moved, sessionsPerDay);
-    console.log('');
-    console.log(formatReportBox(reportData));
-    console.log('');
-
-    if (cleanResult.errors.length > 0) {
-      console.log('  \x1b[31mErrors:\x1b[0m');
-      for (const err of cleanResult.errors) {
-        console.log(`    \u2022 ${err.name}: ${err.error}`);
-      }
-      console.log('');
-    }
-
-    console.log(`  Recovery: ~/.claude/skills.disabled/`);
-    console.log(`  Restore:  npx claude-slim restore\n`);
-
-    await flushCache();
+    await runCleanPipeline({
+      dryRun: !!opts.dryRun,
+      auto: !!opts.auto,
+      sessionsPerDay: parseInt(opts.sessionsPerDay, 10) || 2,
+    });
   });
 
 // --- restore ---
@@ -133,7 +77,12 @@ program
     for (let i = 0; i < restorable.length; i++) {
       const e = restorable[i];
       const date = new Date(e.date).toLocaleDateString();
-      console.log(`    ${i + 1}. ${e.name} (${e.type}, disabled ${date})`);
+      const note = e.type === 'disabled_plugin'
+        ? ' \x1b[33m(reinstall via: claude plugin install)\x1b[0m'
+        : e.type === 'temp_cache'
+          ? ' \x1b[90m(deleted, cannot restore)\x1b[0m'
+          : '';
+      console.log(`    ${i + 1}. ${e.name} (${e.type}, disabled ${date})${note}`);
     }
     console.log('');
 
@@ -189,7 +138,6 @@ program
       totalTokensBefore: totalBefore,
       localSkills: [
         ...result.localSkills,
-        // Add placeholder entries for removed skills to fix breakdown counts
         ...movedEntries
           .filter((e) => e.type !== 'oversized_memory')
           .map((e) => ({ name: e.name, path: e.from, sizeBytes: 0, tokens: e.tokenCount || 0, source: 'local' as const })),
@@ -204,11 +152,89 @@ program
     await flushCache();
   });
 
-// --- default (no subcommand) ---
+// --- default (no subcommand) → run clean ---
 program.action(async () => {
-  // Run full pipeline: scan → propose → clean → report
-  program.commands.find((c) => c.name() === 'clean')?.parse(process.argv);
+  await runCleanPipeline({ dryRun: false, auto: false, sessionsPerDay: 2 });
 });
+
+// --- shared clean pipeline ---
+
+async function runCleanPipeline(opts: { dryRun: boolean; auto: boolean; sessionsPerDay: number }): Promise<void> {
+  await initTokenizer();
+  const result = await scan();
+
+  if (result.issues.length === 0) {
+    console.log('\n  \x1b[32mAlready slim!\x1b[0m No issues found.\n');
+    await flushCache();
+    return;
+  }
+
+  console.log(formatScanSummary(result));
+
+  const isInteractive = !opts.auto && process.stdin.isTTY;
+  let selectedIssues: Issue[];
+
+  if (isInteractive) {
+    console.log('  Actions:');
+    console.log('    Enter    \u2192 accept pre-selected (Tier 1 only)');
+    console.log('    1,3,5    \u2192 select specific items');
+    console.log('    all      \u2192 select everything');
+    console.log('    none     \u2192 cancel');
+    console.log('');
+
+    const selection = await askUser('  Your choice: ');
+    selectedIssues = resolveSelection(selection, result.issues);
+  } else {
+    // Auto mode or non-TTY: select Tier 1 only
+    selectedIssues = result.issues.filter((i) => i.tier === 1);
+    if (!opts.auto) {
+      console.log('  \x1b[33m\u26a0 Non-interactive mode detected, auto-selecting Tier 1\x1b[0m\n');
+    } else {
+      console.log(`  \x1b[36m\u2192 Auto mode: selecting ${selectedIssues.length} Tier 1 item(s)\x1b[0m\n`);
+    }
+  }
+
+  if (selectedIssues.length === 0) {
+    console.log('\n  Cancelled. No changes made.\n');
+    await flushCache();
+    return;
+  }
+
+  if (opts.dryRun) {
+    console.log('\n  \x1b[33m[DRY RUN]\x1b[0m Would disable:');
+    for (const issue of selectedIssues) {
+      console.log(`    \u2022 ${issue.name} (${issue.type})`);
+    }
+    console.log(`\n  Estimated token savings: ~${selectedIssues.reduce((s, i) => s + i.tokens, 0).toLocaleString()}`);
+    console.log('');
+    await flushCache();
+    return;
+  }
+
+  console.log('');
+  const cleanResult = await cleanIssues(selectedIssues);
+
+  // Re-scan after cleanup for accurate breakdown
+  const afterResult = await scan();
+
+  const reportData = calculateReport(result, afterResult, cleanResult.moved, opts.sessionsPerDay);
+  console.log('');
+  console.log(formatReportBox(reportData));
+  console.log('');
+
+  if (cleanResult.errors.length > 0) {
+    console.log('  \x1b[31mErrors:\x1b[0m');
+    for (const err of cleanResult.errors) {
+      console.log(`    \u2022 ${err.name}: ${err.error}`);
+    }
+    console.log('');
+  }
+
+  console.log(`  Recovery: ~/.claude/skills.disabled/`);
+  console.log(`  Restore:  npx claude-slim restore\n`);
+
+  await flushCache();
+}
 
 // --- helpers ---
 
@@ -233,27 +259,17 @@ function resolveSelection(input: string, issues: Issue[]): Issue[] {
     return issues.filter((i) => i.tier === 1);
   }
 
-  // Parse comma-separated numbers
-  const selected = new Set<number>();
+  // Parse comma-separated numbers → select exactly those items
+  const result: Issue[] = [];
+  const seen = new Set<number>();
   for (const part of trimmed.split(',')) {
     const num = parseInt(part.trim(), 10);
-    if (!isNaN(num) && num >= 1 && num <= issues.length) {
-      selected.add(num - 1);
+    if (!isNaN(num) && num >= 1 && num <= issues.length && !seen.has(num)) {
+      seen.add(num);
+      result.push(issues[num - 1]);
     }
   }
-
-  // Start with tier 1, toggle the selected ones
-  const result = new Set<number>();
-  for (let i = 0; i < issues.length; i++) {
-    const isTier1 = issues[i].tier === 1;
-    const isSelected = selected.has(i);
-
-    if (isTier1 && !isSelected) result.add(i);
-    else if (!isTier1 && isSelected) result.add(i);
-    else if (isTier1 && isSelected) { /* toggled off */ }
-  }
-
-  return [...result].map((i) => issues[i]);
+  return result;
 }
 
 function resolveRestoreSelection(input: string, count: number): number[] {

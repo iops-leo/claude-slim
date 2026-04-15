@@ -9,8 +9,9 @@ let cache = { version: 1, entries: {} };
 let cacheDirty = false;
 export async function initTokenizer() {
     try {
-        const { encodingForModel } = await import('js-tiktoken');
-        encoder = encodingForModel('gpt-4o');
+        // cl100k_base is closest to Claude's tokenizer (gpt-4o uses o200k_base which undercounts by ~15%)
+        const { getEncoding } = await import('js-tiktoken');
+        encoder = getEncoding('cl100k_base');
     }
     catch {
         useFallback = true;

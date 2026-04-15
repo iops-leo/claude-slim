@@ -25,6 +25,7 @@ export interface PluginInfo {
   name: string;
   skillCount: number;
   skills: string[];
+  status?: 'enabled' | 'disabled';
 }
 
 export type IssueTier = 1 | 2 | 3;
@@ -35,7 +36,10 @@ export type IssueType =
   | 'skill_dup'
   | 'duplicate'
   | 'oversized_memory'
-  | 'oversized_skill';
+  | 'oversized_skill'
+  | 'disabled_plugin'
+  | 'stale_project'
+  | 'temp_cache';
 
 export interface Issue {
   type: IssueType;
@@ -54,7 +58,9 @@ export interface ScanResult {
   memoryFiles: MemoryFile[];
   claudeMdBytes: number;
   claudeMdTokens: number;
+  claudeMdSections: Array<{ name: string; sizeBytes: number; tokens: number }>;
   mcpServers: number;
+  mcpServerNames: string[];
   issues: Issue[];
   totalTokensBefore: number;
 }

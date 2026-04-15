@@ -149,12 +149,19 @@ export function formatScanSummary(result) {
     lines.push(`\x1b[1m  PLUGINS\x1b[0m (${result.plugins.length} plugins, ${result.pluginSkills.length} skills)`);
     const sortedPlugins = [...result.plugins].sort((a, b) => b.skillCount - a.skillCount);
     for (const plugin of sortedPlugins) {
-        lines.push(`    ${plugin.name.padEnd(28)} ${String(plugin.skillCount).padStart(3)} skills`);
+        const status = plugin.status === 'disabled' ? ' \x1b[33m(disabled)\x1b[0m' : '';
+        lines.push(`    ${plugin.name.padEnd(28)} ${String(plugin.skillCount).padStart(3)} skills${status}`);
     }
     // --- CLAUDE.MD ---
     lines.push('');
-    lines.push(`\x1b[1m  CLAUDE.MD\x1b[0m`);
-    lines.push(`    Size: ${(result.claudeMdBytes / 1024).toFixed(1)}KB (${result.claudeMdTokens.toLocaleString()} tok)`);
+    lines.push(`\x1b[1m  CLAUDE.MD\x1b[0m (${(result.claudeMdBytes / 1024).toFixed(1)}KB, ${result.claudeMdTokens.toLocaleString()} tok)`);
+    if (result.claudeMdSections && result.claudeMdSections.length > 0) {
+        for (const section of result.claudeMdSections) {
+            const kb = (section.sizeBytes / 1024).toFixed(1);
+            const tok = section.tokens.toLocaleString();
+            lines.push(`    ${section.name.padEnd(44)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok`);
+        }
+    }
     // --- MEMORY FILES ---
     lines.push('');
     const memTotal = result.memoryFiles.reduce((s, m) => s + m.sizeBytes, 0);
@@ -175,7 +182,15 @@ export function formatScanSummary(result) {
     }
     // --- MCP SERVERS ---
     lines.push('');
-    lines.push(`\x1b[1m  MCP SERVERS\x1b[0m: ${result.mcpServers}`);
+    if (result.mcpServerNames && result.mcpServerNames.length > 0) {
+        lines.push(`\x1b[1m  MCP SERVERS\x1b[0m (${result.mcpServers})`);
+        for (const name of result.mcpServerNames) {
+            lines.push(`    ${name}`);
+        }
+    }
+    else {
+        lines.push(`\x1b[1m  MCP SERVERS\x1b[0m: ${result.mcpServers}`);
+    }
     // --- SUMMARY ---
     lines.push('');
     lines.push(`\x1b[1m  ESTIMATED OVERHEAD\x1b[0m: ~${result.totalTokensBefore.toLocaleString()} tokens at session start`);
