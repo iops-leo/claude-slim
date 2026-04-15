@@ -11,6 +11,7 @@ import {
   formatReportBox,
   calculateReport,
 } from './report.js';
+import { resolveSelection, resolveRestoreSelection } from './selection.js';
 import type { Issue, ScanResult, ManifestEntry } from './types.js';
 
 const program = new Command();
@@ -66,26 +67,43 @@ program
     const restoredNames = new Set(
       entries.filter((e) => e.action === 'restored').map((e) => e.name),
     );
-    const restorable = disabled.filter((e) => !restoredNames.has(e.name));
+    const all = disabled.filter((e) => !restoredNames.has(e.name));
+    // Separate restorable items from info-only items
+    const NON_RESTORABLE = new Set(['temp_cache', 'disabled_plugin']);
+    const restorable = all.filter((e) => !NON_RESTORABLE.has(e.type));
+    const infoOnly = all.filter((e) => NON_RESTORABLE.has(e.type));
 
-    if (restorable.length === 0) {
+    if (restorable.length === 0 && infoOnly.length === 0) {
       console.log('\n  Nothing to restore.\n');
       return;
     }
 
-    console.log('\n  Previously disabled items:\n');
-    for (let i = 0; i < restorable.length; i++) {
-      const e = restorable[i];
-      const date = new Date(e.date).toLocaleDateString();
-      const note = e.type === 'disabled_plugin'
-        ? ' \x1b[33m(reinstall via: claude plugin install)\x1b[0m'
-        : e.type === 'temp_cache'
-          ? ' \x1b[90m(deleted, cannot restore)\x1b[0m'
-          : '';
-      console.log(`    ${i + 1}. ${e.name} (${e.type}, disabled ${date})${note}`);
+    if (restorable.length > 0) {
+      console.log('\n  Restorable items:\n');
+      for (let i = 0; i < restorable.length; i++) {
+        const e = restorable[i];
+        const date = new Date(e.date).toLocaleDateString();
+        console.log(`    ${i + 1}. ${e.name} (${e.type}, disabled ${date})`);
+      }
     }
-    console.log('');
 
+    if (infoOnly.length > 0) {
+      console.log('\n  \x1b[90mNon-restorable (for reference):\x1b[0m');
+      for (const e of infoOnly) {
+        const date = new Date(e.date).toLocaleDateString();
+        const hint = e.type === 'disabled_plugin'
+          ? `reinstall: claude plugin install ${e.name}`
+          : 'deleted, cannot restore';
+        console.log(`    \x1b[90m\u2022 ${e.name} (${date}) — ${hint}\x1b[0m`);
+      }
+    }
+
+    if (restorable.length === 0) {
+      console.log('\n  No items can be restored.\n');
+      return;
+    }
+
+    console.log('');
     const selection = await askUser('  Restore (all / numbers / none): ');
     const indices = resolveRestoreSelection(selection, restorable.length);
 
@@ -246,48 +264,6 @@ function askUser(prompt: string): Promise<string> {
       resolve(answer.trim());
     });
   });
-}
-
-function resolveSelection(input: string, issues: Issue[]): Issue[] {
-  const trimmed = input.trim().toLowerCase();
-
-  if (trimmed === 'none' || trimmed === 'n') return [];
-  if (trimmed === 'all' || trimmed === 'a') return [...issues];
-
-  if (trimmed === '' || trimmed === 'enter') {
-    // Default: tier 1 only
-    return issues.filter((i) => i.tier === 1);
-  }
-
-  // Parse comma-separated numbers → select exactly those items
-  const result: Issue[] = [];
-  const seen = new Set<number>();
-  for (const part of trimmed.split(',')) {
-    const num = parseInt(part.trim(), 10);
-    if (!isNaN(num) && num >= 1 && num <= issues.length && !seen.has(num)) {
-      seen.add(num);
-      result.push(issues[num - 1]);
-    }
-  }
-  return result;
-}
-
-function resolveRestoreSelection(input: string, count: number): number[] {
-  const trimmed = input.trim().toLowerCase();
-
-  if (trimmed === 'none' || trimmed === 'n' || trimmed === '') return [];
-  if (trimmed === 'all' || trimmed === 'a') {
-    return Array.from({ length: count }, (_, i) => i);
-  }
-
-  const indices: number[] = [];
-  for (const part of trimmed.split(',')) {
-    const num = parseInt(part.trim(), 10);
-    if (!isNaN(num) && num >= 1 && num <= count) {
-      indices.push(num - 1);
-    }
-  }
-  return indices;
 }
 
 program.parse();

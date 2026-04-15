@@ -7,7 +7,7 @@ import type { TokenCache } from './types.js';
 let encoder: { encode: (text: string) => number[] } | null = null;
 let useFallback = false;
 
-const CACHE_PATH = join(homedir(), '.claude', 'skills.disabled', '.token-cache.json');
+const CACHE_PATH = join(homedir(), '.claude', '.token-cache.json');
 let cache: TokenCache = { version: 1, entries: {} };
 let cacheDirty = false;
 

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 let encoder = null;
 let useFallback = false;
-const CACHE_PATH = join(homedir(), '.claude', 'skills.disabled', '.token-cache.json');
+const CACHE_PATH = join(homedir(), '.claude', '.token-cache.json');
 let cache = { version: 1, entries: {} };
 let cacheDirty = false;
 export async function initTokenizer() {

@@ -291,7 +291,7 @@ async function getDisabledPlugins(): Promise<Set<string>> {
   return disabled;
 }
 
-function parseClaudeMdSections(content: string): Array<{ name: string; sizeBytes: number; tokens: number }> {
+export function parseClaudeMdSections(content: string): Array<{ name: string; sizeBytes: number; tokens: number }> {
   const sections: Array<{ name: string; sizeBytes: number; tokens: number }> = [];
   const lines = content.split('\n');
   let currentName: string | null = null;

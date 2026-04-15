@@ -270,7 +270,7 @@ async function getDisabledPlugins() {
     }
     return disabled;
 }
-function parseClaudeMdSections(content) {
+export function parseClaudeMdSections(content) {
     const sections = [];
     const lines = content.split('\n');
     let currentName = null;
