@@ -70,13 +70,16 @@
 | 빈 템플릿 | 내용 없는 플레이스홀더 스킬 |
 | 대용량 파일 | 10KB 이상 SKILL.md |
 | 오래된 메모리 | 매 세션 로드되는 대용량 메모리 파일 |
+| 비활성 플러그인 | 설치됐지만 비활성화된 채 캐시 점유 |
+| 오래된 프로젝트 | 90일 이상 미사용 프로젝트 메모리 |
+| 임시 캐시 | 실패한 플러그인 설치 잔여물 (`temp_local_*`) |
 
 **제안** — 3단계로 분류, 당신이 결정:
 
 | 단계 | 동작 | 예시 |
 |------|------|------|
-| **Auto** | 자동 선택 | 깨진 링크, 빈 템플릿 |
-| **Recommended** | 권장 | 중복, 오래된 메모리 |
+| **Auto** | 자동 선택 | 깨진 링크, 빈 템플릿, 임시 캐시 |
+| **Recommended** | 권장 | 중복, 오래된 메모리, 비활성 플러그인, 오래된 프로젝트 |
 | **Optional** | 사용자 판단 | 아직 쓸 수 있는 대용량 스킬 |
 
 **정리** — 선택한 항목을 `~/.claude/skills.disabled/`로 이동. **삭제는 절대 없습니다.**
@@ -143,6 +146,7 @@ CLI:
 ```bash
 npx claude-slim clean             # 전체 파이프라인
 npx claude-slim clean --dry-run   # 변경 없이 미리보기
+npx claude-slim clean --auto      # 비대화형, Tier 1만 자동 정리 (CI/스크립트용)
 npx claude-slim scan              # 리포트만
 npx claude-slim restore           # 복원
 npx claude-slim report            # 지난 정리의 절감 리포트
@@ -194,12 +198,19 @@ claude-slim은 아래 위치를 스캔합니다. 플러그인 특화 로직 없�
 ## v2.0 변경사항
 
 - **TypeScript CLI** — bash에서 전환. 더 빠르고, 정확하고, 확장 가능.
-- **정확한 토큰 카운팅** — [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) (bytes/4 추정 대체).
+- **정확한 토큰 카운팅** — [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken)의 `cl100k_base` 인코딩 사용.
 - **절감 리포트 박스** — Before/After + 항목별 비교 테이블 + 월간 절감 추정.
 - **`--dry-run`** — 변경 없이 미리보기.
 - **`--json`** — 자동화용 JSON 출력.
 - **토큰 캐시** — 반복 스캔 즉시 완료.
 - **독립 CLI** — `npx claude-slim`으로 Claude Code 밖에서도 사용 가능.
+- **`--auto`** — CI/스크립트용 비대화형 정리 (Tier 1만 자동 선택).
+- **비활성 플러그인 감지** — 비활성화했지만 삭제하지 않은 플러그인 발견.
+- **오래된 프로젝트 감지** — 90일 이상 미사용 프로젝트 메모리 플래그.
+- **CLAUDE.md 섹션 분석** — 어떤 플러그인 지침이 토큰을 가장 많이 차지하는지 확인.
+- **플러그인 상태 표시** — 각 플러그인의 enabled/disabled 상태 표시.
+- **Non-TTY 지원** — stdin이 파이프일 때 자동으로 Tier 1 선택.
+- **유닛 테스트** — vitest 기반 60개 테스트.
 
 ---
 

@@ -70,13 +70,16 @@ That's slower responses. Hitting your usage cap faster. Paying for context you'r
 | Empty templates | Placeholder skills with no content |
 | Oversized files | SKILL.md over 10KB |
 | Stale memory | Large memory files loaded every session |
+| Disabled plugins | Installed but disabled plugins still in cache |
+| Stale projects | Project memory untouched for 90+ days |
+| Temp caches | Failed plugin install remnants (`temp_local_*`) |
 
 **Propose** — Three tiers, you decide:
 
 | Tier | Action | Example |
 |------|--------|---------|
-| **Auto** | Pre-selected | Broken symlinks, empty templates |
-| **Recommended** | Suggested | Duplicates, stale memory |
+| **Auto** | Pre-selected | Broken symlinks, empty templates, temp caches |
+| **Recommended** | Suggested | Duplicates, stale memory, disabled plugins, stale projects |
 | **Optional** | Your call | Oversized skills you might still use |
 
 **Clean** — Moves selected items to `~/.claude/skills.disabled/`. **Nothing is deleted. Ever.**
@@ -143,6 +146,7 @@ CLI equivalents:
 ```bash
 npx claude-slim clean             # Full pipeline
 npx claude-slim clean --dry-run   # See what would happen (no changes)
+npx claude-slim clean --auto      # Non-interactive, Tier 1 only (CI/scripts)
 npx claude-slim scan              # Report only
 npx claude-slim restore           # Undo
 npx claude-slim report            # Show savings from last clean
@@ -194,12 +198,19 @@ From a real cleanup session:
 ## v2.0 — What's new
 
 - **TypeScript CLI** — Rewritten from bash. Faster, more accurate, extensible.
-- **Accurate token counting** — [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) instead of bytes/4 guessing.
+- **Accurate token counting** — [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) with `cl100k_base` encoding.
 - **Savings report box** — Visual before/after with breakdown table and monthly savings estimate.
 - **`--dry-run`** — Preview changes without making them.
 - **`--json`** — Machine-readable output for automation.
 - **Token cache** — Instant repeat scans.
 - **Standalone CLI** — `npx claude-slim` works outside Claude Code.
+- **`--auto`** — Non-interactive cleanup for CI/scripts (Tier 1 only).
+- **Disabled plugin detection** — Finds plugins you disabled but didn't uninstall.
+- **Stale project detection** — Flags project memory untouched for 90+ days.
+- **CLAUDE.md section breakdown** — See which plugin instructions cost the most tokens.
+- **Plugin status** — Shows enabled/disabled status for each plugin.
+- **Non-TTY support** — Auto-selects Tier 1 when stdin is piped.
+- **Unit tests** — 60 tests with vitest.
 
 ---
 
