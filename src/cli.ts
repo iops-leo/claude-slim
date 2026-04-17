@@ -19,7 +19,7 @@ const program = new Command();
 program
   .name('claude-slim')
   .description('Analyze and reduce Claude Code token overhead')
-  .version('2.0.0');
+  .version('2.1.0');
 
 // --- scan ---
 program

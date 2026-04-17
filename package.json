@@ -1,11 +1,17 @@
 {
   "name": "claude-slim",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Analyze and reduce Claude Code token overhead",
   "type": "module",
   "bin": {
     "claude-slim": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

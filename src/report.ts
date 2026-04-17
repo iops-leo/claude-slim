@@ -3,7 +3,7 @@ import type { ScanResult, Issue, ManifestEntry } from './types.js';
 import { isUsingFallback } from './tokenizer.js';
 
 // Claude Code encodes /Users/leo.new/foo as -Users-leo-new-foo
-const HOME_PREFIX = homedir().replace(/\//g, '-').replace(/\./g, '-').replace(/^-/, '-');
+const HOME_PREFIX = homedir().replace(/\//g, '-').replace(/\./g, '-');
 
 const SESSIONS_PER_DAY_DEFAULT = 2;
 const PRICE_PER_1K_TOKENS = 0.003; // Claude Sonnet input price

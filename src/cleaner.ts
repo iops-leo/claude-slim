@@ -1,5 +1,5 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
-import { join, basename, dirname } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { appendManifest, ensureDisabledDir, getDisabledDir } from './manifest.js';
 import type { Issue, ManifestEntry } from './types.js';

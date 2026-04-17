@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initTokenizer } from '../tokenizer.js';
-import { parseClaudeMdSections } from '../scanner.js';
+import { parseClaudeMdSections, dedupeBySymlink } from '../scanner.js';
+import type { SkillInfo } from '../types.js';
 
 beforeAll(async () => {
   await initTokenizer();
@@ -67,5 +68,59 @@ describe('parseClaudeMdSections', () => {
     const actualBytes = Buffer.byteLength(content);
     // Allow small difference from trailing newline handling
     expect(Math.abs(totalSectionBytes - actualBytes)).toBeLessThan(10);
+  });
+});
+
+function makeSkill(name: string, tokens = 100): SkillInfo {
+  return { name, path: `/fake/${name}`, sizeBytes: tokens * 4, tokens, source: 'local' };
+}
+
+describe('dedupeBySymlink', () => {
+  it('keeps unique skills unchanged', () => {
+    const result = dedupeBySymlink([
+      { skill: makeSkill('a'), realMdPath: '/real/a/SKILL.md' },
+      { skill: makeSkill('b'), realMdPath: '/real/b/SKILL.md' },
+    ]);
+    expect(result).toHaveLength(2);
+    expect(result.map((s) => s.name).sort()).toEqual(['a', 'b']);
+  });
+
+  it('deduplicates skills sharing a realpath', () => {
+    const real = '/real/ship/SKILL.md';
+    const result = dedupeBySymlink([
+      { skill: makeSkill('ship'), realMdPath: real },
+      { skill: makeSkill('gstack/ship'), realMdPath: real },
+    ]);
+    expect(result).toHaveLength(1);
+  });
+
+  it('prefers top-level name over nested when deduping', () => {
+    const real = '/real/ship/SKILL.md';
+    // Nested first, then top-level
+    const result = dedupeBySymlink([
+      { skill: makeSkill('gstack/ship'), realMdPath: real },
+      { skill: makeSkill('ship'), realMdPath: real },
+    ]);
+    expect(result[0].name).toBe('ship');
+  });
+
+  it('keeps top-level name when it was seen first', () => {
+    const real = '/real/ship/SKILL.md';
+    const result = dedupeBySymlink([
+      { skill: makeSkill('ship'), realMdPath: real },
+      { skill: makeSkill('gstack/ship'), realMdPath: real },
+    ]);
+    expect(result[0].name).toBe('ship');
+  });
+
+  it('handles mix of duplicates and unique skills', () => {
+    const shipReal = '/real/ship/SKILL.md';
+    const result = dedupeBySymlink([
+      { skill: makeSkill('ship'), realMdPath: shipReal },
+      { skill: makeSkill('gstack/ship'), realMdPath: shipReal },
+      { skill: makeSkill('unique'), realMdPath: '/real/unique/SKILL.md' },
+    ]);
+    expect(result).toHaveLength(2);
+    expect(result.map((s) => s.name).sort()).toEqual(['ship', 'unique']);
   });
 });

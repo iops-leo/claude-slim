@@ -80,8 +80,33 @@ async function getDirSize(dir) {
 }
 // Content cache: avoids re-reading files during classification
 const contentCache = new Map();
+async function resolveRealPath(p) {
+    try {
+        return await realpath(p);
+    }
+    catch {
+        return p;
+    }
+}
+export function dedupeBySymlink(candidates) {
+    const seen = new Map();
+    for (const { skill, realMdPath } of candidates) {
+        const existing = seen.get(realMdPath);
+        if (!existing) {
+            seen.set(realMdPath, skill);
+            continue;
+        }
+        // Prefer top-level name (no slash) over nested duplicate
+        const existingIsNested = existing.name.includes('/');
+        const currentIsNested = skill.name.includes('/');
+        if (existingIsNested && !currentIsNested) {
+            seen.set(realMdPath, skill);
+        }
+    }
+    return Array.from(seen.values());
+}
 async function scanLocalSkills() {
-    const skills = [];
+    const candidates = [];
     const brokenSymlinks = [];
     const entries = await safeReaddir(SKILLS_DIR);
     const scanPromises = entries.map(async (entry) => {
@@ -102,12 +127,16 @@ async function scanLocalSkills() {
         if (content !== null) {
             contentCache.set(skillMd, content);
             const tokens = countTokensCached(content, skillMd);
-            skills.push({
-                name: entry,
-                path: dirPath,
-                sizeBytes: Buffer.byteLength(content),
-                tokens,
-                source: 'local',
+            const realMdPath = await resolveRealPath(skillMd);
+            candidates.push({
+                skill: {
+                    name: entry,
+                    path: dirPath,
+                    sizeBytes: Buffer.byteLength(content),
+                    tokens,
+                    source: 'local',
+                },
+                realMdPath,
             });
         }
         // Nested skills (e.g., @internal-sys/commit-guide)
@@ -131,17 +160,22 @@ async function scanLocalSkills() {
                 const name = `${entry}/${sub}`;
                 contentCache.set(subSkillMd, subContent);
                 const tokens = countTokensCached(subContent, subSkillMd);
-                skills.push({
-                    name,
-                    path: subDir,
-                    sizeBytes: Buffer.byteLength(subContent),
-                    tokens,
-                    source: 'local',
+                const realMdPath = await resolveRealPath(subSkillMd);
+                candidates.push({
+                    skill: {
+                        name,
+                        path: subDir,
+                        sizeBytes: Buffer.byteLength(subContent),
+                        tokens,
+                        source: 'local',
+                    },
+                    realMdPath,
                 });
             }
         }
     });
     await Promise.all(scanPromises);
+    const skills = dedupeBySymlink(candidates);
     return { skills, brokenSymlinks };
 }
 async function scanPluginSkills() {
