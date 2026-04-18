@@ -23,8 +23,12 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
-function parseJsonl(content: string): ManifestEntry[] {
-  const entries: ManifestEntry[] = [];
+// Legacy JSONL format included an `action?: 'restored'` field that v2 no longer
+// carries. We only reference it during migration, so model it as a local type.
+type LegacyManifestEntry = ManifestEntry & { action?: 'restored' };
+
+function parseJsonl(content: string): LegacyManifestEntry[] {
+  const entries: LegacyManifestEntry[] = [];
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
@@ -37,11 +41,11 @@ function parseJsonl(content: string): ManifestEntry[] {
   return entries;
 }
 
-function collapseLegacy(entries: ManifestEntry[]): ManifestEntry[] {
+function collapseLegacy(entries: LegacyManifestEntry[]): ManifestEntry[] {
   // Group by name. If the latest entry for a name has action='restored',
   // the item was restored and is excluded. Otherwise keep the first
   // (earliest clean record) as the canonical entry.
-  const byName = new Map<string, ManifestEntry[]>();
+  const byName = new Map<string, LegacyManifestEntry[]>();
   for (const e of entries) {
     const list = byName.get(e.name) ?? [];
     list.push(e);
@@ -53,7 +57,11 @@ function collapseLegacy(entries: ManifestEntry[]): ManifestEntry[] {
     const latest = list[list.length - 1];
     if (latest.action === 'restored') continue;
     const clean = list.find((e) => e.action !== 'restored');
-    if (clean) active.push(clean);
+    if (clean) {
+      // Strip the legacy `action` field before persisting to v2
+      const { action: _discarded, ...v2Entry } = clean;
+      active.push(v2Entry);
+    }
   }
   return active;
 }

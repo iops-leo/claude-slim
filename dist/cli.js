@@ -109,7 +109,7 @@ program
     await initTokenizer();
     const result = await scan();
     const entries = await readManifest();
-    const movedEntries = entries.filter((e) => e.action !== 'restored' && e.tokenCount && e.tokenCount > 0);
+    const movedEntries = entries.filter((e) => e.tokenCount && e.tokenCount > 0);
     if (movedEntries.length === 0) {
         console.log('\n  No previous cleanup found. Run `claude-slim clean` first.\n');
         await flushCache();

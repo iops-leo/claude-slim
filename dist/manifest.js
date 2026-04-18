@@ -46,8 +46,11 @@ function collapseLegacy(entries) {
         if (latest.action === 'restored')
             continue;
         const clean = list.find((e) => e.action !== 'restored');
-        if (clean)
-            active.push(clean);
+        if (clean) {
+            // Strip the legacy `action` field before persisting to v2
+            const { action: _discarded, ...v2Entry } = clean;
+            active.push(v2Entry);
+        }
     }
     return active;
 }

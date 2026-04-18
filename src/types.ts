@@ -70,7 +70,6 @@ export interface ManifestEntry {
   name: string;
   from: string;
   type: IssueType;
-  action?: 'restored';
   tokenCount?: number;
   tier?: IssueTier;
 }

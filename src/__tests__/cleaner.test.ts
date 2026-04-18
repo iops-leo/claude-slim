@@ -79,7 +79,7 @@ describe('cleanIssues — skill directory moves', () => {
 
       // Round-trip restore
       const entries = await readManifest();
-      const entry = entries.find((e) => e.name === 'my-skill' && e.action !== 'restored');
+      const entry = entries.find((e) => e.name === 'my-skill');
       expect(entry).toBeDefined();
 
       await restoreItem(entry!);

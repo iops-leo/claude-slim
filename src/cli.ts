@@ -130,7 +130,7 @@ program
     const entries = await readManifest();
 
     const movedEntries = entries.filter(
-      (e) => e.action !== 'restored' && e.tokenCount && e.tokenCount > 0,
+      (e) => e.tokenCount && e.tokenCount > 0,
     );
 
     if (movedEntries.length === 0) {
