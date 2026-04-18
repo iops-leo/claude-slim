@@ -1,6 +1,6 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { appendManifest, ensureDisabledDir, getDisabledDir } from './manifest.js';
+import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry } from './manifest.js';
 import { getSkillsDir } from './paths.js';
 import type { Issue, ManifestEntry } from './types.js';
 
@@ -165,12 +165,5 @@ export async function restoreItem(entry: ManifestEntry): Promise<void> {
     await rename(src, entry.from);
   }
 
-  const restoreEntry: ManifestEntry = {
-    date: new Date().toISOString(),
-    name: entry.name,
-    from: entry.from,
-    type: entry.type,
-    action: 'restored',
-  };
-  await appendManifest(restoreEntry);
+  await removeEntry(entry.name);
 }

@@ -1,6 +1,6 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { appendManifest, ensureDisabledDir, getDisabledDir } from './manifest.js';
+import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry } from './manifest.js';
 import { getSkillsDir } from './paths.js';
 async function pathExists(p) {
     try {
@@ -150,12 +150,5 @@ export async function restoreItem(entry) {
         await mkdir(dirname(entry.from), { recursive: true });
         await rename(src, entry.from);
     }
-    const restoreEntry = {
-        date: new Date().toISOString(),
-        name: entry.name,
-        from: entry.from,
-        type: entry.type,
-        action: 'restored',
-    };
-    await appendManifest(restoreEntry);
+    await removeEntry(entry.name);
 }

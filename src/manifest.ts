@@ -38,8 +38,9 @@ function parseJsonl(content: string): ManifestEntry[] {
 }
 
 function collapseLegacy(entries: ManifestEntry[]): ManifestEntry[] {
-  // Group by name. If any entry for that name has action='restored', drop all of them.
-  // Otherwise keep the first (non-restored) entry.
+  // Group by name. If the latest entry for a name has action='restored',
+  // the item was restored and is excluded. Otherwise keep the first
+  // (earliest clean record) as the canonical entry.
   const byName = new Map<string, ManifestEntry[]>();
   for (const e of entries) {
     const list = byName.get(e.name) ?? [];
@@ -70,8 +71,16 @@ export async function migrateLegacyIfNeeded(): Promise<void> {
 
   await ensureDisabledDir();
   const manifest: Manifest = { version: 2, entries: activeEntries };
-  await writeFile(newPath, JSON.stringify(manifest, null, 2));
-  await rename(legacyPath, legacyPath + '.bak');
+  const tmpPath = newPath + '.tmp';
+  await writeFile(tmpPath, JSON.stringify(manifest, null, 2));
+  await rename(tmpPath, newPath);
+  try {
+    await rename(legacyPath, legacyPath + '.bak');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code !== 'ENOENT') throw err;
+    // Already renamed by a concurrent migration — safe to ignore
+  }
 }
 
 export async function readManifestV2(): Promise<Manifest> {
@@ -92,7 +101,10 @@ export async function readManifestV2(): Promise<Manifest> {
 
 export async function writeManifestV2(manifest: Manifest): Promise<void> {
   await ensureDisabledDir();
-  await writeFile(getManifestPath(), JSON.stringify(manifest, null, 2));
+  const target = getManifestPath();
+  const tmp = target + '.tmp';
+  await writeFile(tmp, JSON.stringify(manifest, null, 2));
+  await rename(tmp, target);
 }
 
 export async function addEntry(entry: ManifestEntry): Promise<void> {
