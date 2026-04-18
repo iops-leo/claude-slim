@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "tmp-promise": "^3.0.3",
     "typescript": "^5.7.0",
     "vitest": "^4.1.4"
   }
