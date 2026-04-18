@@ -6,6 +6,7 @@ import {
   createTmpClaude,
   writeBrokenSymlink,
   writeSkill,
+  writeTempCache,
   exists,
   type TmpClaude,
 } from './helpers/tmp-claude.js';
@@ -107,5 +108,43 @@ describe('cleanIssues — skill directory moves', () => {
     await restoreItem(entry!);
 
     expect(await exists(skillPath)).toBe(true);
+  });
+});
+
+describe('cleanIssues — temp_cache', () => {
+  it('deletes temp cache directory and records manifest', async () => {
+    const cachePath = await writeTempCache(tmp.pluginsDir, 'temp_local_abc123');
+    const issue: Issue = {
+      type: 'temp_cache',
+      tier: 1,
+      name: 'temp_local_abc123',
+      detail: '12KB',
+      tokens: 0,
+      path: cachePath,
+    };
+
+    const result = await cleanIssues([issue]);
+
+    expect(result.moved).toHaveLength(1);
+    expect(result.errors).toHaveLength(0);
+    expect(await exists(cachePath)).toBe(false);
+  });
+
+  it('restore throws for temp_cache (not recoverable)', async () => {
+    const cachePath = await writeTempCache(tmp.pluginsDir, 'temp_local_xyz');
+    const issue: Issue = {
+      type: 'temp_cache',
+      tier: 1,
+      name: 'temp_local_xyz',
+      tokens: 0,
+      path: cachePath,
+    };
+    await cleanIssues([issue]);
+
+    const entries = await readManifest();
+    const entry = entries.find((e) => e.name === 'temp_local_xyz');
+    expect(entry).toBeDefined();
+
+    await expect(restoreItem(entry!)).rejects.toThrow(/temp cache/i);
   });
 });

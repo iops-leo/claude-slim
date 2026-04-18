@@ -65,6 +65,16 @@ export async function writeBrokenSymlink(
   return mdPath;
 }
 
+export async function writeTempCache(
+  pluginsDir: string,
+  name: string,
+): Promise<string> {
+  const cacheDir = join(pluginsDir, name);
+  await mkdir(cacheDir, { recursive: true });
+  await writeFile(join(cacheDir, 'junk.txt'), 'failed install remnant');
+  return cacheDir;
+}
+
 export async function exists(path: string): Promise<boolean> {
   try {
     await access(path);
