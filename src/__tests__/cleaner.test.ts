@@ -185,3 +185,51 @@ describe('cleanIssues — stale_project', () => {
     expect(restored).toBe('content one');
   });
 });
+
+describe('cleanIssues — stale_project atomicity', () => {
+  it('leaves no partial state when restore would fail', async () => {
+    const memDir = await writeStaleProject(tmp.projectsDir, 'partial-proj', {
+      'a.md': 'aaa',
+      'b.md': 'bbb',
+    });
+    const issue: Issue = {
+      type: 'stale_project',
+      tier: 2,
+      name: 'partial-proj',
+      tokens: 100,
+      path: memDir,
+    };
+
+    await cleanIssues([issue]);
+
+    // After atomic clean: memDir must not exist (was renamed away, not copied)
+    expect(await exists(memDir)).toBe(false);
+
+    // Backup is a directory, not a collection of individually-moved files
+    const backupDir = join(tmp.disabledDir, 'memory-backup', 'partial-proj');
+    expect(await exists(backupDir)).toBe(true);
+    expect(await exists(join(backupDir, 'a.md'))).toBe(true);
+    expect(await exists(join(backupDir, 'b.md'))).toBe(true);
+  });
+
+  it('atomic restore moves backup dir back in one operation', async () => {
+    const memDir = await writeStaleProject(tmp.projectsDir, 'p2', { 'x.md': 'x' });
+    const issue: Issue = {
+      type: 'stale_project',
+      tier: 2,
+      name: 'p2',
+      tokens: 10,
+      path: memDir,
+    };
+    await cleanIssues([issue]);
+
+    const entries = await readManifest();
+    const entry = entries.find((e) => e.name === 'p2');
+    await restoreItem(entry!);
+
+    // After atomic restore: backup dir gone, memDir restored
+    expect(await exists(join(tmp.disabledDir, 'memory-backup', 'p2'))).toBe(false);
+    expect(await exists(memDir)).toBe(true);
+    expect(await exists(join(memDir, 'x.md'))).toBe(true);
+  });
+});

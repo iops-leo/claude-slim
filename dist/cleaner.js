@@ -57,13 +57,11 @@ export async function cleanIssues(issues) {
                 moved.push(entry);
             }
             else if (issue.type === 'stale_project') {
-                // Move stale memory files to backup
-                const backupDir = join(disabledDir, 'memory-backup', issue.name);
-                await mkdir(backupDir, { recursive: true });
-                const files = await readdir(issue.path);
-                for (const file of files) {
-                    await rename(join(issue.path, file), join(backupDir, file));
-                }
+                const backupParent = join(disabledDir, 'memory-backup');
+                await mkdir(backupParent, { recursive: true });
+                const backupDir = join(backupParent, issue.name);
+                // Atomic directory rename — no partial state possible on same FS
+                await rename(issue.path, backupDir);
                 const entry = {
                     date: new Date().toISOString(),
                     name: issue.name,
@@ -121,13 +119,10 @@ export async function restoreItem(entry) {
     }
     const disabledDir = getDisabledDir();
     if (entry.type === 'stale_project') {
-        // Restore from memory-backup
         const backupDir = join(disabledDir, 'memory-backup', entry.name);
-        await mkdir(entry.from, { recursive: true });
-        const files = await readdir(backupDir);
-        for (const file of files) {
-            await rename(join(backupDir, file), join(entry.from, file));
-        }
+        await mkdir(dirname(entry.from), { recursive: true });
+        // Atomic directory rename back to original location
+        await rename(backupDir, entry.from);
     }
     else {
         // Restore skill directory using the same naming as cleanIssues
