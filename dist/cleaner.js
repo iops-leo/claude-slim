@@ -2,6 +2,15 @@ import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promis
 import { join, dirname } from 'node:path';
 import { appendManifest, ensureDisabledDir, getDisabledDir } from './manifest.js';
 import { getSkillsDir } from './paths.js';
+async function pathExists(p) {
+    try {
+        await lstat(p);
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
 export async function cleanIssues(issues) {
     await ensureDisabledDir();
     const disabledDir = getDisabledDir();
@@ -60,7 +69,12 @@ export async function cleanIssues(issues) {
                 const backupParent = join(disabledDir, 'memory-backup');
                 await mkdir(backupParent, { recursive: true });
                 const backupDir = join(backupParent, issue.name);
-                // Atomic directory rename — no partial state possible on same FS
+                // Refuse to overwrite an existing backup — protects prior clean state
+                if (await pathExists(backupDir)) {
+                    throw new Error(`Backup already exists for "${issue.name}" at ${backupDir}. ` +
+                        `Restore or remove it before cleaning again.`);
+                }
+                // Atomic directory rename — requires same FS (guaranteed since both paths are under ~/.claude/)
                 await rename(issue.path, backupDir);
                 const entry = {
                     date: new Date().toISOString(),
@@ -120,8 +134,13 @@ export async function restoreItem(entry) {
     const disabledDir = getDisabledDir();
     if (entry.type === 'stale_project') {
         const backupDir = join(disabledDir, 'memory-backup', entry.name);
+        // Refuse to overwrite user's current state
+        if (await pathExists(entry.from)) {
+            throw new Error(`Cannot restore: ${entry.from} already exists. ` +
+                `Remove or rename it first.`);
+        }
         await mkdir(dirname(entry.from), { recursive: true });
-        // Atomic directory rename back to original location
+        // Atomic directory rename — requires same FS (guaranteed since both paths are under ~/.claude/)
         await rename(backupDir, entry.from);
     }
     else {

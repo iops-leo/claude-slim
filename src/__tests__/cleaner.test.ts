@@ -232,4 +232,46 @@ describe('cleanIssues — stale_project atomicity', () => {
     expect(await exists(memDir)).toBe(true);
     expect(await exists(join(memDir, 'x.md'))).toBe(true);
   });
+
+  it('refuses to clean when backup already exists', async () => {
+    // First clean succeeds
+    const memDir = await writeStaleProject(tmp.projectsDir, 'dup-proj', { 'a.md': 'aaa' });
+    const issue: Issue = {
+      type: 'stale_project',
+      tier: 2,
+      name: 'dup-proj',
+      tokens: 10,
+      path: memDir,
+    };
+    await cleanIssues([issue]);
+
+    // Recreate the project to simulate "it came back"
+    await writeStaleProject(tmp.projectsDir, 'dup-proj', { 'a.md': 'aaa-new' });
+
+    // Second clean should fail cleanly because backup still exists
+    const result = await cleanIssues([issue]);
+    expect(result.moved).toHaveLength(0);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].name).toBe('dup-proj');
+    expect(result.errors[0].error).toMatch(/backup already exists/i);
+  });
+
+  it('refuses to restore when target memory dir already exists', async () => {
+    const memDir = await writeStaleProject(tmp.projectsDir, 'conflict', { 'x.md': 'x' });
+    const issue: Issue = {
+      type: 'stale_project',
+      tier: 2,
+      name: 'conflict',
+      tokens: 10,
+      path: memDir,
+    };
+    await cleanIssues([issue]);
+
+    // User manually recreates the memory dir before restoring
+    await writeStaleProject(tmp.projectsDir, 'conflict', { 'y.md': 'y' });
+
+    const entries = await readManifest();
+    const entry = entries.find((e) => e.name === 'conflict');
+    await expect(restoreItem(entry!)).rejects.toThrow(/already exists/i);
+  });
 });
