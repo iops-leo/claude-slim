@@ -1,6 +1,6 @@
 import { dir } from 'tmp-promise';
 import { join } from 'node:path';
-import { mkdir, writeFile, symlink } from 'node:fs/promises';
+import { mkdir, writeFile, symlink, access } from 'node:fs/promises';
 import { vi } from 'vitest';
 
 export interface TmpClaude {
@@ -63,4 +63,13 @@ export async function writeBrokenSymlink(
   const mdPath = join(skillDir, 'SKILL.md');
   await symlink('/nonexistent/target', mdPath);
   return mdPath;
+}
+
+export async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
