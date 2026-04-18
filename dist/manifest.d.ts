@@ -1,5 +1,10 @@
-import type { ManifestEntry } from './types.js';
+import type { Manifest, ManifestEntry } from './types.js';
 export declare function getDisabledDir(): string;
 export declare function ensureDisabledDir(): Promise<void>;
+export declare function migrateLegacyIfNeeded(): Promise<void>;
+export declare function readManifestV2(): Promise<Manifest>;
+export declare function writeManifestV2(manifest: Manifest): Promise<void>;
+export declare function addEntry(entry: ManifestEntry): Promise<void>;
+export declare function removeEntry(name: string): Promise<ManifestEntry | null>;
 export declare function readManifest(): Promise<ManifestEntry[]>;
 export declare function appendManifest(entry: ManifestEntry): Promise<void>;

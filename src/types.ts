@@ -75,6 +75,11 @@ export interface ManifestEntry {
   tier?: IssueTier;
 }
 
+export interface Manifest {
+  version: 2;
+  entries: ManifestEntry[];
+}
+
 export interface TokenCache {
   version: number;
   entries: Record<string, { hash: string; tokens: number }>;
