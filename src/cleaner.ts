@@ -1,10 +1,8 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
 import { appendManifest, ensureDisabledDir, getDisabledDir } from './manifest.js';
+import { getSkillsDir } from './paths.js';
 import type { Issue, ManifestEntry } from './types.js';
-
-const SKILLS_DIR = join(homedir(), '.claude', 'skills');
 
 export interface CleanResult {
   moved: ManifestEntry[];
@@ -96,7 +94,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
   }
 
   // Clean empty directories in skills/
-  await cleanEmptyDirs(SKILLS_DIR);
+  await cleanEmptyDirs(getSkillsDir());
 
   return { moved, skipped, errors };
 }
