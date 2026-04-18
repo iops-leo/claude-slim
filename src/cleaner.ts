@@ -1,10 +1,17 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
-import { appendManifest, ensureDisabledDir, getDisabledDir } from './manifest.js';
+import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry } from './manifest.js';
+import { getSkillsDir } from './paths.js';
 import type { Issue, ManifestEntry } from './types.js';
 
-const SKILLS_DIR = join(homedir(), '.claude', 'skills');
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await lstat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface CleanResult {
   moved: ManifestEntry[];
@@ -68,13 +75,18 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
         await appendManifest(entry);
         moved.push(entry);
       } else if (issue.type === 'stale_project') {
-        // Move stale memory files to backup
-        const backupDir = join(disabledDir, 'memory-backup', issue.name);
-        await mkdir(backupDir, { recursive: true });
-        const files = await readdir(issue.path);
-        for (const file of files) {
-          await rename(join(issue.path, file), join(backupDir, file));
+        const backupParent = join(disabledDir, 'memory-backup');
+        await mkdir(backupParent, { recursive: true });
+        const backupDir = join(backupParent, issue.name);
+        // Refuse to overwrite an existing backup — protects prior clean state
+        if (await pathExists(backupDir)) {
+          throw new Error(
+            `Backup already exists for "${issue.name}" at ${backupDir}. ` +
+            `Restore or remove it before cleaning again.`,
+          );
         }
+        // Atomic directory rename — requires same FS (guaranteed since both paths are under ~/.claude/)
+        await rename(issue.path, backupDir);
         const entry: ManifestEntry = {
           date: new Date().toISOString(),
           name: issue.name,
@@ -96,7 +108,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
   }
 
   // Clean empty directories in skills/
-  await cleanEmptyDirs(SKILLS_DIR);
+  await cleanEmptyDirs(getSkillsDir());
 
   return { moved, skipped, errors };
 }
@@ -134,13 +146,17 @@ export async function restoreItem(entry: ManifestEntry): Promise<void> {
   const disabledDir = getDisabledDir();
 
   if (entry.type === 'stale_project') {
-    // Restore from memory-backup
     const backupDir = join(disabledDir, 'memory-backup', entry.name);
-    await mkdir(entry.from, { recursive: true });
-    const files = await readdir(backupDir);
-    for (const file of files) {
-      await rename(join(backupDir, file), join(entry.from, file));
+    // Refuse to overwrite user's current state
+    if (await pathExists(entry.from)) {
+      throw new Error(
+        `Cannot restore: ${entry.from} already exists. ` +
+        `Remove or rename it first.`,
+      );
     }
+    await mkdir(dirname(entry.from), { recursive: true });
+    // Atomic directory rename — requires same FS (guaranteed since both paths are under ~/.claude/)
+    await rename(backupDir, entry.from);
   } else {
     // Restore skill directory using the same naming as cleanIssues
     const safeName = entry.name.replace(/\//g, '--');
@@ -149,12 +165,5 @@ export async function restoreItem(entry: ManifestEntry): Promise<void> {
     await rename(src, entry.from);
   }
 
-  const restoreEntry: ManifestEntry = {
-    date: new Date().toISOString(),
-    name: entry.name,
-    from: entry.from,
-    type: entry.type,
-    action: 'restored',
-  };
-  await appendManifest(restoreEntry);
+  await removeEntry(entry.name);
 }

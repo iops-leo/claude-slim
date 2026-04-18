@@ -1,12 +1,7 @@
 import { readdir, readFile, readlink, stat, lstat, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { countTokensCached } from './tokenizer.js';
-const HOME = homedir();
-const CLAUDE_DIR = join(HOME, '.claude');
-const SKILLS_DIR = join(CLAUDE_DIR, 'skills');
-const PLUGINS_DIR = join(CLAUDE_DIR, 'plugins', 'cache');
-const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
+import { getClaudeDir, getSkillsDir, getPluginsDir, getProjectsDir } from './paths.js';
 const STALE_DAYS = 90;
 async function safeReadFile(p) {
     try {
@@ -106,11 +101,12 @@ export function dedupeBySymlink(candidates) {
     return Array.from(seen.values());
 }
 async function scanLocalSkills() {
+    const skillsDir = getSkillsDir();
     const candidates = [];
     const brokenSymlinks = [];
-    const entries = await safeReaddir(SKILLS_DIR);
+    const entries = await safeReaddir(skillsDir);
     const scanPromises = entries.map(async (entry) => {
-        const dirPath = join(SKILLS_DIR, entry);
+        const dirPath = join(skillsDir, entry);
         if (!(await isDirectory(dirPath)))
             return;
         const skillMd = join(dirPath, 'SKILL.md');
@@ -182,9 +178,10 @@ async function scanPluginSkills() {
     const skills = [];
     const plugins = [];
     const tempCaches = [];
-    const pluginDirs = await safeReaddir(PLUGINS_DIR);
+    const pluginsDir = getPluginsDir();
+    const pluginDirs = await safeReaddir(pluginsDir);
     const scanPromises = pluginDirs.map(async (pluginName) => {
-        const pluginDir = join(PLUGINS_DIR, pluginName);
+        const pluginDir = join(pluginsDir, pluginName);
         if (!(await isDirectory(pluginDir)))
             return;
         // Detect temp_local_* cache dirs (failed plugin installs)
@@ -241,10 +238,11 @@ async function scanPluginSkills() {
 async function scanMemoryFiles() {
     const memoryFiles = [];
     const staleProjects = [];
-    const projectDirs = await safeReaddir(PROJECTS_DIR);
+    const projectsDir = getProjectsDir();
+    const projectDirs = await safeReaddir(projectsDir);
     const now = Date.now();
     const scanPromises = projectDirs.map(async (project) => {
-        const memDir = join(PROJECTS_DIR, project, 'memory');
+        const memDir = join(projectsDir, project, 'memory');
         const files = await safeReaddir(memDir);
         const mdFiles = files.filter((f) => f.endsWith('.md'));
         let newestMtime = 0;
@@ -349,7 +347,7 @@ export function parseClaudeMdSections(content) {
     return sections;
 }
 async function scanMcpServers() {
-    const content = await safeReadFile(join(CLAUDE_DIR, 'settings.json'));
+    const content = await safeReadFile(join(getClaudeDir(), 'settings.json'));
     if (!content)
         return { count: 0, names: [] };
     try {
@@ -473,7 +471,7 @@ function classifyIssues(localSkills, pluginSkills, brokenSymlinks, memoryFiles, 
                 name: plugin.name,
                 detail: `${plugin.skillCount} skills`,
                 tokens: plugin.skillCount * 30,
-                path: join(PLUGINS_DIR, plugin.name),
+                path: join(getPluginsDir(), plugin.name),
             });
         }
     }
@@ -494,10 +492,10 @@ export async function scan() {
         plugin.status = disabledPlugins.has(plugin.name) ? 'disabled' : 'enabled';
     }
     // CLAUDE.md
-    const claudeMdContent = await safeReadFile(join(CLAUDE_DIR, 'CLAUDE.md'));
+    const claudeMdContent = await safeReadFile(join(getClaudeDir(), 'CLAUDE.md'));
     const claudeMdBytes = claudeMdContent ? Buffer.byteLength(claudeMdContent) : 0;
     const claudeMdTokens = claudeMdContent
-        ? countTokensCached(claudeMdContent, join(CLAUDE_DIR, 'CLAUDE.md'))
+        ? countTokensCached(claudeMdContent, join(getClaudeDir(), 'CLAUDE.md'))
         : 0;
     const claudeMdSections = claudeMdContent ? parseClaudeMdSections(claudeMdContent) : [];
     const issues = classifyIssues(localSkills, pluginSkills, brokenSymlinks, memoryFiles, tempCaches, staleProjects, disabledPlugins, plugins);

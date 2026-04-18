@@ -70,9 +70,13 @@ export interface ManifestEntry {
   name: string;
   from: string;
   type: IssueType;
-  action?: 'restored';
   tokenCount?: number;
   tier?: IssueTier;
+}
+
+export interface Manifest {
+  version: 2;
+  entries: ManifestEntry[];
 }
 
 export interface TokenCache {

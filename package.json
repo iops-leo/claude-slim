@@ -1,6 +1,6 @@
 {
   "name": "claude-slim",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Analyze and reduce Claude Code token overhead",
   "type": "module",
   "bin": {
@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "tmp-promise": "^3.0.3",
     "typescript": "^5.7.0",
     "vitest": "^4.1.4"
   }

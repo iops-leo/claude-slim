@@ -1,16 +1,10 @@
 import { readdir, readFile, readlink, stat, lstat, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { countTokensCached } from './tokenizer.js';
+import { getClaudeDir, getSkillsDir, getPluginsDir, getProjectsDir } from './paths.js';
 import type {
   ScanResult, SkillInfo, BrokenSymlink, MemoryFile, PluginInfo, Issue,
 } from './types.js';
-
-const HOME = homedir();
-const CLAUDE_DIR = join(HOME, '.claude');
-const SKILLS_DIR = join(CLAUDE_DIR, 'skills');
-const PLUGINS_DIR = join(CLAUDE_DIR, 'plugins', 'cache');
-const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 
 const STALE_DAYS = 90;
 
@@ -99,13 +93,14 @@ export function dedupeBySymlink(candidates: SkillCandidate[]): SkillInfo[] {
 }
 
 async function scanLocalSkills(): Promise<{ skills: SkillInfo[]; brokenSymlinks: BrokenSymlink[] }> {
+  const skillsDir = getSkillsDir();
   const candidates: SkillCandidate[] = [];
   const brokenSymlinks: BrokenSymlink[] = [];
 
-  const entries = await safeReaddir(SKILLS_DIR);
+  const entries = await safeReaddir(skillsDir);
 
   const scanPromises = entries.map(async (entry) => {
-    const dirPath = join(SKILLS_DIR, entry);
+    const dirPath = join(skillsDir, entry);
     if (!(await isDirectory(dirPath))) return;
 
     const skillMd = join(dirPath, 'SKILL.md');
@@ -185,10 +180,11 @@ async function scanPluginSkills(): Promise<{ skills: SkillInfo[]; plugins: Plugi
   const plugins: PluginInfo[] = [];
   const tempCaches: TempCache[] = [];
 
-  const pluginDirs = await safeReaddir(PLUGINS_DIR);
+  const pluginsDir = getPluginsDir();
+  const pluginDirs = await safeReaddir(pluginsDir);
 
   const scanPromises = pluginDirs.map(async (pluginName) => {
-    const pluginDir = join(PLUGINS_DIR, pluginName);
+    const pluginDir = join(pluginsDir, pluginName);
     if (!(await isDirectory(pluginDir))) return;
 
     // Detect temp_local_* cache dirs (failed plugin installs)
@@ -258,11 +254,12 @@ async function scanMemoryFiles(): Promise<{ memoryFiles: MemoryFile[]; staleProj
   const memoryFiles: MemoryFile[] = [];
   const staleProjects: StaleProject[] = [];
 
-  const projectDirs = await safeReaddir(PROJECTS_DIR);
+  const projectsDir = getProjectsDir();
+  const projectDirs = await safeReaddir(projectsDir);
   const now = Date.now();
 
   const scanPromises = projectDirs.map(async (project) => {
-    const memDir = join(PROJECTS_DIR, project, 'memory');
+    const memDir = join(projectsDir, project, 'memory');
     const files = await safeReaddir(memDir);
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
@@ -373,7 +370,7 @@ export function parseClaudeMdSections(content: string): Array<{ name: string; si
 }
 
 async function scanMcpServers(): Promise<{ count: number; names: string[] }> {
-  const content = await safeReadFile(join(CLAUDE_DIR, 'settings.json'));
+  const content = await safeReadFile(join(getClaudeDir(), 'settings.json'));
   if (!content) return { count: 0, names: [] };
   try {
     const data = JSON.parse(content);
@@ -515,7 +512,7 @@ function classifyIssues(
         name: plugin.name,
         detail: `${plugin.skillCount} skills`,
         tokens: plugin.skillCount * 30,
-        path: join(PLUGINS_DIR, plugin.name),
+        path: join(getPluginsDir(), plugin.name),
       });
     }
   }
@@ -546,10 +543,10 @@ export async function scan(): Promise<ScanResult> {
   }
 
   // CLAUDE.md
-  const claudeMdContent = await safeReadFile(join(CLAUDE_DIR, 'CLAUDE.md'));
+  const claudeMdContent = await safeReadFile(join(getClaudeDir(), 'CLAUDE.md'));
   const claudeMdBytes = claudeMdContent ? Buffer.byteLength(claudeMdContent) : 0;
   const claudeMdTokens = claudeMdContent
-    ? countTokensCached(claudeMdContent, join(CLAUDE_DIR, 'CLAUDE.md'))
+    ? countTokensCached(claudeMdContent, join(getClaudeDir(), 'CLAUDE.md'))
     : 0;
   const claudeMdSections = claudeMdContent ? parseClaudeMdSections(claudeMdContent) : [];
 
