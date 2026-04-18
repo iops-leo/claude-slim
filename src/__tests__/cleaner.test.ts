@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { cleanIssues, restoreItem } from '../cleaner.js';
 import { readManifest } from '../manifest.js';
 import {
   createTmpClaude,
   writeBrokenSymlink,
   writeSkill,
+  writeStaleProject,
   writeTempCache,
   exists,
   type TmpClaude,
@@ -146,5 +148,40 @@ describe('cleanIssues — temp_cache', () => {
     expect(entry).toBeDefined();
 
     await expect(restoreItem(entry!)).rejects.toThrow(/temp cache/i);
+  });
+});
+
+describe('cleanIssues — stale_project', () => {
+  it('moves memory files to backup and restores them', async () => {
+    const memDir = await writeStaleProject(tmp.projectsDir, 'old-proj', {
+      'file1.md': 'content one',
+      'file2.md': 'content two',
+    });
+    const issue: Issue = {
+      type: 'stale_project',
+      tier: 2,
+      name: 'old-proj',
+      detail: '100d, 2 files, 1KB',
+      tokens: 200,
+      path: memDir,
+    };
+
+    const cleanResult = await cleanIssues([issue]);
+    expect(cleanResult.moved).toHaveLength(1);
+
+    // Current impl: files moved into memory-backup/<name>/
+    const backupDir = join(tmp.disabledDir, 'memory-backup', 'old-proj');
+    expect(await exists(join(backupDir, 'file1.md'))).toBe(true);
+    expect(await exists(join(backupDir, 'file2.md'))).toBe(true);
+
+    // Restore
+    const entries = await readManifest();
+    const entry = entries.find((e) => e.name === 'old-proj');
+    await restoreItem(entry!);
+
+    expect(await exists(join(memDir, 'file1.md'))).toBe(true);
+    expect(await exists(join(memDir, 'file2.md'))).toBe(true);
+    const restored = await readFile(join(memDir, 'file1.md'), 'utf-8');
+    expect(restored).toBe('content one');
   });
 });

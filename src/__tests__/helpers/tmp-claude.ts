@@ -83,3 +83,16 @@ export async function exists(path: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function writeStaleProject(
+  projectsDir: string,
+  projectName: string,
+  memoryFiles: Record<string, string>,
+): Promise<string> {
+  const memDir = join(projectsDir, projectName, 'memory');
+  await mkdir(memDir, { recursive: true });
+  for (const [name, content] of Object.entries(memoryFiles)) {
+    await writeFile(join(memDir, name), content);
+  }
+  return memDir;
+}
