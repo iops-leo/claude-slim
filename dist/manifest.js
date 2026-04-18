@@ -1,4 +1,4 @@
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile, appendFile, mkdir } from 'node:fs/promises';
 import { getDisabledDir as getDir, getLegacyManifestPath } from './paths.js';
 export function getDisabledDir() {
     return getDir();
@@ -30,6 +30,5 @@ export async function readManifest() {
 }
 export async function appendManifest(entry) {
     await ensureDisabledDir();
-    const { appendFile } = await import('node:fs/promises');
     await appendFile(getLegacyManifestPath(), JSON.stringify(entry) + '\n');
 }

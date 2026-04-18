@@ -6,6 +6,7 @@ import {
   getProjectsDir,
   getDisabledDir,
   getManifestPath,
+  getLegacyManifestPath,
 } from '../paths.js';
 
 afterEach(() => {
@@ -41,6 +42,11 @@ describe('paths', () => {
   it('resolves manifest path under disabled dir', () => {
     vi.stubEnv('HOME', '/tmp/fake-home');
     expect(getManifestPath()).toBe('/tmp/fake-home/.claude/skills.disabled/manifest.json');
+  });
+
+  it('resolves legacy manifest path', () => {
+    vi.stubEnv('HOME', '/tmp/fake-home');
+    expect(getLegacyManifestPath()).toBe('/tmp/fake-home/.claude/skills.disabled/.claude-slim-manifest.jsonl');
   });
 
   it('re-reads HOME on each call (not cached)', () => {

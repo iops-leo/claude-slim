@@ -93,13 +93,14 @@ export function dedupeBySymlink(candidates: SkillCandidate[]): SkillInfo[] {
 }
 
 async function scanLocalSkills(): Promise<{ skills: SkillInfo[]; brokenSymlinks: BrokenSymlink[] }> {
+  const skillsDir = getSkillsDir();
   const candidates: SkillCandidate[] = [];
   const brokenSymlinks: BrokenSymlink[] = [];
 
-  const entries = await safeReaddir(getSkillsDir());
+  const entries = await safeReaddir(skillsDir);
 
   const scanPromises = entries.map(async (entry) => {
-    const dirPath = join(getSkillsDir(), entry);
+    const dirPath = join(skillsDir, entry);
     if (!(await isDirectory(dirPath))) return;
 
     const skillMd = join(dirPath, 'SKILL.md');
@@ -179,10 +180,11 @@ async function scanPluginSkills(): Promise<{ skills: SkillInfo[]; plugins: Plugi
   const plugins: PluginInfo[] = [];
   const tempCaches: TempCache[] = [];
 
-  const pluginDirs = await safeReaddir(getPluginsDir());
+  const pluginsDir = getPluginsDir();
+  const pluginDirs = await safeReaddir(pluginsDir);
 
   const scanPromises = pluginDirs.map(async (pluginName) => {
-    const pluginDir = join(getPluginsDir(), pluginName);
+    const pluginDir = join(pluginsDir, pluginName);
     if (!(await isDirectory(pluginDir))) return;
 
     // Detect temp_local_* cache dirs (failed plugin installs)
@@ -252,11 +254,12 @@ async function scanMemoryFiles(): Promise<{ memoryFiles: MemoryFile[]; staleProj
   const memoryFiles: MemoryFile[] = [];
   const staleProjects: StaleProject[] = [];
 
-  const projectDirs = await safeReaddir(getProjectsDir());
+  const projectsDir = getProjectsDir();
+  const projectDirs = await safeReaddir(projectsDir);
   const now = Date.now();
 
   const scanPromises = projectDirs.map(async (project) => {
-    const memDir = join(getProjectsDir(), project, 'memory');
+    const memDir = join(projectsDir, project, 'memory');
     const files = await safeReaddir(memDir);
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
