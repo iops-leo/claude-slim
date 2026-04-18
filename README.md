@@ -195,6 +195,15 @@ From a real cleanup session:
 
 ---
 
+## v2.2 — What's new
+
+- **Atomic `stale_project` clean/restore** — Single directory `rename()` instead of per-file loop. No more partial-failure state if the operation is interrupted.
+- **Clear collision errors** — Cleaning a project whose backup already exists (or restoring onto an existing directory) now fails with an actionable message instead of a cryptic OS error.
+- **Manifest schema v2** — Single JSON file (`manifest.json`) containing only currently-disabled entries. Restore removes the entry entirely, so the manifest stays bounded across many clean/restore cycles.
+- **Automatic migration from v1** — Existing legacy manifests (`.claude-slim-manifest.jsonl`) are auto-migrated on first read; the original is preserved as `.jsonl.bak` for safety.
+- **Crash-safe manifest writes** — Write-to-tmp-then-rename pattern prevents partial-write corruption on power loss or SIGKILL.
+- **Expanded test coverage** — 66 tests (was 35). New round-trip tests per issue type: `broken_symlink`, `template`, `duplicate`, `skill_dup`, `oversized_skill`, `temp_cache`, `stale_project`. Plus manifest migration + bounded-growth cycle tests.
+
 ## v2.0 — What's new
 
 - **TypeScript CLI** — Rewritten from bash. Faster, more accurate, extensible.
@@ -210,7 +219,7 @@ From a real cleanup session:
 - **CLAUDE.md section breakdown** — See which plugin instructions cost the most tokens.
 - **Plugin status** — Shows enabled/disabled status for each plugin.
 - **Non-TTY support** — Auto-selects Tier 1 when stdin is piped.
-- **Unit tests** — 60 tests with vitest.
+- **Unit tests** — Vitest-based.
 
 ---
 
