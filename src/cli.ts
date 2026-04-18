@@ -12,14 +12,14 @@ import {
   calculateReport,
 } from './report.js';
 import { resolveSelection, resolveRestoreSelection } from './selection.js';
-import type { Issue, ScanResult, ManifestEntry } from './types.js';
+import type { Issue, ScanResult } from './types.js';
 
 const program = new Command();
 
 program
   .name('claude-slim')
   .description('Analyze and reduce Claude Code token overhead')
-  .version('2.1.0');
+  .version('2.2.0');
 
 // --- scan ---
 program
@@ -59,19 +59,11 @@ program
   .description('Restore previously disabled items')
   .action(async () => {
     const entries = await readManifest();
-    const disabled = entries.filter(
-      (e) => e.action !== 'restored' && e.type !== 'broken_symlink',
-    );
-
-    // Filter out items that were later restored
-    const restoredNames = new Set(
-      entries.filter((e) => e.action === 'restored').map((e) => e.name),
-    );
-    const all = disabled.filter((e) => !restoredNames.has(e.name));
-    // Separate restorable items from info-only items
+    // v2 manifest contains only currently-disabled entries (restored ones are removed)
+    const disabled = entries.filter((e) => e.type !== 'broken_symlink');
     const NON_RESTORABLE = new Set(['temp_cache', 'disabled_plugin']);
-    const restorable = all.filter((e) => !NON_RESTORABLE.has(e.type));
-    const infoOnly = all.filter((e) => NON_RESTORABLE.has(e.type));
+    const restorable = disabled.filter((e) => !NON_RESTORABLE.has(e.type));
+    const infoOnly = disabled.filter((e) => NON_RESTORABLE.has(e.type));
 
     if (restorable.length === 0 && infoOnly.length === 0) {
       console.log('\n  Nothing to restore.\n');

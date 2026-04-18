@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { cleanIssues, restoreItem } from '../cleaner.js';
-import { readManifest } from '../manifest.js';
+import { readManifest, readManifestV2 } from '../manifest.js';
 import {
   createTmpClaude,
   writeBrokenSymlink,
@@ -273,5 +273,38 @@ describe('cleanIssues — stale_project atomicity', () => {
     const entries = await readManifest();
     const entry = entries.find((e) => e.name === 'conflict');
     await expect(restoreItem(entry!)).rejects.toThrow(/already exists/i);
+  });
+});
+
+describe('manifest bounded growth', () => {
+  it('restore removes entry so manifest stays bounded across cycles', async () => {
+    const skillPath = await writeSkill(tmp.skillsDir, 'cycler', 'x');
+    const issue: Issue = {
+      type: 'template',
+      tier: 1,
+      name: 'cycler',
+      tokens: 10,
+      path: skillPath,
+    };
+
+    // 10 clean/restore cycles
+    for (let i = 0; i < 10; i++) {
+      // Ensure skill dir exists before each clean (restore put it back)
+      if (!(await exists(skillPath))) {
+        await writeSkill(tmp.skillsDir, 'cycler', 'x');
+      }
+      await cleanIssues([issue]);
+      const m1 = await readManifestV2();
+      expect(m1.entries.filter((e) => e.name === 'cycler')).toHaveLength(1);
+
+      const entry = m1.entries.find((e) => e.name === 'cycler')!;
+      await restoreItem(entry);
+      const m2 = await readManifestV2();
+      expect(m2.entries.filter((e) => e.name === 'cycler')).toHaveLength(0);
+    }
+
+    // After 10 cycles, manifest should be empty (or at least not linear in cycle count)
+    const final = await readManifestV2();
+    expect(final.entries).toHaveLength(0);
   });
 });
