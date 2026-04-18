@@ -1,19 +1,16 @@
-import { readFile, appendFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-const DISABLED_DIR = join(homedir(), '.claude', 'skills.disabled');
-const MANIFEST_PATH = join(DISABLED_DIR, '.claude-slim-manifest.jsonl');
+import { readFile, mkdir } from 'node:fs/promises';
+import { getDisabledDir as getDir, getLegacyManifestPath } from './paths.js';
 export function getDisabledDir() {
-    return DISABLED_DIR;
+    return getDir();
 }
 export async function ensureDisabledDir() {
-    await mkdir(DISABLED_DIR, { recursive: true });
+    await mkdir(getDisabledDir(), { recursive: true });
 }
 export async function readManifest() {
     const entries = [];
     let content;
     try {
-        content = await readFile(MANIFEST_PATH, 'utf-8');
+        content = await readFile(getLegacyManifestPath(), 'utf-8');
     }
     catch {
         return entries;
@@ -33,5 +30,6 @@ export async function readManifest() {
 }
 export async function appendManifest(entry) {
     await ensureDisabledDir();
-    await appendFile(MANIFEST_PATH, JSON.stringify(entry) + '\n');
+    const { appendFile } = await import('node:fs/promises');
+    await appendFile(getLegacyManifestPath(), JSON.stringify(entry) + '\n');
 }
