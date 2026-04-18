@@ -148,6 +148,17 @@ claude-slimは以下をスキャンします。プラグイン固有ロジック
 
 ---
 
+## v2.2 の新機能
+
+- **`stale_project` のアトミックな clean/restore** — ファイル単位のループではなく、ディレクトリ全体を 1 回の `rename()` で移動。途中で中断しても、ファイルが元とバックアップに分散する「部分失敗」状態は発生しません。
+- **衝突時の明確なエラー** — すでにバックアップが存在するプロジェクトの clean、または既存ディレクトリ上への restore は、OS の難解なエラーではなく、対処法を示すメッセージで失敗します。
+- **マニフェスト v2 スキーマ** — 現在無効化されているエントリだけを含む単一 JSON ファイル（`manifest.json`）。restore でエントリ自体を削除するため、clean/restore サイクルを繰り返してもサイズが無限に増加しません。
+- **v1 からの自動マイグレーション** — 既存のレガシーマニフェスト（`.claude-slim-manifest.jsonl`）は初回読み取り時に v2 へ自動変換。原本は `.jsonl.bak` として保存されます。
+- **クラッシュ安全な書き込み** — tmp ファイルに書き込んでから atomic rename するパターン。停電や SIGKILL でもマニフェストが壊れません。
+- **テストカバレッジの拡充** — 66 テスト（以前は 35）。イシュータイプごとの round-trip テスト：`broken_symlink`、`template`、`duplicate`、`skill_dup`、`oversized_skill`、`temp_cache`、`stale_project`。マイグレーションと bounded-growth サイクルテストも追加。
+
+---
+
 ## 要件
 
 - Claude Code CLI

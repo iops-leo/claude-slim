@@ -195,6 +195,15 @@ claude-slim은 아래 위치를 스캔합니다. 플러그인 특화 로직 없�
 
 ---
 
+## v2.2 변경사항
+
+- **`stale_project` 원자적 clean/restore** — 파일 단위 루프 대신 단일 디렉토리 `rename()`. 중간에 중단되어도 파일이 양쪽에 분산되는 부분 실패 상태 제거.
+- **명확한 충돌 에러 메시지** — 백업이 이미 존재하는 프로젝트를 재정리하거나 기존 디렉토리 위에 restore할 때, OS의 난해한 에러 대신 실행 가능한 안내 출력.
+- **매니페스트 v2 스키마** — 현재 비활성화된 항목만 담는 단일 JSON 파일(`manifest.json`). restore가 항목을 완전히 제거하므로 여러 clean/restore 사이클을 반복해도 매니페스트 크기가 무한 증가하지 않음.
+- **v1 자동 마이그레이션** — 기존 레거시 매니페스트(`.claude-slim-manifest.jsonl`)는 첫 실행 시 v2로 자동 변환. 원본은 `.jsonl.bak`로 보존.
+- **충돌 안전 쓰기** — tmp 파일 작성 후 atomic rename 패턴 적용. 정전·SIGKILL에도 매니페스트 파일 손상 없음.
+- **테스트 커버리지 확장** — 66개 테스트 (이전 35개). 이슈 타입별 round-trip 테스트 추가: `broken_symlink`, `template`, `duplicate`, `skill_dup`, `oversized_skill`, `temp_cache`, `stale_project`. 매니페스트 마이그레이션·bounded-growth 사이클 테스트 포함.
+
 ## v2.0 변경사항
 
 - **TypeScript CLI** — bash에서 전환. 더 빠르고, 정확하고, 확장 가능.
@@ -210,7 +219,7 @@ claude-slim은 아래 위치를 스캔합니다. 플러그인 특화 로직 없�
 - **CLAUDE.md 섹션 분석** — 어떤 플러그인 지침이 토큰을 가장 많이 차지하는지 확인.
 - **플러그인 상태 표시** — 각 플러그인의 enabled/disabled 상태 표시.
 - **Non-TTY 지원** — stdin이 파이프일 때 자동으로 Tier 1 선택.
-- **유닛 테스트** — vitest 기반 60개 테스트.
+- **유닛 테스트** — vitest 기반.
 
 ---
 

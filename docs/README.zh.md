@@ -148,6 +148,17 @@ claude-slim扫描以下位置。无插件特定逻辑 — 纯文件系统分析�
 
 ---
 
+## v2.2 更新
+
+- **`stale_project` 的原子化 clean/restore** — 用单次目录 `rename()` 代替按文件循环。即使中途中断，也不会出现文件分散在源目录与备份目录的"部分失败"状态。
+- **清晰的冲突错误提示** — 对已有备份的项目再次 clean，或把 restore 目标写到已有目录上时，会给出可操作的错误信息，而不是晦涩的 OS 错误。
+- **清单 schema v2** — 仅包含当前被禁用条目的单一 JSON 文件（`manifest.json`）。restore 会直接移除该条目,多次 clean/restore 循环后文件大小不会无限增长。
+- **v1 自动迁移** — 已有的旧清单(`.claude-slim-manifest.jsonl`)会在首次读取时自动转换为 v2;原文件以 `.jsonl.bak` 保留。
+- **崩溃安全写入** — 采用"写临时文件后原子重命名"模式;停电或 SIGKILL 都不会破坏清单文件。
+- **测试覆盖扩展** — 66 项测试(此前 35)。为每种 issue 类型新增 round-trip 测试:`broken_symlink`、`template`、`duplicate`、`skill_dup`、`oversized_skill`、`temp_cache`、`stale_project`。另含清单迁移与 bounded-growth 循环测试。
+
+---
+
 ## 要求
 
 - Claude Code CLI
