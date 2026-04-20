@@ -18,6 +18,6 @@ export interface ReportData {
     sessionsPerDay: number;
     breakdown: BreakdownRow[];
 }
-export declare function calculateReport(scanBefore: ScanResult, scanAfter: ScanResult | null, movedEntries: ManifestEntry[], sessionsPerDay?: number): ReportData;
+export declare function calculateReport(scanBefore: ScanResult, scanAfter: ScanResult, movedEntries: ManifestEntry[], sessionsPerDay?: number): ReportData;
 export declare function formatReportBox(data: ReportData): string;
 export declare function formatScanSummary(result: ScanResult): string;

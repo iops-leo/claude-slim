@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initTokenizer } from '../tokenizer.js';
-import { parseClaudeMdSections, dedupeBySymlink } from '../scanner.js';
+import { parseClaudeMdSections, dedupeBySymlink, parseDisabledPlugins } from '../scanner.js';
 import type { SkillInfo } from '../types.js';
 
 beforeAll(async () => {
@@ -122,5 +122,53 @@ describe('dedupeBySymlink', () => {
     ]);
     expect(result).toHaveLength(2);
     expect(result.map((s) => s.name).sort()).toEqual(['ship', 'unique']);
+  });
+});
+
+describe('parseDisabledPlugins', () => {
+  it('returns empty set for empty output', () => {
+    expect(parseDisabledPlugins('').size).toBe(0);
+  });
+
+  it('extracts marketplace name from sub-plugin@marketplace entries', () => {
+    const output = [
+      '❯ alpha@marketplace-one',
+      '  disabled',
+      '❯ beta@marketplace-two',
+      '  enabled',
+    ].join('\n');
+    const result = parseDisabledPlugins(output);
+    expect(result.has('marketplace-one')).toBe(true);
+    expect(result.has('marketplace-two')).toBe(false);
+  });
+
+  it('falls back to full name when no @ separator', () => {
+    const output = '❯ solo-plugin\n  disabled\n';
+    const result = parseDisabledPlugins(output);
+    expect(result.has('solo-plugin')).toBe(true);
+  });
+
+  it('handles mixed enabled/disabled entries', () => {
+    const output = [
+      '❯ a@m1',
+      '  enabled',
+      '❯ b@m2',
+      '  disabled',
+      '❯ c@m3',
+      '  disabled',
+    ].join('\n');
+    const result = parseDisabledPlugins(output);
+    expect(Array.from(result).sort()).toEqual(['m2', 'm3']);
+  });
+
+  it('is case-insensitive for enabled/disabled tokens', () => {
+    const output = '❯ a@m1\n  DISABLED\n❯ b@m2\n  Enabled\n';
+    expect(parseDisabledPlugins(output).has('m1')).toBe(true);
+    expect(parseDisabledPlugins(output).has('m2')).toBe(false);
+  });
+
+  it('ignores dangling status line without a preceding entry', () => {
+    const output = 'some preamble\n  disabled\n';
+    expect(parseDisabledPlugins(output).size).toBe(0);
   });
 });

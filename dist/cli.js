@@ -1,17 +1,22 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { Command } from 'commander';
 import { initTokenizer, flushCache } from './tokenizer.js';
-import { scan } from './scanner.js';
+import { scan, SKILL_PROMPT_OVERHEAD_TOKENS } from './scanner.js';
 import { cleanIssues, restoreItem } from './cleaner.js';
 import { readManifest } from './manifest.js';
 import { formatScanSummary, formatReportBox, calculateReport, } from './report.js';
 import { resolveSelection, resolveRestoreSelection } from './selection.js';
+const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
+const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 const program = new Command();
 program
     .name('claude-slim')
     .description('Analyze and reduce Claude Code token overhead')
-    .version('2.2.0');
+    .version(PKG_VERSION);
 // --- scan ---
 program
     .command('scan')
@@ -125,7 +130,9 @@ program
     const removedMemoryTokens = movedEntries
         .filter((e) => e.type === 'stale_project')
         .reduce((sum, e) => sum + (e.tokenCount || 0), 0);
-    const totalBefore = result.totalTokensBefore + removedSkillEntries.length * 30 + removedMemoryTokens;
+    const totalBefore = result.totalTokensBefore
+        + removedSkillEntries.length * SKILL_PROMPT_OVERHEAD_TOKENS
+        + removedMemoryTokens;
     const pseudoBefore = {
         ...result,
         totalTokensBefore: totalBefore,

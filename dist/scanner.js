@@ -3,6 +3,9 @@ import { join } from 'node:path';
 import { countTokensCached } from './tokenizer.js';
 import { getClaudeDir, getSkillsDir, getPluginsDir, getProjectsDir } from './paths.js';
 const STALE_DAYS = 90;
+const OVERSIZED_SKILL_BYTES = 10240;
+const OVERSIZED_MEMORY_BYTES = 5120;
+export const SKILL_PROMPT_OVERHEAD_TOKENS = 30;
 async function safeReadFile(p) {
     try {
         return await readFile(p, 'utf-8');
@@ -73,7 +76,9 @@ async function getDirSize(dir) {
     }
     return total;
 }
-// Content cache: avoids re-reading files during classification
+// Content cache: avoids re-reading files during classification.
+// Reset on every scan() so repeat invocations (e.g. pre/post-cleanup) do
+// not accumulate entries for paths that no longer exist.
 const contentCache = new Map();
 async function resolveRealPath(p) {
     try {
@@ -279,11 +284,10 @@ async function scanMemoryFiles() {
     await Promise.all(scanPromises);
     return { memoryFiles, staleProjects };
 }
-async function getDisabledPlugins() {
-    const output = await runCommand('claude plugin list');
-    if (!output)
-        return new Set();
+export function parseDisabledPlugins(output) {
     const disabled = new Set();
+    if (!output)
+        return disabled;
     let currentName = null;
     for (const line of output.split('\n')) {
         const trimmed = line.trim();
@@ -301,6 +305,9 @@ async function getDisabledPlugins() {
         }
     }
     return disabled;
+}
+async function getDisabledPlugins() {
+    return parseDisabledPlugins(await runCommand('claude plugin list'));
 }
 export function parseClaudeMdSections(content) {
     const sections = [];
@@ -399,8 +406,8 @@ function classifyIssues(localSkills, pluginSkills, brokenSymlinks, memoryFiles, 
                 path: skill.path,
             });
         }
-        // Tier 3: oversized skills (>10KB)
-        if (skill.sizeBytes > 10240) {
+        // Tier 3: oversized skills
+        if (skill.sizeBytes > OVERSIZED_SKILL_BYTES) {
             issues.push({
                 type: 'oversized_skill',
                 tier: 3,
@@ -435,9 +442,9 @@ function classifyIssues(localSkills, pluginSkills, brokenSymlinks, memoryFiles, 
             path: temp.path,
         });
     }
-    // Tier 2: oversized memory files (>5KB)
+    // Tier 2: oversized memory files
     for (const mem of memoryFiles) {
-        if (mem.sizeBytes > 5120) {
+        if (mem.sizeBytes > OVERSIZED_MEMORY_BYTES) {
             issues.push({
                 type: 'oversized_memory',
                 tier: 2,
@@ -470,7 +477,7 @@ function classifyIssues(localSkills, pluginSkills, brokenSymlinks, memoryFiles, 
                 tier: 2,
                 name: plugin.name,
                 detail: `${plugin.skillCount} skills`,
-                tokens: plugin.skillCount * 30,
+                tokens: plugin.skillCount * SKILL_PROMPT_OVERHEAD_TOKENS,
                 path: join(getPluginsDir(), plugin.name),
             });
         }
@@ -480,6 +487,7 @@ function classifyIssues(localSkills, pluginSkills, brokenSymlinks, memoryFiles, 
     return issues;
 }
 export async function scan() {
+    contentCache.clear();
     const [{ skills: localSkills, brokenSymlinks }, { skills: pluginSkills, plugins, tempCaches }, { memoryFiles, staleProjects }, mcp, disabledPlugins,] = await Promise.all([
         scanLocalSkills(),
         scanPluginSkills(),
@@ -500,7 +508,7 @@ export async function scan() {
     const claudeMdSections = claudeMdContent ? parseClaudeMdSections(claudeMdContent) : [];
     const issues = classifyIssues(localSkills, pluginSkills, brokenSymlinks, memoryFiles, tempCaches, staleProjects, disabledPlugins, plugins);
     // Estimate total tokens at startup
-    const skillListingTokens = (localSkills.length + pluginSkills.length) * 30;
+    const skillListingTokens = (localSkills.length + pluginSkills.length) * SKILL_PROMPT_OVERHEAD_TOKENS;
     const memoryTokens = memoryFiles.reduce((sum, m) => sum + m.tokens, 0);
     const totalTokensBefore = skillListingTokens + claudeMdTokens + memoryTokens;
     return {

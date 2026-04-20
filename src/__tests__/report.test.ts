@@ -42,13 +42,6 @@ describe('calculateReport', () => {
     expect(report.percent).toBe(0);
   });
 
-  it('handles null scanAfter (estimate mode)', () => {
-    const before = makeScanResult({ totalTokensBefore: 8000 });
-    const report = calculateReport(before, null, [], 2);
-    expect(report.saved).toBe(0);
-    expect(report.after).toBe(8000);
-  });
-
   it('sorts top offenders by token count', () => {
     const before = makeScanResult({ totalTokensBefore: 10000 });
     const after = makeScanResult({ totalTokensBefore: 5000 });

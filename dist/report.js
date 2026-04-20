@@ -6,7 +6,7 @@ const SESSIONS_PER_DAY_DEFAULT = 2;
 const PRICE_PER_1K_TOKENS = 0.003; // Claude Sonnet input price
 export function calculateReport(scanBefore, scanAfter, movedEntries, sessionsPerDay = SESSIONS_PER_DAY_DEFAULT) {
     const before = scanBefore.totalTokensBefore;
-    const after = scanAfter ? scanAfter.totalTokensBefore : before;
+    const after = scanAfter.totalTokensBefore;
     // Use actual scan difference for accurate savings, not SKILL.md file sizes
     const saved = before - after;
     const percent = before > 0 ? (saved / before) * 100 : 0;
@@ -18,15 +18,11 @@ export function calculateReport(scanBefore, scanAfter, movedEntries, sessionsPer
     const monthlySavings = (saved / 1000) * PRICE_PER_1K_TOKENS * sessionsPerDay * 30;
     // Breakdown rows
     const localBefore = scanBefore.localSkills.length;
-    const localAfter = scanAfter ? scanAfter.localSkills.length : localBefore - movedEntries.filter((e) => e.type !== 'oversized_memory').length;
+    const localAfter = scanAfter.localSkills.length;
     const promptBefore = scanBefore.localSkills.length + scanBefore.pluginSkills.length;
-    const promptAfter = scanAfter
-        ? scanAfter.localSkills.length + scanAfter.pluginSkills.length
-        : promptBefore - movedEntries.filter((e) => e.type !== 'oversized_memory').length;
+    const promptAfter = scanAfter.localSkills.length + scanAfter.pluginSkills.length;
     const memBefore = scanBefore.memoryFiles.reduce((s, m) => s + m.sizeBytes, 0);
-    const memAfter = scanAfter
-        ? scanAfter.memoryFiles.reduce((s, m) => s + m.sizeBytes, 0)
-        : memBefore;
+    const memAfter = scanAfter.memoryFiles.reduce((s, m) => s + m.sizeBytes, 0);
     const breakdown = [
         {
             label: 'Local skills',
@@ -207,6 +203,8 @@ export function formatScanSummary(result) {
         lines.push('');
         const tierLabels = { 1: 'Auto', 2: 'Recommended', 3: 'Optional' };
         const tierColors = { 1: '31', 2: '33', 3: '37' };
+        // These actions delete or unlink — they cannot be restored via `claude-slim restore`.
+        const permanentTypes = new Set(['temp_cache', 'broken_symlink']);
         for (let i = 0; i < result.issues.length; i++) {
             const issue = result.issues[i];
             const selected = issue.tier === 1 ? '\u2713' : '\u25cb';
@@ -214,7 +212,8 @@ export function formatScanSummary(result) {
             const color = tierColors[issue.tier] || '37';
             const detail = issue.detail ? ` (${issue.detail})` : '';
             const tokStr = issue.tokens > 0 ? ` ~${issue.tokens.toLocaleString()} tok` : '';
-            lines.push(`  ${selected} ${i + 1}. \x1b[${color}m[${tierLabel}]\x1b[0m ${issue.type}: ${issue.name}${detail}${tokStr}`);
+            const permanent = permanentTypes.has(issue.type) ? ' \x1b[31m(permanent)\x1b[0m' : '';
+            lines.push(`  ${selected} ${i + 1}. \x1b[${color}m[${tierLabel}]\x1b[0m ${issue.type}: ${issue.name}${detail}${tokStr}${permanent}`);
         }
     }
     lines.push('');

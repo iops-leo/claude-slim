@@ -7,6 +7,9 @@ import type {
 } from './types.js';
 
 const STALE_DAYS = 90;
+const OVERSIZED_SKILL_BYTES = 10240;
+const OVERSIZED_MEMORY_BYTES = 5120;
+export const SKILL_PROMPT_OVERHEAD_TOKENS = 30;
 
 async function safeReadFile(p: string): Promise<string | null> {
   try { return await readFile(p, 'utf-8'); } catch { return null; }
@@ -62,7 +65,9 @@ async function getDirSize(dir: string): Promise<number> {
   return total;
 }
 
-// Content cache: avoids re-reading files during classification
+// Content cache: avoids re-reading files during classification.
+// Reset on every scan() so repeat invocations (e.g. pre/post-cleanup) do
+// not accumulate entries for paths that no longer exist.
 const contentCache = new Map<string, string>();
 
 interface SkillCandidate {
@@ -300,11 +305,10 @@ async function scanMemoryFiles(): Promise<{ memoryFiles: MemoryFile[]; staleProj
   return { memoryFiles, staleProjects };
 }
 
-async function getDisabledPlugins(): Promise<Set<string>> {
-  const output = await runCommand('claude plugin list');
-  if (!output) return new Set();
-
+export function parseDisabledPlugins(output: string): Set<string> {
   const disabled = new Set<string>();
+  if (!output) return disabled;
+
   let currentName: string | null = null;
 
   for (const line of output.split('\n')) {
@@ -322,6 +326,10 @@ async function getDisabledPlugins(): Promise<Set<string>> {
   }
 
   return disabled;
+}
+
+async function getDisabledPlugins(): Promise<Set<string>> {
+  return parseDisabledPlugins(await runCommand('claude plugin list'));
 }
 
 export function parseClaudeMdSections(content: string): Array<{ name: string; sizeBytes: number; tokens: number }> {
@@ -435,8 +443,8 @@ function classifyIssues(
       });
     }
 
-    // Tier 3: oversized skills (>10KB)
-    if (skill.sizeBytes > 10240) {
+    // Tier 3: oversized skills
+    if (skill.sizeBytes > OVERSIZED_SKILL_BYTES) {
       issues.push({
         type: 'oversized_skill',
         tier: 3,
@@ -474,9 +482,9 @@ function classifyIssues(
     });
   }
 
-  // Tier 2: oversized memory files (>5KB)
+  // Tier 2: oversized memory files
   for (const mem of memoryFiles) {
-    if (mem.sizeBytes > 5120) {
+    if (mem.sizeBytes > OVERSIZED_MEMORY_BYTES) {
       issues.push({
         type: 'oversized_memory',
         tier: 2,
@@ -511,7 +519,7 @@ function classifyIssues(
         tier: 2,
         name: plugin.name,
         detail: `${plugin.skillCount} skills`,
-        tokens: plugin.skillCount * 30,
+        tokens: plugin.skillCount * SKILL_PROMPT_OVERHEAD_TOKENS,
         path: join(getPluginsDir(), plugin.name),
       });
     }
@@ -523,6 +531,8 @@ function classifyIssues(
 }
 
 export async function scan(): Promise<ScanResult> {
+  contentCache.clear();
+
   const [
     { skills: localSkills, brokenSymlinks },
     { skills: pluginSkills, plugins, tempCaches },
@@ -556,7 +566,8 @@ export async function scan(): Promise<ScanResult> {
   );
 
   // Estimate total tokens at startup
-  const skillListingTokens = (localSkills.length + pluginSkills.length) * 30;
+  const skillListingTokens =
+    (localSkills.length + pluginSkills.length) * SKILL_PROMPT_OVERHEAD_TOKENS;
   const memoryTokens = memoryFiles.reduce((sum, m) => sum + m.tokens, 0);
   const totalTokensBefore = skillListingTokens + claudeMdTokens + memoryTokens;
 
