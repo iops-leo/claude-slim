@@ -5,3 +5,7 @@
 .omc/
 node_modules/
 .token-cache.json
+
+# Personal runbooks / planning notes — local-only, not part of the public repo
+docs/internal/
+docs/superpowers/
