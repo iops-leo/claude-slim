@@ -5,6 +5,26 @@ All notable changes to claude-slim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] — 2026-04-20
+
+### Fixed
+- `claude-slim report` pre-clean token reconstruction: previously multiplied every moved entry (except `oversized_memory`) by the per-skill prompt overhead, which double-counted `stale_project` and zero-token entries. The filter now targets skill-type entries only, and `stale_project` memory tokens are added back separately for an accurate "Before" total.
+- Partial-failure orphan in `cleanIssues`: if `appendManifest` threw after a successful `rename`, the skill or stale project directory was stranded in `skills.disabled/` with no manifest record. A new `recordOrRollback` helper reverses the rename when the manifest write fails. `unlink`/`rm` paths remain best-effort with explicit comments.
+
+### Changed
+- CLI version string is now read from `package.json` at startup instead of hard-coded, so release bumps only need to edit one place.
+- Magic numbers in `scanner.ts` (`10240`, `5120`, `30`) extracted to named constants (`OVERSIZED_SKILL_BYTES`, `OVERSIZED_MEMORY_BYTES`, `SKILL_PROMPT_OVERHEAD_TOKENS`). `SKILL_PROMPT_OVERHEAD_TOKENS` is exported and reused by the `report` command.
+- `calculateReport` signature narrowed to `scanAfter: ScanResult` (the `null`/estimate-mode branch had no production caller).
+- `temp_cache` and `broken_symlink` entries in the interactive clean list now carry a red `(permanent)` tag so users see the action is not restorable before selecting.
+
+### Added
+- `parseDisabledPlugins(output)` — pure parser extracted from `getDisabledPlugins` with unit test coverage for marketplace-suffix, fallback, mixed, case-insensitive, and dangling-status inputs.
+- Rollback tests for `cleanIssues` (skill and `stale_project` paths) using `vi.spyOn(manifest, 'appendManifest')`.
+- `contentCache` is now cleared at the top of each `scan()` so repeat invocations (e.g. pre/post-cleanup) don't accumulate stale entries.
+
+### Tests
+- Total test count: **66 → 73** (+7).
+
 ## [2.2.0] — 2026-04-18
 
 ### Added
