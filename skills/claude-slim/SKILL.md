@@ -41,26 +41,28 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/claude-slim/scripts/scan.sh"
 
 After getting the scan JSON, YOU must interpret and present results to the user. Do NOT just dump raw CLI output. Present a full diagnostic report in the user's language.
 
+> **Templates below are shown in English for readability. Always translate headers, labels, and prompts into the user's detected language when rendering.**
+
 ### 2-1. Environment Snapshot Table
 
 Show a summary table:
 
-| 항목 | 수치 | 토큰 |
-|------|------|------|
-| 로컬 스킬 | N개 (XKB) | X tok |
-| 플러그인 | N개 (M 스킬) | ~X tok |
+| Item | Count | Tokens |
+|------|-------|--------|
+| Local skills | N (XKB) | X tok |
+| Plugins | N (M skills) | ~X tok |
 | CLAUDE.md | XKB | X tok |
-| 메모리 파일 | N개 (XKB) | ~X tok |
-| **세션 시작 오버헤드** | | **~X tok** |
+| Memory files | N (XKB) | ~X tok |
+| **Session startup overhead** | | **~X tok** |
 
 ### 2-2. Plugin Detail Table
 
 List each plugin with skill count and a judgment:
 
-| 플러그인 | 스킬 수 | 비고 |
-|----------|:-------:|------|
-| omc | 36 | 코어 플러그인. 유지 |
-| temp_local_... | 1 | **실패한 설치 잔여물. 삭제 대상** |
+| Plugin | Skills | Notes |
+|--------|:------:|-------|
+| omc | 36 | Core plugin. Keep. |
+| temp_local_... | 1 | **Failed install remnant. Cleanup target.** |
 
 Annotate each with status: actively used, possibly unused, or cleanup target. Flag `temp_local_*` entries as failed install remnants.
 
@@ -68,18 +70,18 @@ Annotate each with status: actively used, possibly unused, or cleanup target. Fl
 
 Group issues by tier and explain EACH one with context and recommendation:
 
-**Tier 1 — 즉시 정리 (위험 없음):**
+**Tier 1 — Immediate cleanup (zero risk):**
 These are safe to remove with zero risk: broken symlinks, empty templates, .skill/ duplicates, temp_local_* cache. Pre-selected. Explain why each is safe.
 
-**Tier 2 — 정리 추천:**
+**Tier 2 — Recommended cleanup:**
 These are recommended but need user judgment. For each issue, explain:
 - What is it and why it's flagged
 - What happens if you remove it (safe? any side effects?)
 - How many tokens it saves
 
-Example: "frontend-design이 로컬과 플러그인에 둘 다 있습니다. 로컬 제거해도 플러그인 버전이 남으니 안전하게 제거 가능. ~823 tok 절감."
+Example: "frontend-design exists both locally and in a plugin. Removing the local copy is safe because the plugin version remains. Saves ~823 tok."
 
-**Tier 3 — 선택 사항 (사용자 판단):**
+**Tier 3 — Optional (user judgment):**
 These are large skills that cost tokens but might be in active use. For each:
 - Show size and token cost
 - Judge whether the user likely uses it (based on what it does)
@@ -94,7 +96,7 @@ End with a numbered action list, ordered by impact:
 
 Show estimated total token savings if all recommended actions are taken.
 
-If subcommand is `scan`, stop here. Ask "정리할까요?" only for the full pipeline.
+If subcommand is `scan`, stop here. Ask a localized equivalent of "Proceed with cleanup?" only for the full pipeline.
 
 ---
 
@@ -133,7 +135,7 @@ cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js restore
 
 ## Language
 
-Detect the user's language from their most recent message. Present all reports, analysis, and explanations in that language. The CLI output is machine-readable — translate only the user-facing interpretation.
+Detect the user's language from their most recent message. Present all reports, analysis, and explanations in that language — including table headers, tier labels, prompts, and every user-facing string. The CLI output is machine-readable (always English) and must not be echoed verbatim; translate its content into the user's language when you interpret it. The example tables above are written in English only for authoring clarity — do not treat them as a required output format.
 
 ## Rules
 

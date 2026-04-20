@@ -5,6 +5,11 @@ All notable changes to claude-slim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] — 2026-04-20
+
+### Changed
+- `skills/claude-slim/SKILL.md` rewritten to be language-neutral. Example tables, tier labels, and the cleanup prompt are now in English; the `Language` section explicitly instructs the model to translate every user-facing string into the detected language and not to treat the English examples as a required output format. Prior versions biased non-Korean sessions toward Korean headers because the authoring templates were Korean.
+
 ## [2.2.1] — 2026-04-20
 
 ### Fixed
