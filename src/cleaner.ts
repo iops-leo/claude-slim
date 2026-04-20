@@ -19,6 +19,20 @@ export interface CleanResult {
   errors: Array<{ name: string; error: string }>;
 }
 
+// Record the manifest entry; if it fails, run the caller's compensation to
+// undo the filesystem side effect so we never leave an untracked orphan.
+async function recordOrRollback(
+  entry: ManifestEntry,
+  rollback: () => Promise<void>,
+): Promise<void> {
+  try {
+    await appendManifest(entry);
+  } catch (err) {
+    try { await rollback(); } catch { /* best-effort */ }
+    throw err;
+  }
+}
+
 export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
   await ensureDisabledDir();
   const disabledDir = getDisabledDir();
@@ -39,6 +53,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
           tokenCount: issue.tokens,
           tier: issue.tier,
         };
+        // unlink is not reversible; best-effort append only
         await appendManifest(entry);
         moved.push(entry);
       } else if (
@@ -59,7 +74,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
           tokenCount: issue.tokens,
           tier: issue.tier,
         };
-        await appendManifest(entry);
+        await recordOrRollback(entry, () => rename(dest, issue.path));
         moved.push(entry);
       } else if (issue.type === 'temp_cache') {
         // Delete temp directories (failed plugin installs, not restorable)
@@ -72,6 +87,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
           tokenCount: 0,
           tier: issue.tier,
         };
+        // rm is not reversible; best-effort append only
         await appendManifest(entry);
         moved.push(entry);
       } else if (issue.type === 'stale_project') {
@@ -95,7 +111,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
           tokenCount: issue.tokens,
           tier: issue.tier,
         };
-        await appendManifest(entry);
+        await recordOrRollback(entry, () => rename(backupDir, issue.path));
         moved.push(entry);
       } else if (issue.type === 'oversized_memory' || issue.type === 'disabled_plugin') {
         // Report only — user manages these manually

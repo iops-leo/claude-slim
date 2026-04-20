@@ -116,17 +116,28 @@ program
         return;
     }
     const sessionsPerDay = parseInt(opts.sessionsPerDay, 10) || 2;
-    // Reconstruct "before" state: current + what was removed
-    const removedSkillCount = movedEntries.filter((e) => e.type !== 'oversized_memory').length;
-    const totalBefore = result.totalTokensBefore + removedSkillCount * 30;
+    // Reconstruct "before" state: current + what was removed.
+    // Only skill-type entries contributed to the per-skill prompt overhead
+    // (stale_project restores memory tokens separately; broken_symlink/
+    // temp_cache never counted toward totalTokensBefore).
+    const SKILL_TYPES = new Set(['template', 'duplicate', 'skill_dup', 'oversized_skill']);
+    const removedSkillEntries = movedEntries.filter((e) => SKILL_TYPES.has(e.type));
+    const removedMemoryTokens = movedEntries
+        .filter((e) => e.type === 'stale_project')
+        .reduce((sum, e) => sum + (e.tokenCount || 0), 0);
+    const totalBefore = result.totalTokensBefore + removedSkillEntries.length * 30 + removedMemoryTokens;
     const pseudoBefore = {
         ...result,
         totalTokensBefore: totalBefore,
         localSkills: [
             ...result.localSkills,
-            ...movedEntries
-                .filter((e) => e.type !== 'oversized_memory')
-                .map((e) => ({ name: e.name, path: e.from, sizeBytes: 0, tokens: e.tokenCount || 0, source: 'local' })),
+            ...removedSkillEntries.map((e) => ({
+                name: e.name,
+                path: e.from,
+                sizeBytes: 0,
+                tokens: e.tokenCount || 0,
+                source: 'local',
+            })),
         ],
     };
     const reportData = calculateReport(pseudoBefore, result, movedEntries, sessionsPerDay);

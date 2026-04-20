@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { cleanIssues, restoreItem } from '../cleaner.js';
+import * as manifest from '../manifest.js';
 import { readManifest, readManifestV2 } from '../manifest.js';
 import {
   createTmpClaude,
@@ -306,5 +307,57 @@ describe('manifest bounded growth', () => {
     // After 10 cycles, manifest should be empty (or at least not linear in cycle count)
     const final = await readManifestV2();
     expect(final.entries).toHaveLength(0);
+  });
+});
+
+describe('cleanIssues — rollback on manifest failure', () => {
+  it('reverses skill rename when appendManifest throws', async () => {
+    const skillPath = await writeSkill(tmp.skillsDir, 'rollback-skill', 'x');
+    const issue: Issue = {
+      type: 'template',
+      tier: 1,
+      name: 'rollback-skill',
+      tokens: 10,
+      path: skillPath,
+    };
+
+    const spy = vi
+      .spyOn(manifest, 'appendManifest')
+      .mockRejectedValueOnce(new Error('manifest write blew up'));
+
+    const result = await cleanIssues([issue]);
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].name).toBe('rollback-skill');
+    expect(result.moved).toHaveLength(0);
+    // Rolled back: original path restored, disabled dir does not hold an orphan
+    expect(await exists(skillPath)).toBe(true);
+    expect(await exists(join(tmp.disabledDir, 'rollback-skill'))).toBe(false);
+
+    spy.mockRestore();
+  });
+
+  it('reverses stale_project rename when appendManifest throws', async () => {
+    const memDir = await writeStaleProject(tmp.projectsDir, 'myproj', { 'a.md': 'x' });
+    const issue: Issue = {
+      type: 'stale_project',
+      tier: 2,
+      name: 'myproj',
+      tokens: 20,
+      path: memDir,
+    };
+
+    const spy = vi
+      .spyOn(manifest, 'appendManifest')
+      .mockRejectedValueOnce(new Error('manifest write blew up'));
+
+    const result = await cleanIssues([issue]);
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.moved).toHaveLength(0);
+    expect(await exists(memDir)).toBe(true);
+    expect(await exists(join(tmp.disabledDir, 'memory-backup', 'myproj'))).toBe(false);
+
+    spy.mockRestore();
   });
 });
