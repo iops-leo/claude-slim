@@ -5,3 +5,4 @@ export declare function getProjectsDir(): string;
 export declare function getDisabledDir(): string;
 export declare function getManifestPath(): string;
 export declare function getLegacyManifestPath(): string;
+export declare function assertInsideClaudeDir(p: string): void;

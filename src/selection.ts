@@ -33,9 +33,11 @@ export function resolveRestoreSelection(input: string, count: number): number[] 
   }
 
   const indices: number[] = [];
+  const seen = new Set<number>();
   for (const part of trimmed.split(',')) {
     const num = parseInt(part.trim(), 10);
-    if (!isNaN(num) && num >= 1 && num <= count) {
+    if (!isNaN(num) && num >= 1 && num <= count && !seen.has(num)) {
+      seen.add(num);
       indices.push(num - 1);
     }
   }

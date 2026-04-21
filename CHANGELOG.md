@@ -5,6 +5,25 @@ All notable changes to claude-slim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3] — 2026-04-21
+
+### Security
+- `cleanIssues` and `restoreItem` now refuse to operate on any path outside `~/.claude/`. A tampered manifest or scanner bug that produced an out-of-tree path previously flowed straight into `rename`/`rm`/`unlink`; the guard (`assertInsideClaudeDir`, `src/paths.ts`) rejects those paths up front with an explicit error. Local-only concern — not remotely exploitable — but the blast radius justified a closed gate.
+- `temp_cache` cleanup now `lstat`s the target first and uses `unlink` when the path is itself a symlink. Node ≥ 18's `fs.rm` does not follow symlinks today, but encoding the invariant in our own code removes the dependency on Node-version behavior. Closes the attack scenario where a malicious plugin plants `temp_local_*` as a symlink to an external directory.
+- `runCommand` switched from `child_process.exec` (shell) to `execFile` (no shell). The sole caller (`'claude plugin list'`) was never exploitable because its arguments were hardcoded, but the previous signature accepted arbitrary strings — removing the shell closes that latent injection surface for forks and future callers.
+
+### Fixed
+- `restoreItem` for skill entries now checks that (a) the disabled backup still exists and (b) the restore target is free, mirroring the `stale_project` branch. Previously a missing backup threw an opaque `ENOENT`, and a re-created skill at the original path was silently overwritten on restore.
+- Breakdown table's **Saved** column was inverted — every row (`Local skills`, `System prompt`, `Memory files`, `Est. tokens`) subtracted `before - after` as `after - before`, producing negative numbers when cleanup reduced counts. The top-level `saved` field was already correct; only the per-row breakdown was wrong.
+- `resolveRestoreSelection` now deduplicates repeated indices (matching `resolveSelection`). Input `"2,2,2"` used to trigger three `restoreItem` calls for the same entry, with the second and third failing noisily.
+- Token cache writes (`~/.claude/.token-cache.json`) use atomic `writeFile` + `rename` instead of a direct overwrite. A crash mid-flush can no longer leave a torn JSON file.
+
+### Changed
+- `src/tokenizer.ts` now resolves the cache path lazily via `getClaudeDir()` instead of freezing it at module load. Tests that stub `HOME` now hit the tmp directory as expected; before, the tokenizer leaked into the real `~/.claude/`. In-memory cache state is also reset on every `initTokenizer()` call so repeated invocations across tests don't bleed entries.
+
+### Tests
+- Total test count: **73 → 82** (+9). New coverage: path containment, temp_cache symlink safety, skill restore existence guards, breakdown sign, restore-selection dedup, tokenizer atomic flush.
+
 ## [2.2.2] — 2026-04-20
 
 ### Changed

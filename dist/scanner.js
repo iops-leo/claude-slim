@@ -47,11 +47,13 @@ async function isBrokenSymlink(p) {
         }
     }
 }
-async function runCommand(cmd) {
+// execFile (not exec) — never routes through a shell, so command arguments
+// cannot be interpreted as shell metacharacters regardless of caller inputs.
+async function runCommand(file, args) {
     try {
-        const { exec } = await import('node:child_process');
+        const { execFile } = await import('node:child_process');
         return new Promise((resolve) => {
-            exec(cmd, { timeout: 10000 }, (_err, stdout) => {
+            execFile(file, args, { timeout: 10000 }, (_err, stdout) => {
                 resolve(stdout || '');
             });
         });
@@ -307,7 +309,7 @@ export function parseDisabledPlugins(output) {
     return disabled;
 }
 async function getDisabledPlugins() {
-    return parseDisabledPlugins(await runCommand('claude plugin list'));
+    return parseDisabledPlugins(await runCommand('claude', ['plugin', 'list']));
 }
 export function parseClaudeMdSections(content) {
     const sections = [];

@@ -95,4 +95,9 @@ describe('resolveRestoreSelection', () => {
   it('ignores out-of-range', () => {
     expect(resolveRestoreSelection('0,6', 5)).toEqual([]);
   });
+
+  it('deduplicates repeated numbers', () => {
+    expect(resolveRestoreSelection('2,2,2', 5)).toEqual([1]);
+    expect(resolveRestoreSelection('1,3,1,3', 5)).toEqual([0, 2]);
+  });
 });

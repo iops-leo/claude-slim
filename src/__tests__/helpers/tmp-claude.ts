@@ -75,6 +75,17 @@ export async function writeTempCache(
   return cacheDir;
 }
 
+// Creates `linkPath` as a symlink to `target`. Used to verify the cleaner
+// does not traverse symlinks when deleting temp_cache directories.
+export async function writeSymlinkDir(
+  linkPath: string,
+  target: string,
+): Promise<string> {
+  await mkdir(join(linkPath, '..'), { recursive: true });
+  await symlink(target, linkPath);
+  return linkPath;
+}
+
 export async function exists(path: string): Promise<boolean> {
   try {
     await access(path);

@@ -10,9 +10,11 @@ import {
   writeSkill,
   writeStaleProject,
   writeTempCache,
+  writeSymlinkDir,
   exists,
   type TmpClaude,
 } from './helpers/tmp-claude.js';
+import { mkdir, writeFile } from 'node:fs/promises';
 import type { Issue } from '../types.js';
 
 let tmp: TmpClaude;
@@ -152,6 +154,35 @@ describe('cleanIssues — temp_cache', () => {
   });
 });
 
+describe('cleanIssues — symlink safety', () => {
+  it('does not follow symlink target when deleting temp_cache', async () => {
+    // Victim data sits OUTSIDE ~/.claude/ but inside the test tmp
+    const victimDir = join(tmp.home, 'victim');
+    await mkdir(victimDir, { recursive: true });
+    await writeFile(join(victimDir, 'precious.txt'), 'do not delete');
+
+    // Attacker plants a symlink inside ~/.claude/plugins/cache/ that points at the victim
+    const linkPath = join(tmp.pluginsDir, 'temp_local_evil');
+    await writeSymlinkDir(linkPath, victimDir);
+
+    const issue: Issue = {
+      type: 'temp_cache',
+      tier: 1,
+      name: 'temp_local_evil',
+      tokens: 0,
+      path: linkPath,
+    };
+
+    await cleanIssues([issue]);
+
+    // The symlink itself should be gone
+    expect(await exists(linkPath)).toBe(false);
+    // But the target must NOT be touched
+    expect(await exists(victimDir)).toBe(true);
+    expect(await exists(join(victimDir, 'precious.txt'))).toBe(true);
+  });
+});
+
 describe('cleanIssues — stale_project', () => {
   it('moves memory files to backup and restores them', async () => {
     const memDir = await writeStaleProject(tmp.projectsDir, 'old-proj', {
@@ -277,6 +308,56 @@ describe('cleanIssues — stale_project atomicity', () => {
   });
 });
 
+describe('restoreItem — skill existence guards', () => {
+  it('refuses to restore when target skill dir already exists', async () => {
+    const skillPath = await writeSkill(tmp.skillsDir, 'collide', 'old');
+    const issue: Issue = {
+      type: 'template',
+      tier: 1,
+      name: 'collide',
+      tokens: 10,
+      path: skillPath,
+    };
+    await cleanIssues([issue]);
+
+    // User recreated the skill with different content while it was disabled
+    await writeSkill(tmp.skillsDir, 'collide', 'new-work');
+
+    const entries = await readManifest();
+    const entry = entries.find((e) => e.name === 'collide');
+    await expect(restoreItem(entry!)).rejects.toThrow(/already exists/i);
+
+    // Original (current) user work must still be intact — not silently overwritten
+    const content = await (await import('node:fs/promises')).readFile(
+      join(skillPath, 'SKILL.md'),
+      'utf-8',
+    );
+    expect(content).toBe('new-work');
+  });
+
+  it('gives a clear error when backup is missing', async () => {
+    const skillPath = await writeSkill(tmp.skillsDir, 'gone', 'content');
+    const issue: Issue = {
+      type: 'template',
+      tier: 1,
+      name: 'gone',
+      tokens: 10,
+      path: skillPath,
+    };
+    await cleanIssues([issue]);
+
+    // Simulate user manually deleting the backup dir
+    await (await import('node:fs/promises')).rm(
+      join(tmp.disabledDir, 'gone'),
+      { recursive: true, force: true },
+    );
+
+    const entries = await readManifest();
+    const entry = entries.find((e) => e.name === 'gone');
+    await expect(restoreItem(entry!)).rejects.toThrow(/backup/i);
+  });
+});
+
 describe('manifest bounded growth', () => {
   it('restore removes entry so manifest stays bounded across cycles', async () => {
     const skillPath = await writeSkill(tmp.skillsDir, 'cycler', 'x');
@@ -307,6 +388,63 @@ describe('manifest bounded growth', () => {
     // After 10 cycles, manifest should be empty (or at least not linear in cycle count)
     const final = await readManifestV2();
     expect(final.entries).toHaveLength(0);
+  });
+});
+
+describe('cleanIssues — path containment', () => {
+  it('refuses to operate on paths outside ~/.claude/', async () => {
+    // Attacker-controlled manifest or scanner bug produces a path outside the claude dir
+    const outside = join(tmp.home, 'sensitive.txt');
+    await (await import('node:fs/promises')).writeFile(outside, 'precious');
+
+    const issue: Issue = {
+      type: 'broken_symlink',
+      tier: 1,
+      name: 'evil',
+      tokens: 0,
+      path: outside,
+    };
+
+    const result = await cleanIssues([issue]);
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].name).toBe('evil');
+    expect(result.errors[0].error).toMatch(/outside|refus/i);
+    expect(result.moved).toHaveLength(0);
+    // File must still exist — guard prevented deletion
+    expect(await exists(outside)).toBe(true);
+  });
+
+  it('refuses to clean temp_cache pointing outside ~/.claude/', async () => {
+    const outside = join(tmp.home, 'not-claude-dir');
+    await (await import('node:fs/promises')).mkdir(outside, { recursive: true });
+    await (await import('node:fs/promises')).writeFile(join(outside, 'important.txt'), 'keep me');
+
+    const issue: Issue = {
+      type: 'temp_cache',
+      tier: 1,
+      name: 'temp_local_evil',
+      tokens: 0,
+      path: outside,
+    };
+
+    const result = await cleanIssues([issue]);
+    expect(result.errors).toHaveLength(1);
+    expect(await exists(join(outside, 'important.txt'))).toBe(true);
+  });
+});
+
+describe('restoreItem — path containment', () => {
+  it('refuses to restore to a path outside ~/.claude/', async () => {
+    const entry = {
+      date: new Date().toISOString(),
+      name: 'evil',
+      from: join(tmp.home, 'etc-passwd-overwrite'),
+      type: 'template' as const,
+      tier: 1 as const,
+    };
+
+    await expect(restoreItem(entry)).rejects.toThrow(/outside|refus/i);
   });
 });
 

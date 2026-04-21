@@ -64,4 +64,37 @@ describe('calculateReport', () => {
     // saved=3000, monthly = (3000/1000) * 0.003 * 5 * 30 = 1.35
     expect(report.monthlySavings).toBeCloseTo(1.35, 2);
   });
+
+  it('breakdown "Saved" column shows positive numbers when cleanup reduces counts', () => {
+    const before = makeScanResult({
+      localSkills: [
+        { name: 's1', path: '/a', sizeBytes: 1024, tokens: 100, source: 'local' },
+        { name: 's2', path: '/b', sizeBytes: 2048, tokens: 200, source: 'local' },
+        { name: 's3', path: '/c', sizeBytes: 1024, tokens: 150, source: 'local' },
+      ],
+      memoryFiles: [
+        { project: 'p', name: 'old.md', path: '/m', sizeBytes: 8192, tokens: 500 },
+      ],
+      totalTokensBefore: 10000,
+    });
+    const after = makeScanResult({
+      localSkills: [
+        { name: 's1', path: '/a', sizeBytes: 1024, tokens: 100, source: 'local' },
+      ],
+      memoryFiles: [],
+      totalTokensBefore: 4000,
+    });
+
+    const report = calculateReport(before, after, [], 2);
+
+    const findRow = (label: string) => report.breakdown.find((r) => r.label === label)!;
+    // 3 → 1, saved 2
+    expect(findRow('Local skills').saved).toBe('2');
+    // ~3 → ~1, saved 2
+    expect(findRow('System prompt').saved).toBe('2');
+    // 8.0KB → 0.0KB, saved 8.0KB
+    expect(findRow('Memory files').saved).toBe('8.0KB');
+    // 10K → 4K, saved 6K
+    expect(findRow('Est. tokens').saved).toBe('~6,000');
+  });
 });

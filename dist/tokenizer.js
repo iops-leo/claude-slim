@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
+import { getClaudeDir } from './paths.js';
 let encoder = null;
 let useFallback = false;
-const CACHE_PATH = join(homedir(), '.claude', '.token-cache.json');
+// Resolved lazily so the HOME env stub used in tests is honored.
+function getCachePath() {
+    return join(getClaudeDir(), '.token-cache.json');
+}
 let cache = { version: 1, entries: {} };
 let cacheDirty = false;
 export async function initTokenizer() {
@@ -16,8 +19,12 @@ export async function initTokenizer() {
     catch {
         useFallback = true;
     }
+    // Reset in-memory state so repeated initTokenizer() calls (e.g. across
+    // test cases) don't bleed cache entries from a prior invocation.
+    cache = { version: 1, entries: {} };
+    cacheDirty = false;
     try {
-        const raw = await readFile(CACHE_PATH, 'utf-8');
+        const raw = await readFile(getCachePath(), 'utf-8');
         cache = JSON.parse(raw);
     }
     catch {
@@ -47,9 +54,15 @@ export function countTokensCached(text, filePath) {
 export async function flushCache() {
     if (!cacheDirty)
         return;
+    const target = getCachePath();
+    const tmp = target + '.tmp';
     try {
-        await mkdir(dirname(CACHE_PATH), { recursive: true });
-        await writeFile(CACHE_PATH, JSON.stringify(cache, null, 2));
+        await mkdir(dirname(target), { recursive: true });
+        // Atomic: write to a sibling tmp file first, then rename. A crash mid-write
+        // leaves the prior cache (or nothing) — never a torn JSON file.
+        await writeFile(tmp, JSON.stringify(cache, null, 2));
+        await rename(tmp, target);
+        cacheDirty = false;
     }
     catch {
         // Non-critical

@@ -59,25 +59,25 @@ export function calculateReport(
       label: 'Local skills',
       before: String(localBefore),
       after: String(localAfter),
-      saved: `${localAfter - localBefore}`,
+      saved: `${localBefore - localAfter}`,
     },
     {
       label: 'System prompt',
       before: `~${promptBefore}`,
       after: `~${promptAfter}`,
-      saved: `${promptAfter - promptBefore}`,
+      saved: `${promptBefore - promptAfter}`,
     },
     {
       label: 'Memory files',
       before: `${(memBefore / 1024).toFixed(1)}KB`,
       after: `${(memAfter / 1024).toFixed(1)}KB`,
-      saved: `${((memAfter - memBefore) / 1024).toFixed(1)}KB`,
+      saved: `${((memBefore - memAfter) / 1024).toFixed(1)}KB`,
     },
     {
       label: 'Est. tokens',
       before: `~${before.toLocaleString()}`,
       after: `~${after.toLocaleString()}`,
-      saved: `~${(after - before).toLocaleString()}`,
+      saved: `~${(before - after).toLocaleString()}`,
     },
   ];
 

@@ -28,9 +28,11 @@ export function resolveRestoreSelection(input, count) {
         return Array.from({ length: count }, (_, i) => i);
     }
     const indices = [];
+    const seen = new Set();
     for (const part of trimmed.split(',')) {
         const num = parseInt(part.trim(), 10);
-        if (!isNaN(num) && num >= 1 && num <= count) {
+        if (!isNaN(num) && num >= 1 && num <= count && !seen.has(num)) {
+            seen.add(num);
             indices.push(num - 1);
         }
     }

@@ -1,7 +1,7 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry } from './manifest.js';
-import { getSkillsDir } from './paths.js';
+import { assertInsideClaudeDir, getSkillsDir } from './paths.js';
 async function pathExists(p) {
     try {
         await lstat(p);
@@ -33,6 +33,7 @@ export async function cleanIssues(issues) {
     const errors = [];
     for (const issue of issues) {
         try {
+            assertInsideClaudeDir(issue.path);
             if (issue.type === 'broken_symlink') {
                 await unlink(issue.path);
                 const entry = {
@@ -67,8 +68,17 @@ export async function cleanIssues(issues) {
                 moved.push(entry);
             }
             else if (issue.type === 'temp_cache') {
-                // Delete temp directories (failed plugin installs, not restorable)
-                await rm(issue.path, { recursive: true, force: true });
+                // Delete temp directories (failed plugin installs, not restorable).
+                // If the path is itself a symlink, only remove the link — never
+                // follow it into whatever it points at. fs.rm on Node >=18 already
+                // behaves this way, but we encode the invariant explicitly.
+                const st = await lstat(issue.path);
+                if (st.isSymbolicLink()) {
+                    await unlink(issue.path);
+                }
+                else {
+                    await rm(issue.path, { recursive: true, force: true });
+                }
                 const entry = {
                     date: new Date().toISOString(),
                     name: issue.name,
@@ -138,6 +148,7 @@ async function cleanEmptyDirs(dir) {
     catch { /* skip */ }
 }
 export async function restoreItem(entry) {
+    assertInsideClaudeDir(entry.from);
     if (entry.type === 'broken_symlink') {
         throw new Error(`Broken symlinks cannot be restored (${entry.name})`);
     }
@@ -163,6 +174,14 @@ export async function restoreItem(entry) {
         // Restore skill directory using the same naming as cleanIssues
         const safeName = entry.name.replace(/\//g, '--');
         const src = join(disabledDir, safeName);
+        if (!(await pathExists(src))) {
+            throw new Error(`Backup not found for "${entry.name}" at ${src}. ` +
+                `It may have been manually removed.`);
+        }
+        if (await pathExists(entry.from)) {
+            throw new Error(`Cannot restore: ${entry.from} already exists. ` +
+                `Remove or rename it first.`);
+        }
         await mkdir(dirname(entry.from), { recursive: true });
         await rename(src, entry.from);
     }
