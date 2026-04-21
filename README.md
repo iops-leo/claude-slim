@@ -2,9 +2,13 @@
 
 # claude-slim
 
+[![npm](https://img.shields.io/npm/v/claude-slim.svg)](https://www.npmjs.com/package/claude-slim)
+[![CI](https://github.com/iops-leo/claude-slim/actions/workflows/ci.yml/badge.svg)](https://github.com/iops-leo/claude-slim/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/claude-slim.svg)](./LICENSE)
+
 **You're burning thousands of tokens before you even say "hello."**
 
-Every session loads *every* skill, memory file, and plugin instruction into the system prompt — even the ones you never use. claude-slim finds and removes that waste.
+Every Claude Code session auto-loads every skill, memory file, and plugin instruction into the system prompt — even the ones you never use. If you run OMC, marketplace plugins, or a custom skill stack, you're paying for context you'll never touch. claude-slim finds and removes that waste.
 
 ```
 /claude-slim
@@ -115,7 +119,15 @@ That's slower responses. Hitting your usage cap faster. Paying for context you'r
 
 ---
 
-## Install (10 seconds)
+## Try it (10 seconds)
+
+No install needed — run once and see what's in your `~/.claude/`:
+
+```bash
+npx claude-slim scan
+```
+
+Happy with what you see? Make it part of your Claude Code workflow:
 
 ```bash
 claude plugin marketplace add iops-leo/claude-slim
@@ -123,12 +135,6 @@ claude plugin install claude-slim
 ```
 
 Then just type `/claude-slim` in any session.
-
-Or use the standalone CLI:
-
-```bash
-npx claude-slim scan
-```
 
 ---
 
@@ -162,6 +168,17 @@ npx claude-slim report            # Show savings from last clean
 | **Reversible** | `/claude-slim restore` brings anything back, any time |
 | **User-controlled** | Always asks before making changes. `--dry-run` to preview. |
 | **Hands off** | Never touches CLAUDE.md, settings.json, or plugin configs |
+| **Scoped** | All operations are refused if the target path escapes `~/.claude/` |
+
+### What claude-slim never touches
+
+- **`~/.claude/CLAUDE.md`** — your system instructions, read-only.
+- **`~/.claude/settings.json`** — MCP server config, hooks, and any other settings. Read-only.
+- **Plugin internals** (`~/.claude/plugins/config.json`, individual `plugin.json` files) — left alone; use `claude plugin` to manage plugins.
+- **Git / project sources** — claude-slim only looks inside `~/.claude/`, never at your code.
+- **Anything outside `~/.claude/`** — a path-containment guard refuses destructive ops anywhere else, even if a tampered manifest asked it to.
+
+Only touched: entries under `~/.claude/skills/`, `~/.claude/plugins/cache/temp_local_*`, and `~/.claude/projects/*/memory/` — and even those are moved to `skills.disabled/`, not deleted (except `temp_local_*` failed-install caches, which are removed outright).
 
 ---
 

@@ -34,6 +34,10 @@
     "type": "git",
     "url": "git+https://github.com/iops-leo/claude-slim.git"
   },
+  "homepage": "https://github.com/iops-leo/claude-slim#readme",
+  "bugs": {
+    "url": "https://github.com/iops-leo/claude-slim/issues"
+  },
   "engines": {
     "node": ">=18"
   },
