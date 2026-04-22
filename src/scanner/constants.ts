@@ -1,0 +1,4 @@
+export const STALE_DAYS = 90;
+export const OVERSIZED_SKILL_BYTES = 10240;
+export const OVERSIZED_MEMORY_BYTES = 5120;
+export const SKILL_PROMPT_OVERHEAD_TOKENS = 30;

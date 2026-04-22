@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initTokenizer } from '../tokenizer.js';
 import { parseClaudeMdSections, dedupeBySymlink, parseDisabledPlugins } from '../scanner.js';
-import type { SkillInfo } from '../types.js';
+import {
+  classifyIssues,
+  detectors,
+  type Detector,
+  type DetectorContext,
+} from '../scanner/detectors.js';
+import type { SkillInfo, Issue } from '../types.js';
 
 beforeAll(async () => {
   await initTokenizer();
@@ -170,5 +176,68 @@ describe('parseDisabledPlugins', () => {
   it('ignores dangling status line without a preceding entry', () => {
     const output = 'some preamble\n  disabled\n';
     expect(parseDisabledPlugins(output).size).toBe(0);
+  });
+});
+
+function makeCtx(partial: Partial<DetectorContext> = {}): DetectorContext {
+  return {
+    localSkills: [],
+    pluginSkills: [],
+    brokenSymlinks: [],
+    memoryFiles: [],
+    tempCaches: [],
+    staleProjects: [],
+    disabledPlugins: new Set(),
+    plugins: [],
+    contents: new Map(),
+    ...partial,
+  };
+}
+
+describe('detector registry', () => {
+  it('classifyIssues uses the built-in registry by default', () => {
+    const ctx = makeCtx({
+      brokenSymlinks: [{ name: 'dead', path: '/fake/dead', target: '/gone' }],
+    });
+    const issues = classifyIssues(ctx);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].type).toBe('broken_symlink');
+  });
+
+  it('accepts a custom registry so contributors can add detectors without editing core', () => {
+    // This is the extensibility contract documented in CONTRIBUTING.md:
+    // writing a new detector is a pure function + one-line append to the
+    // registry array. No scanner.ts edits required.
+    const fakeDetector: Detector = {
+      name: 'fake_issue',
+      detect(): Issue[] {
+        return [{
+          type: 'template',
+          tier: 1,
+          name: 'fake',
+          tokens: 42,
+          path: '/fake/path',
+        }];
+      },
+    };
+    const extended: Detector[] = [...detectors, fakeDetector];
+    const issues = classifyIssues(makeCtx(), extended);
+    expect(issues.find((i) => i.name === 'fake')?.tokens).toBe(42);
+  });
+
+  it('sorts issues by tier regardless of detector order', () => {
+    const brokenLinkDetector = detectors.find((d) => d.name === 'broken_symlink')!;
+    const oversizedDetector = detectors.find((d) => d.name === 'oversized_skill')!;
+    // Tier-3 detector first, tier-1 second — output must still be tier-1 then tier-3
+    const reordered = [oversizedDetector, brokenLinkDetector];
+    const ctx = makeCtx({
+      brokenSymlinks: [{ name: 'dead', path: '/x', target: '/y' }],
+      localSkills: [{
+        name: 'huge', path: '/big', sizeBytes: 100000, tokens: 999, source: 'local',
+      }],
+    });
+    const issues = classifyIssues(ctx, reordered);
+    expect(issues[0].tier).toBe(1);
+    expect(issues[1].tier).toBe(3);
   });
 });

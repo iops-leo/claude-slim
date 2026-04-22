@@ -1,6 +1,6 @@
 {
   "name": "claude-slim",
-  "version": "2.2.3",
+  "version": "2.3.0",
   "description": "Analyze and reduce Claude Code token overhead",
   "type": "module",
   "bin": {

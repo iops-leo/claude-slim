@@ -5,6 +5,22 @@ All notable changes to claude-slim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] — 2026-04-22
+
+### Changed
+- **Scanner split from a 588-line module into 10 focused files under `src/scanner/`**, with issue classification refactored into a detector registry pattern. Public API is unchanged — `cli.ts` and external test imports continue to work through `src/scanner.ts`, which is now a thin re-export barrel. Adding a new detection heuristic no longer requires editing the core scanner; a contributor writes a pure `Detector` function and appends it to the registry array in `src/scanner/detectors.ts`. See CONTRIBUTING.md's "Adding a New Issue Type" section for the full walkthrough.
+- `DetectorContext` threads previously-module-global content cache (and all scan outputs) explicitly through detector input, removing hidden state and making detectors pure functions of their input — trivial to unit-test and reason about.
+
+### Added
+- `classifyIssues(ctx, registry?)` — exported so tests and downstream consumers can plug in custom detectors or run a subset. The built-in registry is the default; omit the second argument for current behavior.
+- `Detector` / `DetectorContext` TypeScript types are now a stable contract for third-party extensions (e.g. an organization's internal heuristics).
+
+### Tests
+- Total test count: **82 → 85** (+3). New coverage: custom detector injection, tier-sort stability regardless of detector registration order, default registry behavior.
+
+### Notes
+- No runtime behavior change. Same scan inputs produce byte-identical issue output to 2.2.3. This release is a pure structural refactor to unblock community contributions and future detector work.
+
 ## [2.2.3] — 2026-04-21
 
 ### Security
