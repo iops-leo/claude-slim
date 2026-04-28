@@ -1,2 +1,5 @@
 import type { ScanResult } from '../types.js';
-export declare function scan(): Promise<ScanResult>;
+export interface ScanOptions {
+    lookbackDays?: number;
+}
+export declare function scan(opts?: ScanOptions): Promise<ScanResult>;

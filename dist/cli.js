@@ -22,9 +22,10 @@ program
     .command('scan')
     .description('Scan environment and report issues')
     .option('--json', 'Output raw JSON')
+    .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
     .action(async (opts) => {
     await initTokenizer();
-    const result = await scan();
+    const result = await scan({ lookbackDays: parseInt(opts.lookbackDays, 10) || 60 });
     await flushCache();
     if (opts.json) {
         console.log(JSON.stringify(result, null, 2));
@@ -40,11 +41,13 @@ program
     .option('--dry-run', 'Show what would happen without making changes')
     .option('--auto', 'Non-interactive: auto-select Tier 1 items only')
     .option('--sessions-per-day <n>', 'Sessions per day for savings estimate', '2')
+    .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
     .action(async (opts) => {
     await runCleanPipeline({
         dryRun: !!opts.dryRun,
         auto: !!opts.auto,
         sessionsPerDay: parseInt(opts.sessionsPerDay, 10) || 2,
+        lookbackDays: parseInt(opts.lookbackDays, 10) || 60,
     });
 });
 // --- restore ---
@@ -110,9 +113,10 @@ program
     .command('report')
     .description('Show savings report from last clean')
     .option('--sessions-per-day <n>', 'Sessions per day for savings estimate', '2')
+    .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
     .action(async (opts) => {
     await initTokenizer();
-    const result = await scan();
+    const result = await scan({ lookbackDays: parseInt(opts.lookbackDays, 10) || 60 });
     const entries = await readManifest();
     const movedEntries = entries.filter((e) => e.tokenCount && e.tokenCount > 0);
     if (movedEntries.length === 0) {
@@ -125,7 +129,9 @@ program
     // Only skill-type entries contributed to the per-skill prompt overhead
     // (stale_project restores memory tokens separately; broken_symlink/
     // temp_cache never counted toward totalTokensBefore).
-    const SKILL_TYPES = new Set(['template', 'duplicate', 'skill_dup', 'oversized_skill']);
+    const SKILL_TYPES = new Set([
+        'template', 'duplicate', 'skill_dup', 'oversized_skill', 'unused_skill',
+    ]);
     const removedSkillEntries = movedEntries.filter((e) => SKILL_TYPES.has(e.type));
     const removedMemoryTokens = movedEntries
         .filter((e) => e.type === 'stale_project')
@@ -155,12 +161,12 @@ program
 });
 // --- default (no subcommand) → run clean ---
 program.action(async () => {
-    await runCleanPipeline({ dryRun: false, auto: false, sessionsPerDay: 2 });
+    await runCleanPipeline({ dryRun: false, auto: false, sessionsPerDay: 2, lookbackDays: 60 });
 });
 // --- shared clean pipeline ---
 async function runCleanPipeline(opts) {
     await initTokenizer();
-    const result = await scan();
+    const result = await scan({ lookbackDays: opts.lookbackDays });
     if (result.issues.length === 0) {
         console.log('\n  \x1b[32mAlready slim!\x1b[0m No issues found.\n');
         await flushCache();
@@ -207,7 +213,7 @@ async function runCleanPipeline(opts) {
     console.log('');
     const cleanResult = await cleanIssues(selectedIssues);
     // Re-scan after cleanup for accurate breakdown
-    const afterResult = await scan();
+    const afterResult = await scan({ lookbackDays: opts.lookbackDays });
     const reportData = calculateReport(result, afterResult, cleanResult.moved, opts.sessionsPerDay);
     console.log('');
     console.log(formatReportBox(reportData));

@@ -9,22 +9,35 @@ import { scanMemoryFiles } from './memory.js';
 import { scanMcpServers } from './mcp.js';
 import { parseClaudeMdSections } from './claude-md.js';
 import { getDisabledPlugins } from './disabled-plugins.js';
+import { scanSessionUsage } from './sessions.js';
 import { classifyIssues } from './detectors.js';
 import { SKILL_PROMPT_OVERHEAD_TOKENS } from './constants.js';
 
-export async function scan(): Promise<ScanResult> {
+export interface ScanOptions {
+  // Days of session history to consider when classifying skills as unused.
+  // Default 60: long enough to absorb a month-off-then-resume cadence,
+  // short enough that "stale by inactivity" remains meaningful.
+  lookbackDays?: number;
+}
+
+const DEFAULT_LOOKBACK_DAYS = 60;
+
+export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
+  const lookbackDays = opts.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
   const [
     { skills: localSkills, brokenSymlinks, contents },
     { skills: pluginSkills, plugins, tempCaches },
     { memoryFiles, staleProjects },
     mcp,
     disabledPlugins,
+    sessionUsage,
   ] = await Promise.all([
     scanLocalSkills(),
     scanPluginSkills(),
     scanMemoryFiles(),
     scanMcpServers(),
     getDisabledPlugins(),
+    scanSessionUsage(lookbackDays),
   ]);
 
   // Annotate plugin status
@@ -44,6 +57,9 @@ export async function scan(): Promise<ScanResult> {
     localSkills, pluginSkills, brokenSymlinks, memoryFiles,
     tempCaches, staleProjects, disabledPlugins, plugins,
     contents,
+    recentSkillInvocations: sessionUsage.invokedSkills,
+    sessionDataAvailable: sessionUsage.dataAvailable,
+    lookbackDays,
   });
 
   // Estimate total tokens at startup

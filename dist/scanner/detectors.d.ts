@@ -11,6 +11,9 @@ export interface DetectorContext {
     disabledPlugins: Set<string>;
     plugins: PluginInfo[];
     contents: Map<string, string>;
+    recentSkillInvocations: Set<string>;
+    sessionDataAvailable: boolean;
+    lookbackDays: number;
 }
 export interface Detector {
     name: string;

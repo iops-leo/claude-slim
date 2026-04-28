@@ -73,6 +73,7 @@ That's slower responses. Hitting your usage cap faster. Paying for context you'r
 | Duplicates | Same skill registered from multiple sources |
 | Empty templates | Placeholder skills with no content |
 | Oversized files | SKILL.md over 10KB |
+| **Unused skills** | **Local skills never invoked in your last N days of sessions (default 60d)** |
 | Stale memory | Large memory files loaded every session |
 | Disabled plugins | Installed but disabled plugins still in cache |
 | Stale projects | Project memory untouched for 90+ days |
@@ -141,21 +142,23 @@ Then just type `/claude-slim` in any session.
 ## Usage
 
 ```bash
-/claude-slim              # Full pipeline: scan → propose → clean → report
-/claude-slim scan         # Report only, no changes
-/claude-slim scan --json  # Machine-readable JSON output
-/claude-slim restore      # Bring back anything you disabled
+/claude-slim                          # Full pipeline: scan → propose → clean → report
+/claude-slim scan                     # Report only, no changes
+/claude-slim scan --json              # Machine-readable JSON output
+/claude-slim scan --lookback-days 30  # Treat skills idle for 30+ days as unused
+/claude-slim restore                  # Bring back anything you disabled
 ```
 
 CLI equivalents:
 
 ```bash
-npx claude-slim clean             # Full pipeline
-npx claude-slim clean --dry-run   # See what would happen (no changes)
-npx claude-slim clean --auto      # Non-interactive, Tier 1 only (CI/scripts)
-npx claude-slim scan              # Report only
-npx claude-slim restore           # Undo
-npx claude-slim report            # Show savings from last clean
+npx claude-slim clean                    # Full pipeline
+npx claude-slim clean --dry-run          # See what would happen (no changes)
+npx claude-slim clean --auto             # Non-interactive, Tier 1 only (CI/scripts)
+npx claude-slim clean --lookback-days N  # Tune the unused-skill detection window
+npx claude-slim scan                     # Report only
+npx claude-slim restore                  # Undo
+npx claude-slim report                   # Show savings from last clean
 ```
 
 ---
@@ -211,6 +214,13 @@ From a real cleanup session:
 | **Est. token savings** | | **~4,300/session** | |
 
 ---
+
+## v2.4 — What's new
+
+- **Unused-skill detection** — claude-slim now reads your `~/.claude/projects/*/*.jsonl` session transcripts, finds every `Skill` tool invocation in the last 60 days, and flags local skills you've installed but never actually used. Tier 3 (Optional, never auto-selected) so you decide. Configurable lookback via `--lookback-days <n>`. Falls back silently if there's not enough session history (≥3 sessions required) — no false-flagging when the data source is unreliable.
+- **Plugin skills are intentionally out of scope** for this detector. They live inside `~/.claude/plugins/cache/` and are managed by the Claude Code plugin runtime; moving them would partially uninstall the plugin. Use `claude plugin disable <name>` for plugin-level cleanup.
+- **Per-file session-usage cache** at `~/.claude/.skill-usage-cache.json` keyed by mtime. Warm rescans only re-parse session logs that have changed.
+- **Node 20+** is now the engine floor (previously `>=18`, but Node 18 was already dropped from CI in v2.3.0).
 
 ## v2.3 — What's new
 

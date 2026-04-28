@@ -22,6 +22,13 @@ export interface DetectorContext {
   // Detectors that peek into content (e.g. template marker) read from here
   // rather than re-reading the file.
   contents: Map<string, string>;
+  // Skill identifiers (e.g. 'init', 'superpowers:brainstorming') invoked via
+  // the Skill tool in any session log within the lookback window.
+  recentSkillInvocations: Set<string>;
+  // false → unused-skill detector must return [] (insufficient session data
+  // or schema drift; see scanner/sessions.ts).
+  sessionDataAvailable: boolean;
+  lookbackDays: number;
 }
 
 // A Detector is a pure function of context → Issue[]. Add a new detector by
@@ -183,6 +190,41 @@ const staleProjectDetector: Detector = {
   },
 };
 
+const unusedSkillDetector: Detector = {
+  name: 'unused_skill',
+  detect({
+    localSkills,
+    recentSkillInvocations,
+    sessionDataAvailable,
+    lookbackDays,
+  }) {
+    // Suppress entirely when the data source is unreliable — better no signal
+    // than a wrong one that flags every skill as unused.
+    if (!sessionDataAvailable) return [];
+
+    const issues: Issue[] = [];
+    for (const skill of localSkills) {
+      // Direct hit: invocation set contains the skill name as-is.
+      if (recentSkillInvocations.has(skill.name)) continue;
+      // Nested skill (e.g. "org/ship"): also check the bare leaf name, which
+      // is how it would appear in a Skill tool_use input.
+      if (skill.name.includes('/')) {
+        const leaf = skill.name.split('/').pop()!;
+        if (recentSkillInvocations.has(leaf)) continue;
+      }
+      issues.push({
+        type: 'unused_skill',
+        tier: 3,
+        name: skill.name,
+        detail: `not invoked in ${lookbackDays}d`,
+        tokens: skill.tokens,
+        path: skill.path,
+      });
+    }
+    return issues;
+  },
+};
+
 const disabledPluginDetector: Detector = {
   name: 'disabled_plugin',
   detect({ plugins, disabledPlugins }) {
@@ -214,6 +256,7 @@ export const detectors: Detector[] = [
   tempCacheDetector,
   oversizedMemoryDetector,
   staleProjectDetector,
+  unusedSkillDetector,
   disabledPluginDetector,
 ];
 

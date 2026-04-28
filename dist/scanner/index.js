@@ -8,15 +8,19 @@ import { scanMemoryFiles } from './memory.js';
 import { scanMcpServers } from './mcp.js';
 import { parseClaudeMdSections } from './claude-md.js';
 import { getDisabledPlugins } from './disabled-plugins.js';
+import { scanSessionUsage } from './sessions.js';
 import { classifyIssues } from './detectors.js';
 import { SKILL_PROMPT_OVERHEAD_TOKENS } from './constants.js';
-export async function scan() {
-    const [{ skills: localSkills, brokenSymlinks, contents }, { skills: pluginSkills, plugins, tempCaches }, { memoryFiles, staleProjects }, mcp, disabledPlugins,] = await Promise.all([
+const DEFAULT_LOOKBACK_DAYS = 60;
+export async function scan(opts = {}) {
+    const lookbackDays = opts.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
+    const [{ skills: localSkills, brokenSymlinks, contents }, { skills: pluginSkills, plugins, tempCaches }, { memoryFiles, staleProjects }, mcp, disabledPlugins, sessionUsage,] = await Promise.all([
         scanLocalSkills(),
         scanPluginSkills(),
         scanMemoryFiles(),
         scanMcpServers(),
         getDisabledPlugins(),
+        scanSessionUsage(lookbackDays),
     ]);
     // Annotate plugin status
     for (const plugin of plugins) {
@@ -33,6 +37,9 @@ export async function scan() {
         localSkills, pluginSkills, brokenSymlinks, memoryFiles,
         tempCaches, staleProjects, disabledPlugins, plugins,
         contents,
+        recentSkillInvocations: sessionUsage.invokedSkills,
+        sessionDataAvailable: sessionUsage.dataAvailable,
+        lookbackDays,
     });
     // Estimate total tokens at startup
     const skillListingTokens = (localSkills.length + pluginSkills.length) * SKILL_PROMPT_OVERHEAD_TOKENS;

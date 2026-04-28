@@ -37,6 +37,7 @@ export type IssueType =
   | 'duplicate'
   | 'oversized_memory'
   | 'oversized_skill'
+  | 'unused_skill'
   | 'disabled_plugin'
   | 'stale_project'
   | 'temp_cache';

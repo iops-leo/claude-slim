@@ -190,6 +190,9 @@ function makeCtx(partial: Partial<DetectorContext> = {}): DetectorContext {
     disabledPlugins: new Set(),
     plugins: [],
     contents: new Map(),
+    recentSkillInvocations: new Set(),
+    sessionDataAvailable: false,
+    lookbackDays: 60,
     ...partial,
   };
 }
@@ -239,5 +242,82 @@ describe('detector registry', () => {
     const issues = classifyIssues(ctx, reordered);
     expect(issues[0].tier).toBe(1);
     expect(issues[1].tier).toBe(3);
+  });
+});
+
+describe('unused_skill detector', () => {
+  const unusedDetector = detectors.find((d) => d.name === 'unused_skill')!;
+
+  it('returns nothing when sessionDataAvailable is false (suppress on bad data)', () => {
+    // Even with skills present and an empty invocation set, refuse to classify
+    // anything as unused — the upstream signal said "don't trust me".
+    const ctx = makeCtx({
+      localSkills: [makeSkill('never-touched')],
+      recentSkillInvocations: new Set(),
+      sessionDataAvailable: false,
+    });
+    expect(unusedDetector.detect(ctx)).toEqual([]);
+  });
+
+  it('flags local skills missing from the invocation set', () => {
+    const ctx = makeCtx({
+      localSkills: [makeSkill('idle'), makeSkill('active')],
+      recentSkillInvocations: new Set(['active']),
+      sessionDataAvailable: true,
+      lookbackDays: 60,
+    });
+    const issues = unusedDetector.detect(ctx);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({
+      type: 'unused_skill',
+      tier: 3,
+      name: 'idle',
+      detail: 'not invoked in 60d',
+    });
+  });
+
+  it('does not flag plugin skills (out of scope: plugin internals are managed by claude plugin)', () => {
+    const pluginSkill: SkillInfo = {
+      name: 'brainstorming',
+      path: '/fake/plugins/superpowers/skills/brainstorming',
+      sizeBytes: 100,
+      tokens: 50,
+      source: 'plugin',
+      pluginName: 'superpowers',
+    };
+    const ctx = makeCtx({
+      pluginSkills: [pluginSkill],
+      recentSkillInvocations: new Set(['something-else']),
+      sessionDataAvailable: true,
+    });
+    expect(unusedDetector.detect(ctx)).toEqual([]);
+  });
+
+  it('treats nested skill leaf name as a match (gstack/ship invoked as ship)', () => {
+    const nested = makeSkill('gstack/ship');
+    const ctx = makeCtx({
+      localSkills: [nested],
+      recentSkillInvocations: new Set(['ship']),
+      sessionDataAvailable: true,
+    });
+    expect(unusedDetector.detect(ctx)).toEqual([]);
+  });
+
+  it('reports tokens and path so cleanup can dispatch correctly', () => {
+    const skill: SkillInfo = {
+      name: 'lonely',
+      path: '/fake/skills/lonely',
+      sizeBytes: 800,
+      tokens: 200,
+      source: 'local',
+    };
+    const ctx = makeCtx({
+      localSkills: [skill],
+      recentSkillInvocations: new Set(['anything-else']),
+      sessionDataAvailable: true,
+    });
+    const issues = unusedDetector.detect(ctx);
+    expect(issues[0].tokens).toBe(200);
+    expect(issues[0].path).toBe('/fake/skills/lonely');
   });
 });

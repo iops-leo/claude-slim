@@ -55,19 +55,28 @@ describe('cleanIssues — broken_symlink', () => {
 });
 
 describe('cleanIssues — skill directory moves', () => {
-  const skillTypes: Array<'template' | 'duplicate' | 'skill_dup' | 'oversized_skill'> = [
+  const skillTypes: Array<
+    'template' | 'duplicate' | 'skill_dup' | 'oversized_skill' | 'unused_skill'
+  > = [
     'template',
     'duplicate',
     'skill_dup',
     'oversized_skill',
+    'unused_skill',
   ];
+
+  function tierFor(type: typeof skillTypes[number]): 1 | 2 | 3 {
+    if (type === 'oversized_skill' || type === 'unused_skill') return 3;
+    if (type === 'duplicate') return 2;
+    return 1;
+  }
 
   for (const type of skillTypes) {
     it(`moves ${type} skill to disabled dir and restores it`, async () => {
       const skillPath = await writeSkill(tmp.skillsDir, 'my-skill', 'content here');
       const issue: Issue = {
         type,
-        tier: type === 'oversized_skill' ? 3 : type === 'duplicate' ? 2 : 1,
+        tier: tierFor(type),
         name: 'my-skill',
         tokens: 100,
         path: skillPath,

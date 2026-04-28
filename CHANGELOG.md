@@ -5,6 +5,29 @@ All notable changes to claude-slim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] — 2026-04-28
+
+### Added
+- **`unused_skill` detector — flags local skills not invoked in any session within the last 60 days.** Reads `~/.claude/projects/<slug>/<sessionId>.jsonl` transcripts, looks for `Skill` tool_use events, and matches the invoked identifiers against detected local skills. The lookback window is configurable via `--lookback-days <n>` on `scan`, `clean`, and `report`. Issues are classified as Tier 3 (Optional) so they are surfaced but never auto-selected — leaves the call to the user.
+- **`scanSessionUsage()` (`src/scanner/sessions.ts`)** — new module that streams JSONL transcripts and aggregates skill invocations. Per-file results are cached at `~/.claude/.skill-usage-cache.json` keyed by mtime, so warm rescans only re-read changed files. Uses the same atomic-write pattern as the token cache (write-tmp-then-rename) to survive crashes mid-flush.
+- **`scan({ lookbackDays })` option** — public `scan()` API now takes an options object (default 60 days). Backward compatible: `scan()` with no args keeps prior behavior.
+
+### Changed
+- **`DetectorContext` extended** with `recentSkillInvocations`, `sessionDataAvailable`, and `lookbackDays`. The two existing core fields (`localSkills`, `pluginSkills`) and the new fields are pure inputs — detectors remain pure functions of their context.
+- **Detector scope decision: only local skills are flagged unused.** Plugin skills under `~/.claude/plugins/cache/` are managed by the Claude Code plugin runtime; moving their files would partially uninstall the plugin and break `claude plugin list`. This matches the README's existing "What claude-slim never touches" promise.
+
+### Safety
+- **Hard suppression when session data is unreliable.** `unused_skill` returns nothing if (a) fewer than 3 sessions exist in the lookback window, or (b) no `Skill` tool_use events were found at all (most likely a Claude Code transcript schema change). Prevents the failure mode where a broken parser would flag every skill as unused.
+- **Schema-defensive JSONL parser.** Any malformed line, unexpected shape, or missing field is silently skipped — a partial schema change degrades gracefully instead of throwing.
+
+### Tests
+- Total test count: **85 → 103** (+18). New coverage: transcript skill extraction (happy path, malformed lines, schema variations), session scanner cache hit/invalidation by mtime, lookback window cutoff, dataAvailable thresholds (sessions floor + zero-invocation floor), the `unused_skill` detector's local-only scope, and a clean+restore round-trip for `unused_skill`.
+
+### Docs
+- README detector table gains an `Unused skills` row; usage section documents `--lookback-days`.
+- README "What's new" section refreshed for v2.4.
+- `engines.node` raised from `>=18` to `>=20` to match the CI matrix (Node 18 was dropped from CI in v2.3.0).
+
 ## [2.3.0] — 2026-04-22
 
 ### Changed

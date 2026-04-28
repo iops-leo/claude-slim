@@ -62,11 +62,11 @@ If you're looking for a place to start, check the [`good first issue`](https://g
 ## Adding a New Issue Type
 
 1. Add the new kind to `IssueType` in `src/types.ts`.
-2. Teach `src/scanner.ts:classifyIssues` to detect it. Use an existing branch (e.g., `oversized_skill`) as a template.
+2. Write a `Detector` in `src/scanner/detectors.ts` and append it to the `detectors` array. Use an existing detector (e.g., `oversizedSkillDetector`) as a template — each detector is a pure function of `DetectorContext`. If your detector needs data the existing context doesn't carry, extend `DetectorContext` with a new field, populate it in `src/scanner/index.ts`, and update the `makeCtx` helper in `src/__tests__/scanner.test.ts` so existing tests still typecheck.
 3. Decide how `src/cleaner.ts:cleanIssues` should act on it. Reuse an existing branch if the action is `rename-to-disabled`, or add one for a new action — **always call `assertInsideClaudeDir(issue.path)` first** (the loop already does this, so you're covered).
 4. If the action is reversible, implement the corresponding branch in `restoreItem` (mirror the skill or `stale_project` branch — both check that the backup exists and the target is free).
 5. Add a round-trip test in `src/__tests__/cleaner.test.ts` that cleans then restores and asserts filesystem state at each step.
-6. Update the issue table in `README.md`.
+6. Update the issue table in `README.md` (and the i18n READMEs under `docs/` if you can).
 
 ## Guidelines
 
