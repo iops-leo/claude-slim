@@ -148,6 +148,13 @@ claude-slim扫描以下位置。无插件特定逻辑 — 纯文件系统分析�
 
 ---
 
+## v2.3 更新
+
+- **detector 注册表重构 (v2.3.0)** — 将 588 行的单体扫描模块拆分为 `src/scanner/` 下的细粒度 detector。新增启发式规则只需新增一个函数（详见 CONTRIBUTING.md）。公共 API 保持不变。
+- **路径封锁守卫 (v2.2.3)** — 所有破坏性操作都会拒绝逃出 `~/.claude/` 的目标路径。`runCommand` 不再经过 shell。`temp_cache` 清理是 symlink-safe 的。
+- **报告符号修正 (v2.2.3)** — 修复 2.2.x 早期分解表 Saved 列符号反转的 bug,现在每行显示正确的节省量。
+- **85 项测试（此前 73）** — 新增路径封锁、restore 守卫、分解表符号、restore-selection 去重、token 缓存原子 flush、自定义 detector 注入等 round-trip 测试。
+
 ## v2.2 更新
 
 - **`stale_project` 的原子化 clean/restore** — 用单次目录 `rename()` 代替按文件循环。即使中途中断，也不会出现文件分散在源目录与备份目录的"部分失败"状态。
@@ -161,9 +168,9 @@ claude-slim扫描以下位置。无插件特定逻辑 — 纯文件系统分析�
 
 ## 要求
 
+- Node.js 20+
+- macOS 或 Linux
 - Claude Code CLI
-- macOS或Linux
-- python3（用于统计MCP服务器数量；缺少时自动降级）
 
 ## 许可证
 

@@ -195,6 +195,13 @@ claude-slim은 아래 위치를 스캔합니다. 플러그인 특화 로직 없�
 
 ---
 
+## v2.3 변경사항
+
+- **detector 레지스트리 리팩터 (v2.3.0)** — 588줄 단일 모듈이던 스캐너를 `src/scanner/` 하위의 세분화된 detector들로 분리. 새 휴리스틱 추가가 함수 하나 추가로 끝남 (CONTRIBUTING.md 참고). 공개 API는 그대로.
+- **경로 봉쇄 가드 (v2.2.3)** — 모든 destructive 작업이 `~/.claude/` 바깥 경로를 거부. `runCommand`는 더 이상 셸을 거치지 않음. `temp_cache` 정리는 symlink-safe.
+- **리포트 부호 수정 (v2.2.3)** — 2.2.x 초기에 분해 테이블의 Saved 컬럼 부호가 뒤집혀 있던 버그 수정. 이제 행별로 올바른 절감량 표시.
+- **85개 테스트 (이전 73개)** — 경로 봉쇄, restore 가드, 분해 테이블 부호, restore-selection 중복 제거, 토큰 캐시 atomic flush, 커스텀 detector 주입 테스트 추가.
+
 ## v2.2 변경사항
 
 - **`stale_project` 원자적 clean/restore** — 파일 단위 루프 대신 단일 디렉토리 `rename()`. 중간에 중단되어도 파일이 양쪽에 분산되는 부분 실패 상태 제거.
@@ -225,7 +232,7 @@ claude-slim은 아래 위치를 스캔합니다. 플러그인 특화 로직 없�
 
 ## 요구사항
 
-- Node.js 18+
+- Node.js 20+
 - macOS 또는 Linux
 - Claude Code CLI
 

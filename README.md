@@ -212,6 +212,13 @@ From a real cleanup session:
 
 ---
 
+## v2.3 — What's new
+
+- **Detector registry refactor (v2.3.0)** — Scanner split from a 588-line module into focused detectors under `src/scanner/`. Adding a new heuristic is a one-function addition; see CONTRIBUTING.md. Public API unchanged.
+- **Path-containment guard (v2.2.3)** — Every destructive op refuses any target path that escapes `~/.claude/`. `runCommand` no longer goes through a shell. `temp_cache` cleanup is symlink-safe.
+- **Report sign fix (v2.2.3)** — The breakdown table's Saved column was inverted in earlier 2.2.x; cleanup now shows correct savings per row.
+- **85 tests (was 73)** — New round-trip coverage for path containment, restore guards, breakdown sign, restore-selection dedup, atomic tokenizer flush, and custom detector injection.
+
 ## v2.2 — What's new
 
 - **Atomic `stale_project` clean/restore** — Single directory `rename()` instead of per-file loop. No more partial-failure state if the operation is interrupted.
@@ -242,7 +249,7 @@ From a real cleanup session:
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 20+
 - macOS or Linux
 - Claude Code CLI
 

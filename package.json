@@ -39,7 +39,7 @@
     "url": "https://github.com/iops-leo/claude-slim/issues"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "commander": "^13.0.0",
