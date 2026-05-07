@@ -19,6 +19,7 @@ Set Width 1200
 Set Height 720
 Set Padding 24
 Set TypingSpeed 70ms
+Set PlaybackSpeed 1.5
 
 # --- Setup (hidden) -------------------------------------------------------
 # Point the demo at the synthetic fixture and shadow the binary with the
