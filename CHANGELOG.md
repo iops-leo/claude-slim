@@ -5,6 +5,14 @@ All notable changes to claude-slim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] — 2026-05-07
+
+### Changed
+- **Demo GIF playback speed bumped to 1.5x (26s → 17s).** Sits comfortably under Twitter/X's 30s autoplay window. All four hero detector beats and the final report box remain readable. Single-line addition of `Set PlaybackSpeed 1.5` in `scripts/demo/demo.tape`.
+
+### Safety
+- Republish only — no source-code or `dist/` changes versus 2.5.0. Behavior is byte-identical for users running `npx claude-slim`. The patch exists to refresh the npmjs.com README rendering cache so the faster GIF appears on the package page.
+
 ## [2.5.0] — 2026-05-07
 
 ### Added
