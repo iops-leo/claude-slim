@@ -5,6 +5,19 @@ All notable changes to claude-slim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] — 2026-05-07
+
+### Added
+- **README demo GIF showing a real cleanup flow.** Replaces the static ASCII bar chart with a 26-second terminal recording: `claude-slim` runs against a synthetic `~/.claude/` producing ~11,442 tokens of overhead, surfaces 24 issues across all four hero detectors (broken_symlink, duplicate, oversized_skill, unused_skill), the user types `all`, cleanup runs, and the report box reveals "Saved: 5,616 tokens (49.1%)" with monthly $ savings.
+- **`scripts/demo/`** — reproducible demo pipeline. `fixture.sh` builds an isolated synthetic environment under `/tmp/claude-slim-demo/.claude/` (refuses non-`/tmp` paths as a safety guard); `demo.tape` is a [vhs](https://github.com/charmbracelet/vhs) DSL script that scripts the recording deterministically; `bin/claude-slim` shadows the CLI to point at the local `dist/` build during recording. Re-render any time with `npm run demo` (requires `brew install vhs`).
+- **`npm run demo` script** — chains `npm run build` → `bash scripts/demo/fixture.sh` → `vhs scripts/demo/demo.tape`. Output overwrites `docs/demo.gif`. Manual regeneration only — no CI auto-render.
+
+### Changed
+- **README "The problem, visualized" section** replaced with the demo GIF embedded as a centered `<img>`. Hook copy and the "Where the bloat hides" overhead table are unchanged.
+
+### Safety
+- No source-code changes. `src/`, `dist/`, and the npm `files[]` array are untouched, so users running `npx claude-slim` or installing the plugin see byte-identical behavior to v2.4.0. The demo assets ship in the GitHub repo only, not the npm package.
+
 ## [2.4.0] — 2026-04-28
 
 ### Added

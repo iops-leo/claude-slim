@@ -20,18 +20,11 @@ Every Claude Code session auto-loads every skill, memory file, and plugin instru
 
 ---
 
-### The problem, visualized
+### See it in action
 
-```
-  Session start token budget
-  ┌──────────────────────────────────────────────────┐
-  │██████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░│ Before claude-slim
-  │ 12K tokens consumed ↑    your actual work ↑      │
-  ├──────────────────────────────────────────────────┤
-  │██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │ After claude-slim
-  │ 5K ↑            more room for your work ↑        │
-  └──────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="docs/demo.gif" alt="claude-slim cleanup: 11,442 tokens of overhead reduced to ~5,800 in 45 seconds" width="900" />
+</p>
 
 Where the bloat hides:
 

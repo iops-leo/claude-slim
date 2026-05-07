@@ -1,0 +1,7 @@
+#!/bin/sh
+# Wrapper used by demo.tape so the demo runs the local dist/ build instead of
+# whatever's on PATH. The tape prepends scripts/demo/bin/ to PATH, then types
+# `claude-slim` — which resolves here, which then execs the local CLI.
+set -e
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+exec node "$ROOT/dist/cli.js" "$@"

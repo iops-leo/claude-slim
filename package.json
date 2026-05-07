@@ -1,6 +1,6 @@
 {
   "name": "claude-slim",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Analyze and reduce Claude Code token overhead",
   "type": "module",
   "bin": {
@@ -17,6 +17,7 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "demo": "npm run build && bash scripts/demo/fixture.sh && vhs scripts/demo/demo.tape",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
