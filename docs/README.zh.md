@@ -143,6 +143,12 @@ claude-slim扫描以下位置。无插件特定逻辑 — 纯文件系统分析�
 
 ---
 
+## v2.6 更新
+
+- **`claude-slim doctor`** — 检查 Node 支持、`~/.claude/` 可读性、本地技能/插件缓存、`claude plugin list` 以及近期会话日志信号质量。适合在扫描结果过少或未使用技能检测被抑制时诊断原因。
+- **更准确的安全说明** — 技能和项目记忆会移动到 `~/.claude/skills.disabled/`，可恢复；断开的 symlink 文件和失败安装的 `temp_local_*` 缓存会作为 permanent 清理目标标记。
+- **固定开发 Node 版本** — `.nvmrc` 和 `.node-version` 固定为 Node 22.12.0，以匹配当前 Vitest/Vite/Rolldown 的 patch-floor 要求。
+
 ## v2.4 更新
 
 - **未使用技能检测** — 读取 `~/.claude/projects/*/*.jsonl` 会话记录，找出最近 60 天内从未被 `Skill` 工具调用过的本地技能并标记。归为 Tier 3（Optional，默认不选中），由用户自行决定。可通过 `--lookback-days <n>` 调整窗口。会话数不足 3 个或一次调用都没有（可能是 schema 变更）时整体抑制分类，避免在数据不可靠时产生错误信号。

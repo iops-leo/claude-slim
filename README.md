@@ -210,6 +210,12 @@ From a real cleanup session:
 
 ---
 
+## v2.6 — What's new
+
+- **`claude-slim doctor`** — Checks Node support, `~/.claude/` readability, local skill/plugin cache access, `claude plugin list`, and recent session-log signal quality. Use it when scan results look sparse or unused-skill detection is suppressed.
+- **Clearer safety wording** — Skills and project memory are reversible moves into `~/.claude/skills.disabled/`; broken symlink files and failed-install `temp_local_*` caches are permanent cleanup targets and are labeled before selection.
+- **Pinned development Node version** — `.nvmrc` and `.node-version` pin contributors to Node 22.12.0, matching the current Vitest/Vite/Rolldown patch-floor requirements.
+
 ## v2.4 — What's new
 
 - **Unused-skill detection** — claude-slim now reads your `~/.claude/projects/*/*.jsonl` session transcripts, finds every `Skill` tool invocation in the last 60 days, and flags local skills you've installed but never actually used. Tier 3 (Optional, never auto-selected) so you decide. Configurable lookback via `--lookback-days <n>`. Falls back silently if there's not enough session history (≥3 sessions required) — no false-flagging when the data source is unreliable.

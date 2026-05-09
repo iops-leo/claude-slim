@@ -191,6 +191,12 @@ claude-slim은 아래 위치를 스캔합니다. 플러그인 특화 로직 없�
 
 ---
 
+## v2.6 변경사항
+
+- **`claude-slim doctor`** — Node 지원 여부, `~/.claude/` 접근성, 로컬 스킬/플러그인 캐시 접근, `claude plugin list`, 최근 세션 로그 신뢰도를 점검. 스캔 결과가 비어 보이거나 미사용 스킬 탐지가 suppress될 때 원인을 확인할 수 있습니다.
+- **더 정확한 안전 문구** — 스킬과 프로젝트 메모리는 `~/.claude/skills.disabled/`로 이동되어 복구 가능하고, 깨진 symlink 파일과 실패한 `temp_local_*` 캐시만 permanent 정리 대상으로 표시됩니다.
+- **개발 Node 버전 고정** — `.nvmrc`와 `.node-version`을 Node 22.12.0으로 고정해 Vitest/Vite/Rolldown의 현재 patch-floor 요구사항과 맞췄습니다.
+
 ## v2.4 변경사항
 
 - **미사용 스킬 탐지** — `~/.claude/projects/*/*.jsonl` 세션 트랜스크립트를 읽어 최근 60일 동안 한 번도 `Skill` 도구로 호출되지 않은 로컬 스킬을 찾아 표시. Tier 3 (Optional, 기본 미선택) 이라 사용자가 직접 고름. `--lookback-days <n>` 으로 윈도우 조절 가능. 세션 데이터가 부족하거나(3개 미만) 호출 이벤트가 0건이면(스키마 변경 가능성) 분류를 통째로 suppress — 데이터 신뢰도 떨어질 때 잘못된 시그널 안 냄.
