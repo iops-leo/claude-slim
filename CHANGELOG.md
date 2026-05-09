@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] — 2026-05-09
+
 ### Added
 - `claude-slim doctor` command to check Node runtime support, `~/.claude/` readability, Claude plugin CLI availability, and recent session-log signal quality for unused-skill detection.
 - `.nvmrc` and `.node-version` pin local development to Node 22.12.0, matching Vitest/Vite/Rolldown's current minimum patch requirements for the Node 22 line.
