@@ -80,7 +80,7 @@ That's slower responses. Hitting your usage cap faster. Paying for context you'r
 | **Recommended** | Suggested | Duplicates, stale memory, disabled plugins, stale projects |
 | **Optional** | Your call | Oversized skills you might still use |
 
-**Clean** — Moves selected items to `~/.claude/skills.disabled/`. **Nothing is deleted. Ever.**
+**Clean** — Moves selected skills and project memory to `~/.claude/skills.disabled/`. Failed-install temp caches and dead symlink files are the only permanent cleanups, and they are labeled before selection.
 
 **Report** — Shows exactly what changed:
 
@@ -139,6 +139,7 @@ Then just type `/claude-slim` in any session.
 /claude-slim scan                     # Report only, no changes
 /claude-slim scan --json              # Machine-readable JSON output
 /claude-slim scan --lookback-days 30  # Treat skills idle for 30+ days as unused
+/claude-slim doctor                   # Check scanner prerequisites and data fidelity
 /claude-slim restore                  # Bring back anything you disabled
 ```
 
@@ -150,6 +151,7 @@ npx claude-slim clean --dry-run          # See what would happen (no changes)
 npx claude-slim clean --auto             # Non-interactive, Tier 1 only (CI/scripts)
 npx claude-slim clean --lookback-days N  # Tune the unused-skill detection window
 npx claude-slim scan                     # Report only
+npx claude-slim doctor                   # Diagnose Node/Claude/session-log readiness
 npx claude-slim restore                  # Undo
 npx claude-slim report                   # Show savings from last clean
 ```
@@ -160,9 +162,9 @@ npx claude-slim report                   # Show savings from last clean
 
 | | |
 |---|---|
-| **Non-destructive** | Nothing is ever deleted. Disabled items move to `~/.claude/skills.disabled/` |
-| **Reversible** | `/claude-slim restore` brings anything back, any time |
-| **User-controlled** | Always asks before making changes. `--dry-run` to preview. |
+| **Non-destructive for user data** | Skills and project memory move to `~/.claude/skills.disabled/` |
+| **Reversible where state exists** | `/claude-slim restore` brings moved skills and project memory back |
+| **User-controlled** | Interactive runs ask before changes. `--dry-run` previews; `--auto` selects Tier 1 only. |
 | **Hands off** | Never touches CLAUDE.md, settings.json, or plugin configs |
 | **Scoped** | All operations are refused if the target path escapes `~/.claude/` |
 
@@ -174,7 +176,7 @@ npx claude-slim report                   # Show savings from last clean
 - **Git / project sources** — claude-slim only looks inside `~/.claude/`, never at your code.
 - **Anything outside `~/.claude/`** — a path-containment guard refuses destructive ops anywhere else, even if a tampered manifest asked it to.
 
-Only touched: entries under `~/.claude/skills/`, `~/.claude/plugins/cache/temp_local_*`, and `~/.claude/projects/*/memory/` — and even those are moved to `skills.disabled/`, not deleted (except `temp_local_*` failed-install caches, which are removed outright).
+Only touched: entries under `~/.claude/skills/`, `~/.claude/plugins/cache/temp_local_*`, and `~/.claude/projects/*/memory/`. Skill and memory entries are moved to `skills.disabled/`; broken symlink files are unlinked and `temp_local_*` failed-install caches are removed outright.
 
 ---
 

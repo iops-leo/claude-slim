@@ -16,18 +16,11 @@
 
 ---
 
-### 문제를 시각화하면
+### 실제 동작 보기
 
-```
-  세션 시작 시 토큰 예산
-  ┌──────────────────────────────────────────────────┐
-  │██████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░│ claude-slim 적용 전
-  │ 12K 토큰 소모 ↑          실제 작업 ↑              │
-  ├──────────────────────────────────────────────────┤
-  │██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│ claude-slim 적용 후
-  │ 5K ↑              작업 공간 확보 ↑                │
-  └──────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="demo.gif" alt="claude-slim cleanup demo" width="900" />
+</p>
 
 오버헤드가 숨어있는 곳:
 
@@ -83,7 +76,7 @@
 | **Recommended** | 권장 | 중복, 오래된 메모리, 비활성 플러그인, 오래된 프로젝트 |
 | **Optional** | 사용자 판단 | 아직 쓸 수 있는 대용량 스킬 |
 
-**정리** — 선택한 항목을 `~/.claude/skills.disabled/`로 이동. **삭제는 절대 없습니다.**
+**정리** — 선택한 스킬과 프로젝트 메모리를 `~/.claude/skills.disabled/`로 이동. 실패한 설치 임시 캐시와 죽은 symlink 파일만 영구 정리되며, 선택 전에 permanent로 표시됩니다.
 
 **리포트** — 정확히 뭐가 바뀌었는지 보여줌:
 
@@ -139,6 +132,7 @@ npx claude-slim scan
 /claude-slim              # 전체 파이프라인: 스캔 → 제안 → 정리 → 리포트
 /claude-slim scan         # 리포트만 (변경 없음)
 /claude-slim scan --json  # JSON 출력
+/claude-slim doctor       # 스캐너 전제조건과 세션 로그 신뢰도 점검
 /claude-slim restore      # 비활성화한 항목 복원
 ```
 
@@ -149,6 +143,7 @@ npx claude-slim clean             # 전체 파이프라인
 npx claude-slim clean --dry-run   # 변경 없이 미리보기
 npx claude-slim clean --auto      # 비대화형, Tier 1만 자동 정리 (CI/스크립트용)
 npx claude-slim scan              # 리포트만
+npx claude-slim doctor            # Node/Claude/세션 로그 준비 상태 진단
 npx claude-slim restore           # 복원
 npx claude-slim report            # 지난 정리의 절감 리포트
 ```
@@ -159,9 +154,9 @@ npx claude-slim report            # 지난 정리의 절감 리포트
 
 | | |
 |---|---|
-| **비파괴적** | 아무것도 삭제하지 않음. 비활성화 항목은 `~/.claude/skills.disabled/`로 이동 |
-| **복구 가능** | `/claude-slim restore`로 언제든 복구 |
-| **사용자 제어** | 실행 전 항상 확인 요청. `--dry-run`으로 미리보기. |
+| **사용자 데이터 비파괴** | 스킬과 프로젝트 메모리는 `~/.claude/skills.disabled/`로 이동 |
+| **복구 가능** | 이동된 스킬과 프로젝트 메모리는 `/claude-slim restore`로 복구 |
+| **사용자 제어** | 대화형 실행은 변경 전 확인 요청. `--dry-run`으로 미리보기, `--auto`는 Tier 1만 선택. |
 | **위험 영역 미접촉** | CLAUDE.md, settings.json, 플러그인 설정 절대 건드리지 않음 |
 
 ---

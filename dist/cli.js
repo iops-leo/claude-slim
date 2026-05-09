@@ -9,6 +9,7 @@ import { scan, SKILL_PROMPT_OVERHEAD_TOKENS } from './scanner.js';
 import { cleanIssues, restoreItem } from './cleaner.js';
 import { readManifest } from './manifest.js';
 import { formatScanSummary, formatReportBox, calculateReport, } from './report.js';
+import { collectDoctorReport, formatDoctorReport } from './doctor.js';
 import { resolveSelection, resolveRestoreSelection } from './selection.js';
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
 const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8'));
@@ -32,6 +33,23 @@ program
     }
     else {
         console.log(formatScanSummary(result));
+    }
+});
+// --- doctor ---
+program
+    .command('doctor')
+    .description('Check local Claude Code environment and scanner fidelity')
+    .option('--json', 'Output raw JSON')
+    .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
+    .action(async (opts) => {
+    const report = await collectDoctorReport({
+        lookbackDays: parseInt(opts.lookbackDays, 10) || 60,
+    });
+    if (opts.json) {
+        console.log(JSON.stringify(report, null, 2));
+    }
+    else {
+        console.log(formatDoctorReport(report));
     }
 });
 // --- clean ---

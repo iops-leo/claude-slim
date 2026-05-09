@@ -5,6 +5,17 @@ All notable changes to claude-slim are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `claude-slim doctor` command to check Node runtime support, `~/.claude/` readability, Claude plugin CLI availability, and recent session-log signal quality for unused-skill detection.
+- `.nvmrc` and `.node-version` pin local development to Node 22.12.0, matching Vitest/Vite/Rolldown's current minimum patch requirements for the Node 22 line.
+
+### Changed
+- Safety copy now distinguishes reversible skill/project-memory moves from permanent cleanup of broken symlink files and failed-install `temp_local_*` caches.
+- English, Korean, Japanese, and Chinese README usage sections document the `doctor` command and share the demo GIF presentation.
+- CI and contributor docs now describe the current Node 20/22/24 matrix and supported dev-toolchain patch floors.
+
 ## [2.5.1] — 2026-05-07
 
 ### Changed

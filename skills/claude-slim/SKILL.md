@@ -12,6 +12,7 @@ Analyze the user's Claude Code environment for token waste and perform non-destr
 - `/claude-slim` or `/claude-slim run` → full pipeline (scan → propose → execute → report)
 - `/claude-slim scan` → report only, no changes
 - `/claude-slim scan --json` → raw JSON output
+- `/claude-slim doctor` → check scanner prerequisites and session-log signal quality
 - `/claude-slim restore` → restore previously disabled items
 
 ---
@@ -131,6 +132,16 @@ When `/claude-slim restore` is invoked:
 cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js restore
 ```
 
+## Doctor
+
+When `/claude-slim doctor` is invoked:
+
+```bash
+cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js doctor
+```
+
+Explain warnings in the user's language. Pay special attention to session-log warnings because they explain why unused-skill detection may be suppressed.
+
 ---
 
 ## Language
@@ -139,7 +150,7 @@ Detect the user's language from their most recent message. Present all reports, 
 
 ## Rules
 
-1. **Never delete.** The CLI moves items to `~/.claude/skills.disabled/`.
+1. **Never delete user data.** Skill directories and project memory are moved to `~/.claude/skills.disabled/`; dead symlink files and failed-install `temp_local_*` caches are permanent cleanups and should be described that way.
 2. **Never modify CLAUDE.md or settings.json.**
 3. **Never disable plugin-managed skills.** Report only.
 4. **Always confirm before executing.** Use `--dry-run` to preview changes.

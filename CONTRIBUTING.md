@@ -7,6 +7,7 @@ Thanks for your interest in contributing!
 ```bash
 git clone https://github.com/iops-leo/claude-slim.git
 cd claude-slim
+nvm use
 npm install
 npm run build
 npm test
@@ -46,7 +47,7 @@ skills/claude-slim/
 1. Create a branch from `main`.
 2. **Write the test first.** Bug fixes and features land via TDD — red test, then green code. See `src/__tests__/cleaner.test.ts` for the round-trip pattern.
 3. Run `npm run build` to compile.
-4. Run `npm test` to verify. CI runs on Node 18, 20, and 22.
+4. Run `npm test` to verify. CI runs on Node 20, 22, and 24. Local development should use the version pinned in `.nvmrc` / `.node-version` because Vitest 4's Vite/Rolldown stack requires Node 20.19+ or 22.12+.
 5. Test the CLI: `node dist/cli.js scan`.
 6. Submit a PR.
 

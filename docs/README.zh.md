@@ -12,18 +12,11 @@
 
 ---
 
-### 问题可视化
+### 实际运行效果
 
-```
-  会话启动时的token预算
-  ┌──────────────────────────────────────────────────┐
-  │██████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░│ claude-slim之前
-  │ 12K tokens消耗 ↑         实际工作 ↑              │
-  ├──────────────────────────────────────────────────┤
-  │██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│ claude-slim之后
-  │ 5K ↑               工作空间扩大 ↑               │
-  └──────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="demo.gif" alt="claude-slim cleanup demo" width="900" />
+</p>
 
 开销藏在哪里：
 
@@ -74,7 +67,7 @@
 | **Recommended** | 建议 | 重复项、过期记忆 |
 | **Optional** | 用户判断 | 可能还会用的大型技能 |
 
-**Execute** — 将选中项移至 `~/.claude/skills.disabled/`。不会删除任何文件。
+**Execute** — 将选中的技能和项目记忆移至 `~/.claude/skills.disabled/`。失败安装的临时缓存和断开的 symlink 文件是唯一的永久清理项，并会在选择前标记为 permanent。
 
 **Report** — 精确展示变化：
 
@@ -103,6 +96,7 @@ claude plugin install claude-slim
 ```bash
 /claude-slim              # 完整流水线
 /claude-slim scan         # 仅报告，不做更改
+/claude-slim doctor       # 检查扫描前提和会话日志信号质量
 /claude-slim restore      # 全部恢复
 ```
 
@@ -112,9 +106,9 @@ claude plugin install claude-slim
 
 | | |
 |---|---|
-| **非破坏性** | 不删除任何东西。禁用项移至 `~/.claude/skills.disabled/` |
-| **可恢复** | `/claude-slim restore` 随时恢复 |
-| **用户可控** | 更改前始终确认 |
+| **不破坏用户数据** | 技能和项目记忆移至 `~/.claude/skills.disabled/` |
+| **可恢复** | 已移动的技能和项目记忆可通过 `/claude-slim restore` 恢复 |
+| **用户可控** | 交互式运行会在更改前确认。`--dry-run` 可预览，`--auto` 只选择 Tier 1 |
 | **不触碰危险区** | 绝不修改CLAUDE.md、settings.json或插件配置 |
 
 ---

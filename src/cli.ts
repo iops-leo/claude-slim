@@ -14,6 +14,7 @@ import {
   formatReportBox,
   calculateReport,
 } from './report.js';
+import { collectDoctorReport, formatDoctorReport } from './doctor.js';
 import { resolveSelection, resolveRestoreSelection } from './selection.js';
 import type { Issue, ScanResult } from './types.js';
 
@@ -42,6 +43,24 @@ program
       console.log(JSON.stringify(result, null, 2));
     } else {
       console.log(formatScanSummary(result));
+    }
+  });
+
+// --- doctor ---
+program
+  .command('doctor')
+  .description('Check local Claude Code environment and scanner fidelity')
+  .option('--json', 'Output raw JSON')
+  .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
+  .action(async (opts) => {
+    const report = await collectDoctorReport({
+      lookbackDays: parseInt(opts.lookbackDays, 10) || 60,
+    });
+
+    if (opts.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(formatDoctorReport(report));
     }
   });
 

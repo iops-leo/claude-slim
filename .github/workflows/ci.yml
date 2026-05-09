@@ -11,10 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # `engines` still targets Node >=18 for the runtime. The dev toolchain
-      # (vitest 4 → rolldown) needs Node 20.12+ (`styleText` from node:util),
-      # so CI runs on 20/22/24. If a runtime-only regression on 18 ever
-      # shows up, users should file an issue — we don't test it here.
+      # Runtime support starts at Node 20. The dev toolchain (Vitest 4/Vite 8)
+      # currently needs Node 20.19+ or 22.12+, and setup-node resolves these
+      # majors to current patch releases.
       matrix:
         node-version: ['20', '22', '24']
     steps:
