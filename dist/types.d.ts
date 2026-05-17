@@ -25,7 +25,7 @@ export interface PluginInfo {
     status?: 'enabled' | 'disabled';
 }
 export type IssueTier = 1 | 2 | 3;
-export type IssueType = 'broken_symlink' | 'template' | 'skill_dup' | 'duplicate' | 'oversized_memory' | 'oversized_skill' | 'unused_skill' | 'disabled_plugin' | 'stale_project' | 'temp_cache';
+export type IssueType = 'broken_symlink' | 'template' | 'skill_dup' | 'duplicate' | 'oversized_memory' | 'oversized_skill' | 'unused_skill' | 'unused_plugin' | 'disabled_plugin' | 'stale_project' | 'temp_cache';
 export interface Issue {
     type: IssueType;
     tier: IssueTier;
@@ -33,6 +33,17 @@ export interface Issue {
     detail?: string;
     tokens: number;
     path: string;
+    marketplace?: string;
+}
+export interface PluginBreakdown {
+    name: string;
+    marketplace: string;
+    tokens: number;
+    skills: number;
+    mcp: number;
+    commands: number;
+    lastUsed: 'used' | 'never';
+    status: 'used' | 'unused' | 'agent-only' | 'insufficient data' | 'disabled';
 }
 export interface ScanResult {
     localSkills: SkillInfo[];
@@ -51,6 +62,7 @@ export interface ScanResult {
     mcpServerNames: string[];
     issues: Issue[];
     totalTokensBefore: number;
+    pluginBreakdown: PluginBreakdown[];
 }
 export interface ManifestEntry {
     date: string;
@@ -60,9 +72,17 @@ export interface ManifestEntry {
     tokenCount?: number;
     tier?: IssueTier;
 }
+export type LegacyManifestEntry = ManifestEntry;
+export interface DisabledPluginEntry {
+    type: 'disabled_plugin';
+    plugin: string;
+    marketplace: string;
+    disabledAt: string;
+}
+export type AnyManifestEntry = ManifestEntry | DisabledPluginEntry;
 export interface Manifest {
     version: 2;
-    entries: ManifestEntry[];
+    entries: AnyManifestEntry[];
 }
 export interface TokenCache {
     version: number;

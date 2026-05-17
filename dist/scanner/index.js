@@ -7,9 +7,11 @@ import { scanPluginSkills } from './plugin-skills.js';
 import { scanMemoryFiles } from './memory.js';
 import { scanMcpServers } from './mcp.js';
 import { parseClaudeMdSections } from './claude-md.js';
-import { getDisabledPlugins } from './disabled-plugins.js';
+import { getDisabledPlugins, getInstalledPlugins } from './disabled-plugins.js';
 import { scanSessionUsage } from './sessions.js';
 import { classifyIssues } from './detectors.js';
+import { scanPluginSurfaces } from './plugin-surfaces.js';
+import { computePluginBreakdown } from './plugin-breakdown.js';
 import { SKILL_PROMPT_OVERHEAD_TOKENS } from './constants.js';
 const DEFAULT_LOOKBACK_DAYS = 60;
 export async function scan(opts = {}) {
@@ -22,10 +24,19 @@ export async function scan(opts = {}) {
         getDisabledPlugins(),
         scanSessionUsage(lookbackDays),
     ]);
+    const pluginSurfaces = scanPluginSurfaces();
     // Annotate plugin status
     for (const plugin of plugins) {
         plugin.status = disabledPlugins.has(plugin.name) ? 'disabled' : 'enabled';
     }
+    // Build enabled plugin list for unused_plugin detector. `plugins[].name` from
+    // existing code is the marketplace name (intentional, for cache-dir matching).
+    // For unused_plugin we need the actual plugin name parsed from
+    // `claude plugin list` output (the `<plugin>` part of `<plugin>@<marketplace>`).
+    const installed = await getInstalledPlugins();
+    const enabledPlugins = installed
+        .filter((p) => p.enabled)
+        .map((p) => ({ name: p.name, marketplace: p.marketplace }));
     // CLAUDE.md
     const claudeMdContent = await safeReadFile(join(getClaudeDir(), 'CLAUDE.md'));
     const claudeMdBytes = claudeMdContent ? Buffer.byteLength(claudeMdContent) : 0;
@@ -40,6 +51,23 @@ export async function scan(opts = {}) {
         recentSkillInvocations: sessionUsage.invokedSkills,
         sessionDataAvailable: sessionUsage.dataAvailable,
         lookbackDays,
+        pluginSurfaces,
+        enabledPlugins,
+        recentMcpPrefixes: sessionUsage.mcpPrefixesInvoked,
+        recentCommands: sessionUsage.commandsInvoked,
+        totalUserCallableInvocations: sessionUsage.totalUserCallableInvocations,
+        sessionsInWindow: sessionUsage.sessionsInWindow,
+    });
+    // Compute plugin breakdown (used by PLUGINS table in scan output)
+    const pluginBreakdown = computePluginBreakdown({
+        surfaces: pluginSurfaces,
+        installedPlugins: installed,
+        invokedSkills: sessionUsage.invokedSkills,
+        mcpPrefixesInvoked: sessionUsage.mcpPrefixesInvoked,
+        commandsInvoked: sessionUsage.commandsInvoked,
+        totalUserCallableInvocations: sessionUsage.totalUserCallableInvocations,
+        sessionsInWindow: sessionUsage.sessionsInWindow,
+        claudeMdSections,
     });
     // Estimate total tokens at startup
     const skillListingTokens = (localSkills.length + pluginSkills.length) * SKILL_PROMPT_OVERHEAD_TOKENS;
@@ -58,5 +86,6 @@ export async function scan(opts = {}) {
         mcpServerNames: mcp.names,
         issues,
         totalTokensBefore,
+        pluginBreakdown,
     };
 }

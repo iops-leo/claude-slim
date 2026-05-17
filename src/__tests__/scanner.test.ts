@@ -193,6 +193,12 @@ function makeCtx(partial: Partial<DetectorContext> = {}): DetectorContext {
     recentSkillInvocations: new Set(),
     sessionDataAvailable: false,
     lookbackDays: 60,
+    pluginSurfaces: [],
+    enabledPlugins: [],
+    recentMcpPrefixes: new Set(),
+    recentCommands: new Set(),
+    totalUserCallableInvocations: 0,
+    sessionsInWindow: 0,
     ...partial,
   };
 }

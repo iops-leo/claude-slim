@@ -38,6 +38,7 @@ export type IssueType =
   | 'oversized_memory'
   | 'oversized_skill'
   | 'unused_skill'
+  | 'unused_plugin'
   | 'disabled_plugin'
   | 'stale_project'
   | 'temp_cache';
@@ -49,6 +50,18 @@ export interface Issue {
   detail?: string;
   tokens: number;
   path: string;
+  marketplace?: string;
+}
+
+export interface PluginBreakdown {
+  name: string;
+  marketplace: string;
+  tokens: number;
+  skills: number;
+  mcp: number;
+  commands: number;
+  lastUsed: 'used' | 'never';
+  status: 'used' | 'unused' | 'agent-only' | 'insufficient data' | 'disabled';
 }
 
 export interface ScanResult {
@@ -64,8 +77,10 @@ export interface ScanResult {
   mcpServerNames: string[];
   issues: Issue[];
   totalTokensBefore: number;
+  pluginBreakdown: PluginBreakdown[];
 }
 
+// Flat "skill/memory moved" record written by the cleaner.
 export interface ManifestEntry {
   date: string;
   name: string;
@@ -75,9 +90,21 @@ export interface ManifestEntry {
   tier?: IssueTier;
 }
 
+// Alias used by cleaner.ts (linter renamed the import).
+export type LegacyManifestEntry = ManifestEntry;
+
+export interface DisabledPluginEntry {
+  type: 'disabled_plugin';
+  plugin: string;
+  marketplace: string;
+  disabledAt: string;
+}
+
+export type AnyManifestEntry = ManifestEntry | DisabledPluginEntry;
+
 export interface Manifest {
   version: 2;
-  entries: ManifestEntry[];
+  entries: AnyManifestEntry[];
 }
 
 export interface TokenCache {

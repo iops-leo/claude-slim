@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir, rename, access } from 'node:fs/promises';
-import type { Manifest, ManifestEntry } from './types.js';
+import type { Manifest, ManifestEntry, AnyManifestEntry, DisabledPluginEntry } from './types.js';
 import {
   getDisabledDir as getDir,
   getManifestPath,
@@ -25,10 +25,14 @@ async function pathExists(p: string): Promise<boolean> {
 
 // Legacy JSONL format included an `action?: 'restored'` field that v2 no longer
 // carries. We only reference it during migration, so model it as a local type.
-type LegacyManifestEntry = ManifestEntry & { action?: 'restored' };
+type LegacyJsonlEntry = ManifestEntry & { action?: 'restored' };
 
-function parseJsonl(content: string): LegacyManifestEntry[] {
-  const entries: LegacyManifestEntry[] = [];
+function isDisabledPluginEntry(e: AnyManifestEntry): e is DisabledPluginEntry {
+  return e.type === 'disabled_plugin' && 'plugin' in e && 'marketplace' in e;
+}
+
+function parseJsonl(content: string): LegacyJsonlEntry[] {
+  const entries: LegacyJsonlEntry[] = [];
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
@@ -41,11 +45,11 @@ function parseJsonl(content: string): LegacyManifestEntry[] {
   return entries;
 }
 
-function collapseLegacy(entries: LegacyManifestEntry[]): ManifestEntry[] {
+function collapseLegacy(entries: LegacyJsonlEntry[]): ManifestEntry[] {
   // Group by name. If the latest entry for a name has action='restored',
   // the item was restored and is excluded. Otherwise keep the first
   // (earliest clean record) as the canonical entry.
-  const byName = new Map<string, LegacyManifestEntry[]>();
+  const byName = new Map<string, LegacyJsonlEntry[]>();
   for (const e of entries) {
     const list = byName.get(e.name) ?? [];
     list.push(e);
@@ -115,7 +119,7 @@ export async function writeManifestV2(manifest: Manifest): Promise<void> {
   await rename(tmp, target);
 }
 
-export async function addEntry(entry: ManifestEntry): Promise<void> {
+export async function addEntry(entry: AnyManifestEntry): Promise<void> {
   const m = await readManifestV2();
   m.entries.push(entry);
   await writeManifestV2(m);
@@ -123,20 +127,49 @@ export async function addEntry(entry: ManifestEntry): Promise<void> {
 
 export async function removeEntry(name: string): Promise<ManifestEntry | null> {
   const m = await readManifestV2();
-  const idx = m.entries.findIndex((e) => e.name === name);
+  const idx = m.entries.findIndex((e) => !isDisabledPluginEntry(e) && e.name === name);
   if (idx === -1) return null;
   const [removed] = m.entries.splice(idx, 1);
   await writeManifestV2(m);
-  return removed;
+  return removed as ManifestEntry;
+}
+
+export async function recordDisabledPlugin(plugin: string, marketplace: string): Promise<void> {
+  const entry: DisabledPluginEntry = {
+    type: 'disabled_plugin',
+    plugin,
+    marketplace,
+    disabledAt: new Date().toISOString(),
+  };
+  await addEntry(entry);
+}
+
+export async function findDisabledPlugin(plugin: string, marketplace: string): Promise<DisabledPluginEntry | undefined> {
+  const m = await readManifestV2();
+  return m.entries.find(
+    (e): e is DisabledPluginEntry =>
+      isDisabledPluginEntry(e) && e.plugin === plugin && e.marketplace === marketplace,
+  );
+}
+
+export async function removeDisabledPlugin(plugin: string, marketplace: string): Promise<boolean> {
+  const m = await readManifestV2();
+  const idx = m.entries.findIndex(
+    (e) => isDisabledPluginEntry(e) && e.plugin === plugin && e.marketplace === marketplace,
+  );
+  if (idx === -1) return false;
+  m.entries.splice(idx, 1);
+  await writeManifestV2(m);
+  return true;
 }
 
 // --- Legacy-compatible API (still used by cleaner/cli pending Task 8) ---
 
-export async function readManifest(): Promise<ManifestEntry[]> {
+export async function readManifest(): Promise<AnyManifestEntry[]> {
   const m = await readManifestV2();
   return m.entries;
 }
 
-export async function appendManifest(entry: ManifestEntry): Promise<void> {
+export async function appendManifest(entry: AnyManifestEntry): Promise<void> {
   await addEntry(entry);
 }

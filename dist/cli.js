@@ -73,12 +73,17 @@ program
     .command('restore')
     .description('Restore previously disabled items')
     .action(async () => {
-    const entries = await readManifest();
+    const allEntries = await readManifest();
+    // Separate plugin entries (DisabledPluginEntry shape) from legacy ManifestEntry
+    const pluginEntries = allEntries.filter((e) => 'plugin' in e && 'marketplace' in e);
+    const legacyEntries = allEntries.filter((e) => !('plugin' in e && 'marketplace' in e));
     // v2 manifest contains only currently-disabled entries (restored ones are removed)
-    const disabled = entries.filter((e) => e.type !== 'broken_symlink');
+    const disabled = legacyEntries.filter((e) => e.type !== 'broken_symlink');
     const NON_RESTORABLE = new Set(['temp_cache', 'disabled_plugin']);
-    const restorable = disabled.filter((e) => !NON_RESTORABLE.has(e.type));
+    const restorableLegacy = disabled.filter((e) => !NON_RESTORABLE.has(e.type));
     const infoOnly = disabled.filter((e) => NON_RESTORABLE.has(e.type));
+    // Combine restorable: legacy skill/project entries + plugin entries
+    const restorable = [...restorableLegacy, ...pluginEntries];
     if (restorable.length === 0 && infoOnly.length === 0) {
         console.log('\n  Nothing to restore.\n');
         return;
@@ -87,8 +92,16 @@ program
         console.log('\n  Restorable items:\n');
         for (let i = 0; i < restorable.length; i++) {
             const e = restorable[i];
-            const date = new Date(e.date).toLocaleDateString();
-            console.log(`    ${i + 1}. ${e.name} (${e.type}, disabled ${date})`);
+            if ('plugin' in e && 'marketplace' in e) {
+                const pe = e;
+                const date = new Date(pe.disabledAt).toLocaleDateString();
+                console.log(`    ${i + 1}. [plugin] ${pe.plugin} @ ${pe.marketplace} (disabled ${date})`);
+            }
+            else {
+                const le = e;
+                const date = new Date(le.date).toLocaleDateString();
+                console.log(`    ${i + 1}. ${le.name} (${le.type}, disabled ${date})`);
+            }
         }
     }
     if (infoOnly.length > 0) {
@@ -98,7 +111,7 @@ program
             const hint = e.type === 'disabled_plugin'
                 ? `reinstall: claude plugin install ${e.name}`
                 : 'deleted, cannot restore';
-            console.log(`    \x1b[90m\u2022 ${e.name} (${date}) — ${hint}\x1b[0m`);
+            console.log(`    \x1b[90m• ${e.name} (${date}) — ${hint}\x1b[0m`);
         }
     }
     if (restorable.length === 0) {
@@ -114,14 +127,18 @@ program
     }
     let restored = 0;
     for (const idx of indices) {
+        const e = restorable[idx];
+        const label = 'plugin' in e && 'marketplace' in e
+            ? e.plugin
+            : e.name;
         try {
-            await restoreItem(restorable[idx]);
-            console.log(`  \x1b[32m\u2713\x1b[0m Restored: ${restorable[idx].name}`);
+            await restoreItem(e);
+            console.log(`  \x1b[32m✓\x1b[0m Restored: ${label}`);
             restored++;
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.log(`  \x1b[31m\u2717\x1b[0m ${restorable[idx].name}: ${msg}`);
+            console.log(`  \x1b[31m✗\x1b[0m ${label}: ${msg}`);
         }
     }
     console.log(`\n  Restored ${restored} item(s).\n`);
@@ -135,7 +152,9 @@ program
     .action(async (opts) => {
     await initTokenizer();
     const result = await scan({ lookbackDays: parseInt(opts.lookbackDays, 10) || 60 });
-    const entries = await readManifest();
+    const allEntries = await readManifest();
+    // Filter to legacy-style entries only (those with tokenCount/name/from fields)
+    const entries = allEntries.filter((e) => !('plugin' in e && 'marketplace' in e));
     const movedEntries = entries.filter((e) => e.tokenCount && e.tokenCount > 0);
     if (movedEntries.length === 0) {
         console.log('\n  No previous cleanup found. Run `claude-slim clean` first.\n');
@@ -195,10 +214,10 @@ async function runCleanPipeline(opts) {
     let selectedIssues;
     if (isInteractive) {
         console.log('  Actions:');
-        console.log('    Enter    \u2192 accept pre-selected (Tier 1 only)');
-        console.log('    1,3,5    \u2192 select specific items');
-        console.log('    all      \u2192 select everything');
-        console.log('    none     \u2192 cancel');
+        console.log('    Enter    → accept pre-selected (Tier 1 only)');
+        console.log('    1,3,5    → select specific items');
+        console.log('    all      → select everything');
+        console.log('    none     → cancel');
         console.log('');
         const selection = await askUser('  Your choice: ');
         selectedIssues = resolveSelection(selection, result.issues);
@@ -207,10 +226,10 @@ async function runCleanPipeline(opts) {
         // Auto mode or non-TTY: select Tier 1 only
         selectedIssues = result.issues.filter((i) => i.tier === 1);
         if (!opts.auto) {
-            console.log('  \x1b[33m\u26a0 Non-interactive mode detected, auto-selecting Tier 1\x1b[0m\n');
+            console.log('  \x1b[33m⚠ Non-interactive mode detected, auto-selecting Tier 1\x1b[0m\n');
         }
         else {
-            console.log(`  \x1b[36m\u2192 Auto mode: selecting ${selectedIssues.length} Tier 1 item(s)\x1b[0m\n`);
+            console.log(`  \x1b[36m→ Auto mode: selecting ${selectedIssues.length} Tier 1 item(s)\x1b[0m\n`);
         }
     }
     if (selectedIssues.length === 0) {
@@ -221,7 +240,7 @@ async function runCleanPipeline(opts) {
     if (opts.dryRun) {
         console.log('\n  \x1b[33m[DRY RUN]\x1b[0m Would disable:');
         for (const issue of selectedIssues) {
-            console.log(`    \u2022 ${issue.name} (${issue.type})`);
+            console.log(`    • ${issue.name} (${issue.type})`);
         }
         console.log(`\n  Estimated token savings: ~${selectedIssues.reduce((s, i) => s + i.tokens, 0).toLocaleString()}`);
         console.log('');
@@ -239,7 +258,7 @@ async function runCleanPipeline(opts) {
     if (cleanResult.errors.length > 0) {
         console.log('  \x1b[31mErrors:\x1b[0m');
         for (const err of cleanResult.errors) {
-            console.log(`    \u2022 ${err.name}: ${err.error}`);
+            console.log(`    • ${err.name}: ${err.error}`);
         }
         console.log('');
     }

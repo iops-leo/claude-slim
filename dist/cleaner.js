@@ -1,7 +1,8 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry } from './manifest.js';
+import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordDisabledPlugin, removeDisabledPlugin } from './manifest.js';
 import { assertInsideClaudeDir, getSkillsDir } from './paths.js';
+import { disablePlugin, enablePlugin } from './plugin-runtime.js';
 async function pathExists(p) {
     try {
         await lstat(p);
@@ -33,7 +34,10 @@ export async function cleanIssues(issues) {
     const errors = [];
     for (const issue of issues) {
         try {
-            assertInsideClaudeDir(issue.path);
+            // unused_plugin and report-only types don't touch filesystem paths directly
+            if (issue.type !== 'unused_plugin' && issue.type !== 'oversized_memory' && issue.type !== 'disabled_plugin') {
+                assertInsideClaudeDir(issue.path);
+            }
             if (issue.type === 'broken_symlink') {
                 await unlink(issue.path);
                 const entry = {
@@ -114,6 +118,19 @@ export async function cleanIssues(issues) {
                 await recordOrRollback(entry, () => rename(backupDir, issue.path));
                 moved.push(entry);
             }
+            else if (issue.type === 'unused_plugin') {
+                await disablePlugin(issue.name);
+                // Record in manifest; if that fails, roll back the disable
+                try {
+                    await recordDisabledPlugin(issue.name, issue.marketplace ?? 'unknown');
+                }
+                catch (e) {
+                    await enablePlugin(issue.name).catch(() => { });
+                    throw e;
+                }
+                // unused_plugin doesn't contribute to moved (no ManifestEntry shape), track skipped
+                skipped.push(issue.name);
+            }
             else if (issue.type === 'oversized_memory' || issue.type === 'disabled_plugin') {
                 // Report only — user manages these manually
                 skipped.push(issue.name);
@@ -149,42 +166,50 @@ async function cleanEmptyDirs(dir) {
     catch { /* skip */ }
 }
 export async function restoreItem(entry) {
-    assertInsideClaudeDir(entry.from);
-    if (entry.type === 'broken_symlink') {
-        throw new Error(`Broken symlinks cannot be restored (${entry.name})`);
+    // Handle new-style disabled_plugin entries (plugin + marketplace shape)
+    if ('plugin' in entry && 'marketplace' in entry) {
+        const pluginEntry = entry;
+        await enablePlugin(pluginEntry.plugin);
+        await removeDisabledPlugin(pluginEntry.plugin, pluginEntry.marketplace);
+        return;
     }
-    if (entry.type === 'disabled_plugin') {
-        throw new Error(`Plugins must be reinstalled: claude plugin install ${entry.name}`);
+    const legacyEntry = entry;
+    assertInsideClaudeDir(legacyEntry.from);
+    if (legacyEntry.type === 'broken_symlink') {
+        throw new Error(`Broken symlinks cannot be restored (${legacyEntry.name})`);
     }
-    if (entry.type === 'temp_cache') {
-        throw new Error(`Temp caches were deleted and cannot be restored (${entry.name})`);
+    if (legacyEntry.type === 'disabled_plugin') {
+        throw new Error(`Plugins must be reinstalled: claude plugin install ${legacyEntry.name}`);
+    }
+    if (legacyEntry.type === 'temp_cache') {
+        throw new Error(`Temp caches were deleted and cannot be restored (${legacyEntry.name})`);
     }
     const disabledDir = getDisabledDir();
-    if (entry.type === 'stale_project') {
-        const backupDir = join(disabledDir, 'memory-backup', entry.name);
+    if (legacyEntry.type === 'stale_project') {
+        const backupDir = join(disabledDir, 'memory-backup', legacyEntry.name);
         // Refuse to overwrite user's current state
-        if (await pathExists(entry.from)) {
-            throw new Error(`Cannot restore: ${entry.from} already exists. ` +
+        if (await pathExists(legacyEntry.from)) {
+            throw new Error(`Cannot restore: ${legacyEntry.from} already exists. ` +
                 `Remove or rename it first.`);
         }
-        await mkdir(dirname(entry.from), { recursive: true });
+        await mkdir(dirname(legacyEntry.from), { recursive: true });
         // Atomic directory rename — requires same FS (guaranteed since both paths are under ~/.claude/)
-        await rename(backupDir, entry.from);
+        await rename(backupDir, legacyEntry.from);
     }
     else {
         // Restore skill directory using the same naming as cleanIssues
-        const safeName = entry.name.replace(/\//g, '--');
+        const safeName = legacyEntry.name.replace(/\//g, '--');
         const src = join(disabledDir, safeName);
         if (!(await pathExists(src))) {
-            throw new Error(`Backup not found for "${entry.name}" at ${src}. ` +
+            throw new Error(`Backup not found for "${legacyEntry.name}" at ${src}. ` +
                 `It may have been manually removed.`);
         }
-        if (await pathExists(entry.from)) {
-            throw new Error(`Cannot restore: ${entry.from} already exists. ` +
+        if (await pathExists(legacyEntry.from)) {
+            throw new Error(`Cannot restore: ${legacyEntry.from} already exists. ` +
                 `Remove or rename it first.`);
         }
-        await mkdir(dirname(entry.from), { recursive: true });
-        await rename(src, entry.from);
+        await mkdir(dirname(legacyEntry.from), { recursive: true });
+        await rename(src, legacyEntry.from);
     }
-    await removeEntry(entry.name);
+    await removeEntry(legacyEntry.name);
 }

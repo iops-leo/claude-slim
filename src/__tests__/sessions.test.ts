@@ -199,10 +199,11 @@ describe('scanSessionUsage', () => {
     const cachePath = join(tmp.claudeDir, '.skill-usage-cache.json');
     // Cache claims s1 contains 'from-cache'; the file actually has 'real-content'.
     // If the cache is honored, scan sees 'from-cache' and not 'real-content'.
+    // Include v2.6 extension fields so the entry is not treated as stale.
     await writeFile(cachePath, JSON.stringify({
       version: 1,
       entries: {
-        [filePath]: { mtimeMs, skills: ['from-cache'] },
+        [filePath]: { mtimeMs, skills: ['from-cache'], mcpPrefixes: [], commands: [], invocationCount: 1 },
       },
     }));
 

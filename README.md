@@ -67,6 +67,7 @@ That's slower responses. Hitting your usage cap faster. Paying for context you'r
 | Empty templates | Placeholder skills with no content |
 | Oversized files | SKILL.md over 10KB |
 | **Unused skills** | **Local skills never invoked in your last N days of sessions (default 60d)** |
+| **Unused plugins** | **Plugins whose skill/mcp/cmd were never invoked in your last N days of sessions (default 60d). Tier 3, never auto-selected.** |
 | Stale memory | Large memory files loaded every session |
 | Disabled plugins | Installed but disabled plugins still in cache |
 | Stale projects | Project memory untouched for 90+ days |
@@ -209,6 +210,13 @@ From a real cleanup session:
 | **Est. token savings** | | **~4,300/session** | |
 
 ---
+
+## v2.7 — What's new
+
+- **Unused-plugin detection** — claude-slim now reads your session transcripts for MCP tool calls (`mcp__plugin_<plugin>_<server>__*`) and slash commands, and flags plugins whose surfaces you've never touched in the last 60 days. Tier 3 (Optional, never auto-selected). When you choose to clean one, `claude plugin disable <name>` runs automatically; `/claude-slim restore` re-enables it.
+- **PLUGIN BREAKDOWN table** — the scan report now includes a per-plugin cost breakdown: token estimate (CLAUDE.md section + skills + deferred MCP tools + commands) and usage status (used / unused / agent-only / insufficient data / disabled). In the owner's real env: `oh-my-claudecode` tops the list at ~6,210 tok; three plugins were flagged as unused despite being enabled.
+- **Session parser fix** — slash commands in string-form user messages were previously missed (only array-form content was parsed). All slash-command invocations are now captured correctly.
+- **+82 tests** for the new modules and the parser regression.
 
 ## v2.6 — What's new
 

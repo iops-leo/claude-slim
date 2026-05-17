@@ -1,4 +1,4 @@
-import type { Issue, ManifestEntry } from './types.js';
+import type { Issue, ManifestEntry, DisabledPluginEntry } from './types.js';
 export interface CleanResult {
     moved: ManifestEntry[];
     skipped: string[];
@@ -8,4 +8,4 @@ export interface CleanResult {
     }>;
 }
 export declare function cleanIssues(issues: Issue[]): Promise<CleanResult>;
-export declare function restoreItem(entry: ManifestEntry): Promise<void>;
+export declare function restoreItem(entry: ManifestEntry | DisabledPluginEntry): Promise<void>;

@@ -1,6 +1,7 @@
 import { homedir } from 'node:os';
-import type { ScanResult, Issue, ManifestEntry } from './types.js';
+import type { ScanResult, Issue, ManifestEntry, PluginBreakdown } from './types.js';
 import { isUsingFallback } from './tokenizer.js';
+import { formatPluginsTable } from './scanner/plugin-breakdown.js';
 
 // Claude Code encodes /Users/leo.new/foo as -Users-leo-new-foo
 const HOME_PREFIX = homedir().replace(/\//g, '-').replace(/\./g, '-');
@@ -24,6 +25,7 @@ export interface ReportData {
   monthlySavings: number;
   sessionsPerDay: number;
   breakdown: BreakdownRow[];
+  unusedPlugins: { count: number; tokens: number };
 }
 
 export function calculateReport(
@@ -81,6 +83,12 @@ export function calculateReport(
     },
   ];
 
+  const unusedPluginIssues = scanAfter.issues.filter((i) => i.type === 'unused_plugin');
+  const unusedPlugins = {
+    count: unusedPluginIssues.length,
+    tokens: unusedPluginIssues.reduce((s, i) => s + (i.tokens || 0), 0),
+  };
+
   return {
     before,
     after,
@@ -90,6 +98,7 @@ export function calculateReport(
     monthlySavings,
     sessionsPerDay,
     breakdown,
+    unusedPlugins,
   };
 }
 
@@ -104,7 +113,7 @@ export function formatReportBox(data: ReportData): string {
 
   const top = '\u256d' + '\u2500'.repeat(W) + '\u256e';
   const bot = '\u2570' + '\u2500'.repeat(W) + '\u256f';
-  const blank = '\u2502' + ' '.repeat(W) + '\u2502';
+  const blank = '\u2502' + ' '.repeat(W - 2) + '\u2502';
 
   lines.push(top);
   lines.push(`\u2502${pad('  claude-slim report')}\u2502`);
@@ -132,6 +141,19 @@ export function formatReportBox(data: ReportData): string {
   if (isUsingFallback()) {
     lines.push(blank);
     lines.push(`\u2502${pad('  \u26a0 Token counts are approximations (bytes/4)')}\u2502`);
+  }
+
+  if (data.unusedPlugins.count > 0) {
+    const n = data.unusedPlugins.count;
+    const pluginWord = n === 1 ? 'unused plugin' : 'unused plugins';
+    let hintText: string;
+    if (data.unusedPlugins.tokens > 0) {
+      hintText = `  ! ${n} ${pluginWord} (~${data.unusedPlugins.tokens.toLocaleString()} tok).`;
+    } else {
+      hintText = `  ! ${n} ${pluginWord}. Run: claude-slim`;
+    }
+    lines.push(blank);
+    lines.push(`\u2502${pad(hintText)}\u2502`);
   }
 
   lines.push(bot);
@@ -276,6 +298,19 @@ export function formatScanSummary(result: ScanResult): string {
     }
   }
 
+  // --- PLUGINS BREAKDOWN ---
+  if (result.pluginBreakdown && result.pluginBreakdown.length > 0) {
+    const totalInstalled = result.pluginBreakdown.length;
+    const totalEnabled = result.pluginBreakdown.filter(
+      (p) => p.status !== 'disabled',
+    ).length;
+    lines.push(formatPluginsTable(result.pluginBreakdown, totalInstalled, totalEnabled));
+  }
+
   lines.push('');
   return lines.join('\n');
 }
+
+// Re-export for external callers (e.g. tests)
+export { formatPluginsTable };
+export type { PluginBreakdown };

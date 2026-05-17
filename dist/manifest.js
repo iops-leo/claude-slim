@@ -15,6 +15,9 @@ async function pathExists(p) {
         return false;
     }
 }
+function isDisabledPluginEntry(e) {
+    return e.type === 'disabled_plugin' && 'plugin' in e && 'marketplace' in e;
+}
 function parseJsonl(content) {
     const entries = [];
     for (const line of content.split('\n')) {
@@ -108,12 +111,34 @@ export async function addEntry(entry) {
 }
 export async function removeEntry(name) {
     const m = await readManifestV2();
-    const idx = m.entries.findIndex((e) => e.name === name);
+    const idx = m.entries.findIndex((e) => !isDisabledPluginEntry(e) && e.name === name);
     if (idx === -1)
         return null;
     const [removed] = m.entries.splice(idx, 1);
     await writeManifestV2(m);
     return removed;
+}
+export async function recordDisabledPlugin(plugin, marketplace) {
+    const entry = {
+        type: 'disabled_plugin',
+        plugin,
+        marketplace,
+        disabledAt: new Date().toISOString(),
+    };
+    await addEntry(entry);
+}
+export async function findDisabledPlugin(plugin, marketplace) {
+    const m = await readManifestV2();
+    return m.entries.find((e) => isDisabledPluginEntry(e) && e.plugin === plugin && e.marketplace === marketplace);
+}
+export async function removeDisabledPlugin(plugin, marketplace) {
+    const m = await readManifestV2();
+    const idx = m.entries.findIndex((e) => isDisabledPluginEntry(e) && e.plugin === plugin && e.marketplace === marketplace);
+    if (idx === -1)
+        return false;
+    m.entries.splice(idx, 1);
+    await writeManifestV2(m);
+    return true;
 }
 // --- Legacy-compatible API (still used by cleaner/cli pending Task 8) ---
 export async function readManifest() {

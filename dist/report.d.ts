@@ -1,4 +1,5 @@
-import type { ScanResult, ManifestEntry } from './types.js';
+import type { ScanResult, ManifestEntry, PluginBreakdown } from './types.js';
+import { formatPluginsTable } from './scanner/plugin-breakdown.js';
 export interface BreakdownRow {
     label: string;
     before: string;
@@ -17,7 +18,13 @@ export interface ReportData {
     monthlySavings: number;
     sessionsPerDay: number;
     breakdown: BreakdownRow[];
+    unusedPlugins: {
+        count: number;
+        tokens: number;
+    };
 }
 export declare function calculateReport(scanBefore: ScanResult, scanAfter: ScanResult, movedEntries: ManifestEntry[], sessionsPerDay?: number): ReportData;
 export declare function formatReportBox(data: ReportData): string;
 export declare function formatScanSummary(result: ScanResult): string;
+export { formatPluginsTable };
+export type { PluginBreakdown };

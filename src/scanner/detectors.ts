@@ -3,6 +3,7 @@ import { getPluginsDir } from '../paths.js';
 import type { SkillInfo, BrokenSymlink, MemoryFile, PluginInfo, Issue } from '../types.js';
 import type { TempCache } from './plugin-skills.js';
 import type { StaleProject } from './memory.js';
+import type { PluginSurfaces } from './plugin-surfaces.js';
 import {
   OVERSIZED_SKILL_BYTES, OVERSIZED_MEMORY_BYTES, SKILL_PROMPT_OVERHEAD_TOKENS,
 } from './constants.js';
@@ -29,6 +30,13 @@ export interface DetectorContext {
   // or schema drift; see scanner/sessions.ts).
   sessionDataAvailable: boolean;
   lookbackDays: number;
+  // v2.6 unused_plugin detector fields
+  pluginSurfaces: PluginSurfaces[];
+  enabledPlugins: Array<{ name: string; marketplace: string }>;
+  recentMcpPrefixes: Set<string>;
+  recentCommands: Set<string>;
+  totalUserCallableInvocations: number;
+  sessionsInWindow: number;
 }
 
 // A Detector is a pure function of context → Issue[]. Add a new detector by
@@ -225,6 +233,66 @@ const unusedSkillDetector: Detector = {
   },
 };
 
+const unusedPluginDetector: Detector = {
+  name: 'unused_plugin',
+  detect({
+    pluginSurfaces,
+    enabledPlugins,
+    recentSkillInvocations,
+    recentMcpPrefixes,
+    recentCommands,
+    totalUserCallableInvocations,
+    sessionsInWindow,
+    lookbackDays,
+  }) {
+    // (a) Global suppression: too few sessions to draw a conclusion
+    if (sessionsInWindow < 3) return [];
+    // (b) Global suppression: no user-callable activity — schema change suspected
+    if (totalUserCallableInvocations === 0) return [];
+
+    const enabledNames = new Set(enabledPlugins.map((p) => p.name));
+    const issues: Issue[] = [];
+
+    for (const ps of pluginSurfaces) {
+      // Inner-join: only consider plugins reported as enabled (filters .git noise)
+      if (!enabledNames.has(ps.pluginName)) continue;
+
+      // (c) Per-plugin suppression: no user-callable surface (agent/hook only)
+      const userCallableCount =
+        ps.skills.length + ps.mcpToolPrefixes.length + ps.commands.length;
+      if (userCallableCount === 0) continue;
+
+      // (d) suppression was intended to skip recently-installed plugins by
+      // `installedAt` mtime, but dogfooding showed `claude plugin update` resets
+      // cache mtime indiscriminately, making install age unreliable. Dropped.
+      // Tier 3 (never auto-selected) lets users sanity-check any flagged plugin.
+
+      // Usage check: any skill/mcp/command from this plugin invoked?
+      const usedSkill = ps.skills.some(
+        (s) =>
+          recentSkillInvocations.has(s) ||
+          recentSkillInvocations.has(`${ps.pluginName}:${s}`),
+      );
+      const usedMcp = ps.mcpToolPrefixes.some((p) => recentMcpPrefixes.has(p));
+      const usedCmd = ps.commands.some((c) => recentCommands.has(c));
+
+      if (usedSkill || usedMcp || usedCmd) continue;
+
+      issues.push({
+        type: 'unused_plugin',
+        tier: 3,
+        name: ps.pluginName,
+        marketplace: ps.marketplace,
+        detail: `not invoked in ${lookbackDays}d (${ps.marketplace})`,
+        tokens: 0,
+        path: ps.installDir,
+      });
+    }
+
+    return issues;
+  },
+};
+
 const disabledPluginDetector: Detector = {
   name: 'disabled_plugin',
   detect({ plugins, disabledPlugins }) {
@@ -257,6 +325,7 @@ export const detectors: Detector[] = [
   oversizedMemoryDetector,
   staleProjectDetector,
   unusedSkillDetector,
+  unusedPluginDetector,
   disabledPluginDetector,
 ];
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateReport } from '../report.js';
-import type { ScanResult, ManifestEntry } from '../types.js';
+import { calculateReport, formatReportBox } from '../report.js';
+import type { ScanResult, ManifestEntry, Issue } from '../types.js';
 
 function makeScanResult(overrides: Partial<ScanResult> = {}): ScanResult {
   return {
@@ -16,6 +16,7 @@ function makeScanResult(overrides: Partial<ScanResult> = {}): ScanResult {
     mcpServerNames: [],
     issues: [],
     totalTokensBefore: 0,
+    pluginBreakdown: [],
     ...overrides,
   };
 }
@@ -96,5 +97,128 @@ describe('calculateReport', () => {
     expect(findRow('Memory files').saved).toBe('8.0KB');
     // 10K → 4K, saved 6K
     expect(findRow('Est. tokens').saved).toBe('~6,000');
+  });
+});
+
+// Helper: build an unused_plugin issue
+function makeUnusedPluginIssue(name: string, tokens: number): Issue {
+  return { type: 'unused_plugin', tier: 3, name, tokens, path: '/fake' };
+}
+
+describe('formatReportBox unused plugin hint', () => {
+  const baseReport = calculateReport(
+    { localSkills: [], pluginSkills: [], plugins: [], brokenSymlinks: [], memoryFiles: [],
+      claudeMdBytes: 0, claudeMdTokens: 0, claudeMdSections: [], mcpServers: 0,
+      mcpServerNames: [], issues: [], totalTokensBefore: 10000, pluginBreakdown: [] },
+    { localSkills: [], pluginSkills: [], plugins: [], brokenSymlinks: [], memoryFiles: [],
+      claudeMdBytes: 0, claudeMdTokens: 0, claudeMdSections: [], mcpServers: 0,
+      mcpServerNames: [], issues: [], totalTokensBefore: 6000, pluginBreakdown: [] },
+    [], 2,
+  );
+
+  it('shows no hint when unused plugin count is 0', () => {
+    const box = formatReportBox(baseReport);
+    expect(box).not.toContain('unused plugin');
+  });
+
+  it('shows hint with count when unused plugins exist (plural)', () => {
+    const after: ScanResult = {
+      localSkills: [], pluginSkills: [], plugins: [], brokenSymlinks: [], memoryFiles: [],
+      claudeMdBytes: 0, claudeMdTokens: 0, claudeMdSections: [], mcpServers: 0,
+      mcpServerNames: [], totalTokensBefore: 6000, pluginBreakdown: [],
+      issues: [
+        makeUnusedPluginIssue('figma', 0),
+        makeUnusedPluginIssue('graphify', 0),
+        makeUnusedPluginIssue('pdf', 0),
+      ],
+    };
+    const report = calculateReport(
+      { ...after, totalTokensBefore: 10000, issues: [] },
+      after, [], 2,
+    );
+    const box = formatReportBox(report);
+    expect(box).toContain('3 unused plugins');
+    expect(box).toContain('Run: claude-slim');
+  });
+
+  it('shows singular form for 1 unused plugin', () => {
+    const after: ScanResult = {
+      localSkills: [], pluginSkills: [], plugins: [], brokenSymlinks: [], memoryFiles: [],
+      claudeMdBytes: 0, claudeMdTokens: 0, claudeMdSections: [], mcpServers: 0,
+      mcpServerNames: [], totalTokensBefore: 6000, pluginBreakdown: [],
+      issues: [makeUnusedPluginIssue('figma', 0)],
+    };
+    const report = calculateReport(
+      { ...after, totalTokensBefore: 10000, issues: [] },
+      after, [], 2,
+    );
+    const box = formatReportBox(report);
+    expect(box).toContain('1 unused plugin');
+    expect(box).not.toContain('1 unused plugins');
+  });
+
+  it('includes token count in hint when tokens > 0', () => {
+    const after: ScanResult = {
+      localSkills: [], pluginSkills: [], plugins: [], brokenSymlinks: [], memoryFiles: [],
+      claudeMdBytes: 0, claudeMdTokens: 0, claudeMdSections: [], mcpServers: 0,
+      mcpServerNames: [], totalTokensBefore: 6000, pluginBreakdown: [],
+      issues: [
+        makeUnusedPluginIssue('figma', 5000),
+        makeUnusedPluginIssue('pdf', 3000),
+      ],
+    };
+    const report = calculateReport(
+      { ...after, totalTokensBefore: 10000, issues: [] },
+      after, [], 2,
+    );
+    const box = formatReportBox(report);
+    expect(box).toContain('~8,000 tok');
+  });
+
+  it('omits token count in hint when tokens are 0', () => {
+    const after: ScanResult = {
+      localSkills: [], pluginSkills: [], plugins: [], brokenSymlinks: [], memoryFiles: [],
+      claudeMdBytes: 0, claudeMdTokens: 0, claudeMdSections: [], mcpServers: 0,
+      mcpServerNames: [], totalTokensBefore: 6000, pluginBreakdown: [],
+      issues: [makeUnusedPluginIssue('figma', 0)],
+    };
+    const report = calculateReport(
+      { ...after, totalTokensBefore: 10000, issues: [] },
+      after, [], 2,
+    );
+    const box = formatReportBox(report);
+    expect(box).toContain('1 unused plugin');
+    // hint line should not include "~X tok" token annotation
+    const hintLine = box.split('\n').find(l => l.includes('unused plugin'))!;
+    expect(hintLine).not.toContain('~');
+    expect(hintLine).not.toContain(' tok)');
+  });
+
+  it('hint line width matches other non-blank content lines', () => {
+    // Strip ANSI, find non-blank │ lines (blank lines are wider by design: W spaces vs W-2 for content)
+    const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+    const getNonBlankContentWidths = (box: string) =>
+      box.split('\n')
+        .map(stripAnsi)
+        .filter(l => l.startsWith('│') && l.trim() !== '│');
+
+    const after: ScanResult = {
+      localSkills: [], pluginSkills: [], plugins: [], brokenSymlinks: [], memoryFiles: [],
+      claudeMdBytes: 0, claudeMdTokens: 0, claudeMdSections: [], mcpServers: 0,
+      mcpServerNames: [], totalTokensBefore: 6000, pluginBreakdown: [],
+      issues: [makeUnusedPluginIssue('figma', 0), makeUnusedPluginIssue('pdf', 0)],
+    };
+    const reportWith = calculateReport(
+      { ...after, totalTokensBefore: 10000, issues: [] },
+      after, [], 2,
+    );
+    const boxWith = formatReportBox(reportWith);
+    const nonBlankLines = getNonBlankContentWidths(boxWith);
+
+    expect(nonBlankLines.length).toBeGreaterThan(0);
+    // hint line and other content lines must all have the same width
+    const widths = nonBlankLines.map(l => l.length);
+    const allSame = widths.every(w => w === widths[0]);
+    expect(allSame).toBe(true);
   });
 });

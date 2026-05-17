@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] — 2026-05-17
+
+### Added
+- **`unused_plugin` detector — flags plugins whose skills, MCP tools, and commands were never invoked in the last 60 days of sessions.** Reads the same JSONL session transcripts used by `unused_skill`, now also extracting MCP tool prefixes (`mcp__plugin_<plugin>_<server>__*`) and slash commands. Issues are Tier 3 (Optional, never auto-selected) — the call is yours. Cleanup runs `claude plugin disable <name>` automatically; restore re-enables with `claude plugin enable <name>`.
+- **PLUGIN BREAKDOWN table** — new section in the scan report showing every installed plugin, its token cost (CLAUDE.md section + skill registrations + MCP deferred tools + commands), usage status (used / unused / agent-only / insufficient data / disabled), and a per-plugin token estimate. Top offenders in a real env: `oh-my-claudecode` ~6,210 tok, `pm-skills` series ~2,500 tok combined.
+- **`src/scanner/plugin-surfaces.ts`** — walks `~/.claude/plugins/cache/` and enumerates all user-callable surfaces per plugin (skills, MCP tool namespaces, slash commands, agents, hooks).
+- **`src/scanner/plugin-cost.ts`** — per-plugin token estimation with calibrated constants: `DEFERRED_TOOL_OVERHEAD_TOKENS=8`, `COMMAND_OVERHEAD_TOKENS=10`, `MCP_SERVER_TOOLS_AVG=10` (validated against owner's real system prompt, ~1,500 tok for 209 MCP tools).
+- **`src/scanner/plugin-breakdown.ts`** — combines surfaces + costs + session signals into `PluginBreakdown[]` rows; exports `formatPluginsTable()` renderer.
+- **`src/plugin-runtime.ts`** — `disablePlugin(name)` / `enablePlugin(name)` via `execFile` (no shell). 30s timeout. Plugin name gated by regex validation (`^[a-zA-Z0-9_-]+$`).
+- **`getInstalledPlugins()` (`src/scanner/disabled-plugins.ts`)** — enumerates installed plugins by marketplace identity (distinct from the existing `getDisabledPlugins()` which returns marketplace-level disabled status).
+- **`recordDisabledPlugin`, `findDisabledPlugin`, `removeDisabledPlugin`** helpers in `src/manifest.ts` — track disabled plugin entries alongside existing skill/project entries.
+
+### Changed
+- **`scanSessionUsage()` now returns richer signals**: `mcpPrefixesInvoked: Set<string>`, `commandsInvoked: Set<string>`, `totalUserCallableInvocations: number`, `sessionsInWindow: number`. Existing fields (`invokedSkills`, `dataAvailable`) are unchanged — fully backward compatible.
+- **Session JSONL parser bug fix**: user message content was only handled when it was an array; string-content messages (direct slash commands) were silently skipped, causing all slash-command invocations to be missed. Both shapes are now handled.
+- **`DetectorContext` extended** with `pluginSurfaces`, `enabledPlugins`, `recentMcpPrefixes`, `recentCommands`, `totalUserCallableInvocations`, `sessionsInWindow`. Existing fields untouched — detectors remain pure functions of their context.
+- **`src/cleaner.ts`** — `unused_plugin` clean/restore case added; `restoreItem` handles `disabled_plugin` manifest entries.
+- **`src/cli.ts`** — restore selection UI labels disabled plugin entries as `[plugin] {name} @ {marketplace}`.
+- **`src/report.ts`** — report box shows a hint line (`! N unused plugins. Run: claude-slim`) when unused plugins are detected; PLUGIN BREAKDOWN section appended after the main breakdown table.
+- **`src/types.ts`** — `Issue` gains optional `marketplace?: string`; new `DisabledPluginEntry`, `AnyManifestEntry` union, and `PluginBreakdown` interface.
+
+### Safety
+- **install-mtime suppression was evaluated and rejected.** An earlier design planned to suppress "unused plugin" flags for recently installed plugins using `~/.claude/plugins/cache/` mtime as a proxy for install date. Dogfooding revealed that `claude plugin update` resets cache mtime indiscriminately, making the mtime an unreliable install timestamp. The feature was dropped before shipping. Tier 3 classification is the safety net: users always decide before anything is disabled.
+- **Plugin name regex validation** (`^[a-zA-Z0-9_-]+$`) gates all `disablePlugin`/`enablePlugin` calls — any scanner or manifest corruption producing a weird name is rejected before it reaches the shell.
+- **`execFile` no-shell pattern** (established in v2.2.3) reused for `disablePlugin`/`enablePlugin` — arguments are never concatenated into a shell string.
+
+### Tests
+- Total test count: **103 → 185** (+82) on the v2.5.1 baseline. After rebasing onto v2.6.1 (which added doctor-command tests), the combined suite count will reconcile during the post-merge test run.
+
+### Docs
+- README Classify table gains an `Unused plugins` row.
+- README "v2.7 — What's new" section added above the existing v2.6 doctor-command notes.
+
 ## [2.6.1] — 2026-05-09
 
 ### Fixed
