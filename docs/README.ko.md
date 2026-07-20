@@ -191,6 +191,22 @@ claude-slim은 아래 위치를 스캔합니다. 플러그인 특화 로직 없�
 
 ---
 
+## v2.7 변경사항
+
+- **미사용 플러그인 감지** — 세션 트랜스크립트에서 MCP 도구 호출(`mcp__plugin_<플러그인>_<서버>__*`)과 슬래시 커맨드를 함께 파싱해 최근 60일 동안 스킬·MCP·커맨드 어느 것도 호출되지 않은 플러그인을 표시합니다. Tier 3(Optional, 기본 미선택)이라 사용자가 판단합니다. 정리 시 `claude plugin disable <name>`이 자동 실행되고, `/claude-slim restore`로 되돌립니다.
+- **PLUGIN BREAKDOWN 테이블** — 스캔 리포트에 플러그인별 토큰 비용(CLAUDE.md 섹션 + 스킬 등록 + MCP deferred 도구 + 커맨드)과 사용 상태(used / unused / agent-only / insufficient data / disabled)가 담긴 표가 추가됐습니다. 실제 환경 상위 예시: `oh-my-claudecode` ~6,210 tok, `pm-skills` 계열 합계 ~2,500 tok.
+- **세션 파서 버그 수정** — 문자열 형태의 user 메시지(직접 슬래시 커맨드)가 무시되던 문제 수정. 이제 문자열·배열 양쪽 콘텐츠에서 슬래시 커맨드가 정확히 집계됩니다.
+- **+82 테스트** 추가 (신규 모듈 + 파서 회귀).
+
+## v2.7.1 (2026-07-20)
+
+- **`unused_plugin` 절감량이 항상 0이던 문제 수정** — 감지기가 계산된 플러그인 비용을 실제로 사용하지 못해 dry-run과 리포트가 절감량을 과소집계하던 버그. `pluginCosts` 맵을 DetectorContext에 배선해 실제 값을 반영합니다.
+- **`duplicate` 감지기의 네임스페이스 오탐 수정** — `org/ship` 같은 네임스페이스 로컬 스킬이 플러그인의 동명 `ship`과 중복으로 잘못 분류되던 문제. 이제 완전한 이름 일치만 중복으로 판정합니다.
+- **`stale_project` 복원 시 경로 스코프 강화** — 조작된 매니페스트가 project-memory 백업을 스킬 디렉토리로 리다이렉트할 수 있던 취약점을 타입별 서브트리 가드로 차단.
+- **비대화형 셸에서 `--auto`/`--dry-run` 없이 clean 실행 시 거부** — 이전엔 조용히 Tier 1을 자동 적용했지만, 이제 경고 후 exit 1로 사용자 명시 opt-in 요구.
+- **`--lookback-days 0` 및 `--sessions-per-day 0` 존중** — `parseInt() || N`이 explicit 0을 기본값으로 승격하던 버그 수정.
+- **`claude-slim report`가 zero-token 정리(broken_symlink/temp_cache)만 있는 이력도 표시**.
+
 ## v2.6 변경사항
 
 - **`claude-slim doctor`** — Node 지원 여부, `~/.claude/` 접근성, 로컬 스킬/플러그인 캐시 접근, `claude plugin list`, 최근 세션 로그 신뢰도를 점검. 스캔 결과가 비어 보이거나 미사용 스킬 탐지가 suppress될 때 원인을 확인할 수 있습니다.

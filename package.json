@@ -1,7 +1,7 @@
 {
   "name": "claude-slim",
   "version": "2.7.1",
-  "description": "Analyze and reduce Claude Code token overhead",
+  "description": "Cut Claude Code startup token overhead — non-destructive scan, tiered proposals, one-command restore. Finds unused skills, duplicate registrations, stale memory, and heavyweight plugins in ~/.claude/.",
   "type": "module",
   "bin": {
     "claude-slim": "./dist/cli.js"
@@ -23,11 +23,19 @@
   "keywords": [
     "claude",
     "claude-code",
+    "anthropic",
     "token",
-    "optimization",
+    "token-optimization",
+    "context-bloat",
+    "prompt-optimization",
+    "system-prompt",
     "cleanup",
     "skills",
-    "plugin"
+    "skill-management",
+    "plugin",
+    "plugin-cleanup",
+    "cli",
+    "developer-experience"
   ],
   "author": "iops-leo",
   "license": "MIT",

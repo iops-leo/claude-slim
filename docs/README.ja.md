@@ -143,6 +143,22 @@ claude-slimは以下をスキャンします。プラグイン固有ロジック
 
 ---
 
+## v2.7 の新機能
+
+- **未使用プラグインの検出** — セッショントランスクリプトから MCP ツール呼び出し(`mcp__plugin_<プラグイン>_<サーバー>__*`)とスラッシュコマンドを併せて解析し、直近 60 日でスキル・MCP・コマンドのいずれも呼ばれていないプラグインを表示します。Tier 3（Optional、既定では未選択）なのでユーザーが判断します。クリーンアップ時は `claude plugin disable <name>` が自動実行され、`/claude-slim restore` で戻せます。
+- **PLUGIN BREAKDOWN テーブル** — スキャンレポートにプラグイン別トークン内訳（CLAUDE.md セクション + スキル登録 + MCP deferred ツール + コマンド）と使用状況（used / unused / agent-only / insufficient data / disabled）が追加されました。実測上位例: `oh-my-claudecode` ~6,210 tok、`pm-skills` 系合計 ~2,500 tok。
+- **セッションパーサーのバグ修正** — 文字列形式の user メッセージ（直接のスラッシュコマンド）が取りこぼされていた問題を修正。string / array の両方が正しく集計されます。
+- **+82 テスト** 追加（新規モジュールとパーサーの回帰）。
+
+## v2.7.1 (2026-07-20)
+
+- **`unused_plugin` の節約量が常に 0 だった問題を修正** — 検出器が算出済みのプラグイン費用を使わず、dry-run とレポートで節約量を過小計上していたバグ。`pluginCosts` マップを DetectorContext に配線し、実値を反映します。
+- **`duplicate` 検出器の名前空間誤検知を修正** — `org/ship` のような名前空間付きローカルスキルがプラグイン側 `ship` と重複と誤判定される問題。完全一致のみを重複扱いにします。
+- **`stale_project` の復元パス範囲を強化** — 改ざんされたマニフェストが project-memory バックアップをスキルディレクトリへ流し込める余地を型別サブツリーガードで封じました。
+- **非対話シェルで `--auto`/`--dry-run` を伴わない clean を拒否** — 以前は Tier 1 を暗黙適用していましたが、警告を出して exit 1 とし、明示的な opt-in を必須にしました。
+- **`--lookback-days 0` と `--sessions-per-day 0` を尊重** — `parseInt() || N` が明示的な 0 を既定値へ格上げしていたバグを修正。
+- **`claude-slim report` が zero-token クリーンアップ (broken_symlink / temp_cache) のみの履歴も表示するように**。
+
 ## v2.6 の新機能
 
 - **`claude-slim doctor`** — Node 対応状況、`~/.claude/` の読み取り、ローカルスキル/プラグインキャッシュ、`claude plugin list`、最近のセッションログ信頼度を確認します。スキャン結果が少ない場合や未使用スキル検出が抑制された場合の診断に使えます。
