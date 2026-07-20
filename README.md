@@ -211,6 +211,20 @@ From a real cleanup session:
 
 ---
 
+## v2.7.1 — What's new
+
+Correctness patch cleaning up seven bugs found in post-2.7 review. No new features; no breaking changes.
+
+- **`unused_plugin` savings always showed 0.** The detector emitted `tokens: 0` for every flagged plugin, so both the dry-run summary and the final report box under-counted savings for what is typically the largest cleanup target. Cost is now threaded through `DetectorContext` and the detector uses the real per-plugin value.
+- **`duplicate` detector could disable namespaced local skills.** A `baseName` fallback flagged `org/ship` as a duplicate of a bare plugin `ship`, even though namespaced local skills are addressable independently. Only exact-name matches are flagged now.
+- **`stale_project` restore was scoped to all of `~/.claude/`.** A tampered manifest could redirect a project-memory backup into `~/.claude/skills/` and clobber an unrelated asset. Restores are now type-scoped — `stale_project` targets must live under `~/.claude/projects/`, skill restores under `~/.claude/skills/`.
+- **Non-interactive `claude-slim clean` refuses to auto-apply.** Prior behavior silently auto-selected Tier 1 in non-TTY without `--auto`/`--dry-run`, surprising users running from scripts. It now prints a warning and exits with status 1; opt in explicitly with `--auto` or `--dry-run`.
+- **`--lookback-days 0` / `--sessions-per-day 0` are respected.** `parseInt(x, 10) || N` was silently upgrading explicit `0` to the default. Replaced with a `parseNonNegativeInt` helper.
+- **`claude-slim report` recognizes zero-token cleanups.** Runs that only removed `broken_symlink` or `temp_cache` entries were being reported as "no previous cleanup"; every manifest entry now counts.
+- **Session parser regex hardened.** `extractCommandsFromTranscript` uses `String.matchAll` instead of a manual `lastIndex`-resetting loop — one fewer footgun for future refactors.
+
+Tests: 188 → 190 (+2 regression cases for the token-propagation fix).
+
 ## v2.7 — What's new
 
 - **Unused-plugin detection** — claude-slim now reads your session transcripts for MCP tool calls (`mcp__plugin_<plugin>_<server>__*`) and slash commands, and flags plugins whose surfaces you've never touched in the last 60 days. Tier 3 (Optional, never auto-selected). When you choose to clean one, `claude plugin disable <name>` runs automatically; `/claude-slim restore` re-enables it.
