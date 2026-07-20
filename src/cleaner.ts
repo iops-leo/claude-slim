@@ -1,9 +1,27 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve, sep } from 'node:path';
 import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordDisabledPlugin, removeDisabledPlugin } from './manifest.js';
-import { assertInsideClaudeDir, getSkillsDir } from './paths.js';
+import { assertInsideClaudeDir, getSkillsDir, getProjectsDir } from './paths.js';
 import { disablePlugin, enablePlugin } from './plugin-runtime.js';
 import type { Issue, ManifestEntry, DisabledPluginEntry } from './types.js';
+
+// Restrict a restore target to a specific subtree of ~/.claude/. Complements
+// assertInsideClaudeDir: a tampered manifest could still name a legal
+// ~/.claude/ path that belongs to a different type of asset (e.g. redirect a
+// stale-project restore into ~/.claude/skills/ to clobber a skill). By pinning
+// each restore type to its own subtree we close that gap.
+function assertInsideSubtree(p: string, subtreeRoot: string, label: string): void {
+  const resolvedTarget = resolve(p);
+  const resolvedRoot = resolve(subtreeRoot);
+  if (
+    resolvedTarget !== resolvedRoot &&
+    !resolvedTarget.startsWith(resolvedRoot + sep)
+  ) {
+    throw new Error(
+      `Refusing to restore ${label} outside ${subtreeRoot}: ${p}`,
+    );
+  }
+}
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -197,6 +215,11 @@ export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry): P
   const disabledDir = getDisabledDir();
 
   if (legacyEntry.type === 'stale_project') {
+    // Type-scoped path guard: stale-project backups must restore under
+    // ~/.claude/projects/. Prevents a tampered manifest from redirecting a
+    // restore into ~/.claude/skills/ (or elsewhere under ~/.claude/) and
+    // clobbering an unrelated asset.
+    assertInsideSubtree(legacyEntry.from, getProjectsDir(), 'project memory');
     const backupDir = join(disabledDir, 'memory-backup', legacyEntry.name);
     // Refuse to overwrite user's current state
     if (await pathExists(legacyEntry.from)) {
@@ -209,6 +232,8 @@ export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry): P
     // Atomic directory rename — requires same FS (guaranteed since both paths are under ~/.claude/)
     await rename(backupDir, legacyEntry.from);
   } else {
+    // Type-scoped path guard: skill restores must land under ~/.claude/skills/.
+    assertInsideSubtree(legacyEntry.from, getSkillsDir(), 'skill');
     // Restore skill directory using the same naming as cleanIssues
     const safeName = legacyEntry.name.replace(/\//g, '--');
     const src = join(disabledDir, safeName);

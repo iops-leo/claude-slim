@@ -12,6 +12,7 @@ import { scanSessionUsage } from './sessions.js';
 import { classifyIssues } from './detectors.js';
 import { scanPluginSurfaces } from './plugin-surfaces.js';
 import { computePluginBreakdown } from './plugin-breakdown.js';
+import { computePluginCosts } from './plugin-cost.js';
 import { SKILL_PROMPT_OVERHEAD_TOKENS } from './constants.js';
 const DEFAULT_LOOKBACK_DAYS = 60;
 export async function scan(opts = {}) {
@@ -44,6 +45,14 @@ export async function scan(opts = {}) {
         ? countTokensCached(claudeMdContent, join(getClaudeDir(), 'CLAUDE.md'))
         : 0;
     const claudeMdSections = claudeMdContent ? parseClaudeMdSections(claudeMdContent) : [];
+    // Per-plugin cost map for the unused_plugin detector's savings estimate.
+    // Aggregates when multiple surface entries share a pluginName (mirrors the
+    // same logic in computePluginBreakdown).
+    const pluginCostBreakdowns = computePluginCosts(pluginSurfaces, claudeMdSections);
+    const pluginCosts = new Map();
+    for (const c of pluginCostBreakdowns) {
+        pluginCosts.set(c.pluginName, (pluginCosts.get(c.pluginName) ?? 0) + c.totalEstimatedTokens);
+    }
     const issues = classifyIssues({
         localSkills, pluginSkills, brokenSymlinks, memoryFiles,
         tempCaches, staleProjects, disabledPlugins, plugins,
@@ -57,6 +66,7 @@ export async function scan(opts = {}) {
         recentCommands: sessionUsage.commandsInvoked,
         totalUserCallableInvocations: sessionUsage.totalUserCallableInvocations,
         sessionsInWindow: sessionUsage.sessionsInWindow,
+        pluginCosts,
     });
     // Compute plugin breakdown (used by PLUGINS table in scan output)
     const pluginBreakdown = computePluginBreakdown({

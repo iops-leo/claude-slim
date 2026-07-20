@@ -45,6 +45,7 @@ function makeCtx(partial: Partial<DetectorContext> = {}): DetectorContext {
     recentCommands: new Set(),
     totalUserCallableInvocations: 10,
     sessionsInWindow: 5,
+    pluginCosts: new Map(),
     ...partial,
   };
 }
@@ -148,6 +149,29 @@ describe('unused_plugin detector', () => {
       sessionsInWindow: 5,
     });
     expect(unusedPluginDetector.detect(ctx)).toEqual([]);
+  });
+
+  it('9. tokens propagated from pluginCosts map (v2.7.1 fix)', () => {
+    const ps = makePs();
+    const ctx = makeCtx({
+      pluginSurfaces: [ps],
+      enabledPlugins: [{ name: 'test-plugin', marketplace: 'npmjs.com' }],
+      pluginCosts: new Map([['test-plugin', 4321]]),
+    });
+    const issues = unusedPluginDetector.detect(ctx);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].tokens).toBe(4321);
+  });
+
+  it('10. tokens defaults to 0 when plugin missing from cost map', () => {
+    const ps = makePs();
+    const ctx = makeCtx({
+      pluginSurfaces: [ps],
+      enabledPlugins: [{ name: 'test-plugin', marketplace: 'npmjs.com' }],
+      pluginCosts: new Map(),
+    });
+    const issues = unusedPluginDetector.detect(ctx);
+    expect(issues[0].tokens).toBe(0);
   });
 
   it('8. namespaced skill — invocation as "<plugin>:<skill>" matches bare skill name', () => {

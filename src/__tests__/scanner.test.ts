@@ -199,6 +199,7 @@ function makeCtx(partial: Partial<DetectorContext> = {}): DetectorContext {
     recentCommands: new Set(),
     totalUserCallableInvocations: 0,
     sessionsInWindow: 0,
+    pluginCosts: new Map(),
     ...partial,
   };
 }

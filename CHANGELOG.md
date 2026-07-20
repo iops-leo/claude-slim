@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.7.0] — 2026-05-17
+## [2.7.1] — 2026-07-20
+
+### Fixed
+- **`unused_plugin` savings estimate was always 0.** The detector emitted `tokens: 0` for every flagged plugin, so the dry-run summary and final report box under-counted savings for what is typically the largest cleanup target (`oh-my-claudecode` ~6,210 tok, etc.). The scanner now threads a per-plugin cost map into `DetectorContext` and the detector reads its own value from it. Regression tests added.
+- **`duplicate` detector could disable namespaced local skills.** A `baseName` fallback flagged a local `org/ship` as a duplicate of a bare plugin `ship`, even though namespaced local skills are addressable independently and are not real duplicates. Cleanup would then move the local skill into `skills.disabled/`. The fallback is removed — only exact-name matches are flagged.
+- **`stale_project` restore was scoped to all of `~/.claude/`.** A tampered manifest could name any legal `~/.claude/**` path as the restore target, redirecting a project-memory backup into `~/.claude/skills/` (or another subtree) and clobbering an unrelated asset. Restores are now type-scoped: `stale_project` targets must live under `~/.claude/projects/`, skill restores under `~/.claude/skills/`.
+- **`claude-slim clean` in a non-TTY without `--auto`/`--dry-run` silently mutated the filesystem.** Prior behavior auto-selected Tier 1, surprising users running the CLI from scripts/nohup expecting a no-op. The CLI now prints a `⚠ Non-interactive shell detected` hint and exits with status 1; users must opt in with `--auto` (apply Tier 1) or `--dry-run` (preview).
+- **`claude-slim report` said "No previous cleanup found" after zero-token cleanups.** Filtering on `tokenCount > 0` hid manifest entries whose only removals were `broken_symlink` or `temp_cache` (both zero-token). The report now surfaces every prior manifest entry.
+- **`--lookback-days 0` and `--sessions-per-day 0` were silently upgraded.** `parseInt(x, 10) || N` collapsed an explicit 0 into the default. Replaced with a `parseNonNegativeInt(raw, fallback)` helper that only substitutes on non-string / non-finite / negative input.
+
+### Changed
+- `extractCommandsFromTranscript` uses `String.matchAll(pattern)` in place of a manual `lastIndex`-resetting `RegExp.exec` loop. The prior form relied on an explicit reset that would silently break if a future refactor added an early return inside the inner loop.
+
+### Tests
+- 188 → 190 (+2). New coverage: `unused_plugin` token propagation from the cost map, defaulting to 0 when a plugin is missing from the map.
+
+
 
 ### Added
 - **`unused_plugin` detector — flags plugins whose skills, MCP tools, and commands were never invoked in the last 60 days of sessions.** Reads the same JSONL session transcripts used by `unused_skill`, now also extracting MCP tool prefixes (`mcp__plugin_<plugin>_<server>__*`) and slash commands. Issues are Tier 3 (Optional, never auto-selected) — the call is yours. Cleanup runs `claude plugin disable <name>` automatically; restore re-enables with `claude plugin enable <name>`.

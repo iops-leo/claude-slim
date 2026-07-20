@@ -146,9 +146,13 @@ export function extractMcpPrefixesFromTranscript(content: string): Set<string> {
 //
 // Only `type === "user"` / `role === "user"` messages are examined to avoid
 // false positives from assistant text that may reference command names.
+// Regex pattern held as a plain string — each call site constructs a fresh
+// RegExp so there is no shared `lastIndex` state to reset. `String.matchAll`
+// then wraps that RegExp in its own iterator, further insulating the loop.
+const COMMAND_TAG_PATTERN = /<command-name>([^<]+)<\/command-name>/g;
+
 export function extractCommandsFromTranscript(content: string): Set<string> {
   const commands = new Set<string>();
-  const TAG_RE = /<command-name>([^<]+)<\/command-name>/g;
   const lines = content.split('\n');
   for (const line of lines) {
     if (!line) continue;
@@ -174,9 +178,7 @@ export function extractCommandsFromTranscript(content: string): Set<string> {
       }
     }
     for (const text of texts) {
-      TAG_RE.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = TAG_RE.exec(text)) !== null) {
+      for (const match of text.matchAll(COMMAND_TAG_PATTERN)) {
         // Strip leading slash from the command value (e.g. "/clear" → "clear")
         const raw = match[1].trim();
         commands.add(raw.startsWith('/') ? raw.slice(1) : raw);
