@@ -143,6 +143,22 @@ claude-slim扫描以下位置。无插件特定逻辑 — 纯文件系统分析�
 
 ---
 
+## v2.7 更新
+
+- **未使用插件检测** — 从会话记录中同时解析 MCP 工具调用(`mcp__plugin_<插件>_<服务器>__*`)与斜杠命令,标记出最近 60 天内技能、MCP、命令都未被调用过的插件。归为 Tier 3(Optional,默认不选中),由用户自行判断。清理时会自动执行 `claude plugin disable <name>`,可通过 `/claude-slim restore` 恢复。
+- **PLUGIN BREAKDOWN 表格** — 扫描报告新增按插件划分的 token 明细(CLAUDE.md 章节 + 技能注册 + MCP deferred 工具 + 命令)与使用状态(used / unused / agent-only / insufficient data / disabled)。真实环境头部示例:`oh-my-claudecode` ~6,210 tok,`pm-skills` 系列合计 ~2,500 tok。
+- **会话解析器 Bug 修复** — 字符串形式的用户消息(直接使用的斜杠命令)以往会被跳过,现在字符串与数组两种内容形态都能正确统计。
+- **新增 +82 项测试**(新模块与解析器回归)。
+
+## v2.7.1 (2026-07-20)
+
+- **修复 `unused_plugin` 节省量始终为 0 的问题** — 检测器未能使用已计算好的插件成本,导致 dry-run 与报告低估了节省量。`pluginCosts` 映射现已接入 DetectorContext,使用真实值。
+- **修复 `duplicate` 检测器的命名空间误报** — 带命名空间的本地技能(如 `org/ship`)会被错误标记为插件同名 `ship` 的重复。现在只有完全一致的名称才判定为重复。
+- **加强 `stale_project` 恢复的路径范围** — 通过按类型划分的子树守卫,阻断被篡改的清单把项目内存备份重定向到技能目录的攻击面。
+- **非交互式 shell 中若未附带 `--auto`/`--dry-run`,`clean` 会被拒绝** — 之前会默默应用 Tier 1,现在会给出警告并以 exit 1 结束,要求用户显式 opt-in。
+- **正确处理 `--lookback-days 0` 与 `--sessions-per-day 0`** — 修复 `parseInt() || N` 把显式的 0 升级为默认值的问题。
+- **`claude-slim report` 现在也会展示仅包含 zero-token 清理(broken_symlink / temp_cache)的历史记录**。
+
 ## v2.6 更新
 
 - **`claude-slim doctor`** — 检查 Node 支持、`~/.claude/` 可读性、本地技能/插件缓存、`claude plugin list` 以及近期会话日志信号质量。适合在扫描结果过少或未使用技能检测被抑制时诊断原因。
