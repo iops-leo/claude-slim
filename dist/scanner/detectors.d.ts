@@ -24,6 +24,7 @@ export interface DetectorContext {
     recentCommands: Set<string>;
     totalUserCallableInvocations: number;
     sessionsInWindow: number;
+    pluginCosts: Map<string, number>;
 }
 export interface Detector {
     name: string;

@@ -21,6 +21,16 @@ import type { Issue, ScanResult, ManifestEntry, DisabledPluginEntry, AnyManifest
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
 const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string };
 
+// Parse a non-negative-integer CLI option, keeping explicit 0 distinct from an
+// unset/invalid value. `parseInt(x, 10) || N` was swallowing legitimate 0
+// (e.g. `--lookback-days 0` was silently upgraded to 60).
+function parseNonNegativeInt(raw: unknown, fallback: number): number {
+  if (typeof raw !== 'string') return fallback;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return n;
+}
+
 const program = new Command();
 
 program
@@ -36,7 +46,7 @@ program
   .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
   .action(async (opts) => {
     await initTokenizer();
-    const result = await scan({ lookbackDays: parseInt(opts.lookbackDays, 10) || 60 });
+    const result = await scan({ lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60) });
     await flushCache();
 
     if (opts.json) {
@@ -54,7 +64,7 @@ program
   .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
   .action(async (opts) => {
     const report = await collectDoctorReport({
-      lookbackDays: parseInt(opts.lookbackDays, 10) || 60,
+      lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60),
     });
 
     if (opts.json) {
@@ -76,8 +86,8 @@ program
     await runCleanPipeline({
       dryRun: !!opts.dryRun,
       auto: !!opts.auto,
-      sessionsPerDay: parseInt(opts.sessionsPerDay, 10) || 2,
-      lookbackDays: parseInt(opts.lookbackDays, 10) || 60,
+      sessionsPerDay: parseNonNegativeInt(opts.sessionsPerDay, 2),
+      lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60),
     });
   });
 
@@ -178,14 +188,16 @@ program
   .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
   .action(async (opts) => {
     await initTokenizer();
-    const result = await scan({ lookbackDays: parseInt(opts.lookbackDays, 10) || 60 });
+    const result = await scan({ lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60) });
     const allEntries = await readManifest();
     // Filter to legacy-style entries only (those with tokenCount/name/from fields)
     const entries = allEntries.filter((e): e is ManifestEntry => !('plugin' in e && 'marketplace' in e));
 
-    const movedEntries = entries.filter(
-      (e) => e.tokenCount && e.tokenCount > 0,
-    );
+    // Any prior manifest entry counts as a cleanup receipt. Filtering on
+    // `tokenCount > 0` previously hid runs that only removed zero-token items
+    // (broken_symlink / temp_cache), making `report` say "no previous cleanup"
+    // even after real work.
+    const movedEntries = entries;
 
     if (movedEntries.length === 0) {
       console.log('\n  No previous cleanup found. Run `claude-slim clean` first.\n');
@@ -193,7 +205,7 @@ program
       return;
     }
 
-    const sessionsPerDay = parseInt(opts.sessionsPerDay, 10) || 2;
+    const sessionsPerDay = parseNonNegativeInt(opts.sessionsPerDay, 2);
     // Reconstruct "before" state: current + what was removed.
     // Only skill-type entries contributed to the per-skill prompt overhead
     // (stale_project restores memory tokens separately; broken_symlink/
@@ -269,14 +281,21 @@ async function runCleanPipeline(opts: {
 
     const selection = await askUser('  Your choice: ');
     selectedIssues = resolveSelection(selection, result.issues);
-  } else {
-    // Auto mode or non-TTY: select Tier 1 only
+  } else if (opts.auto) {
+    // Explicit non-interactive mode: select Tier 1 only.
     selectedIssues = result.issues.filter((i) => i.tier === 1);
-    if (!opts.auto) {
-      console.log('  \x1b[33m⚠ Non-interactive mode detected, auto-selecting Tier 1\x1b[0m\n');
-    } else {
-      console.log(`  \x1b[36m→ Auto mode: selecting ${selectedIssues.length} Tier 1 item(s)\x1b[0m\n`);
-    }
+    console.log(`  \x1b[36m→ Auto mode: selecting ${selectedIssues.length} Tier 1 item(s)\x1b[0m\n`);
+  } else {
+    // Non-TTY without --auto/--dry-run: refuse rather than silently mutating
+    // the filesystem. Prior behavior auto-selected Tier 1, which surprised
+    // users who ran the CLI from scripts/nohup expecting a no-op.
+    console.log(
+      '\n  \x1b[33m⚠ Non-interactive shell detected.\x1b[0m ' +
+      'Re-run with \x1b[1m--auto\x1b[0m (apply Tier 1) or \x1b[1m--dry-run\x1b[0m (preview only).\n',
+    );
+    await flushCache();
+    process.exitCode = 1;
+    return;
   }
 
   if (selectedIssues.length === 0) {

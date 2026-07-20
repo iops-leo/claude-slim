@@ -37,6 +37,9 @@ export interface DetectorContext {
   recentCommands: Set<string>;
   totalUserCallableInvocations: number;
   sessionsInWindow: number;
+  // Per-plugin estimated token cost keyed by plugin name. Populated from
+  // computePluginCosts(); used by unused_plugin to report accurate savings.
+  pluginCosts: Map<string, number>;
 }
 
 // A Detector is a pure function of context → Issue[]. Add a new detector by
@@ -88,9 +91,11 @@ const duplicateDetector: Detector = {
     const pluginSkillNames = new Set(pluginSkills.map((s) => s.name));
     const issues: Issue[] = [];
     for (const skill of localSkills) {
-      // Check base name for nested skills (e.g. "org/ship" → "ship")
-      const baseName = skill.name.includes('/') ? skill.name.split('/').pop()! : skill.name;
-      if (pluginSkillNames.has(baseName)) {
+      // Exact-name match only. A prior baseName fallback flagged nested local
+      // skills (e.g. `org/ship`) as duplicates of a bare plugin `ship`, but
+      // namespaced local skills are addressable independently and are not real
+      // duplicates — the fallback risked disabling user content.
+      if (pluginSkillNames.has(skill.name)) {
         issues.push({
           type: 'duplicate',
           tier: 2,
@@ -244,6 +249,7 @@ const unusedPluginDetector: Detector = {
     totalUserCallableInvocations,
     sessionsInWindow,
     lookbackDays,
+    pluginCosts,
   }) {
     // (a) Global suppression: too few sessions to draw a conclusion
     if (sessionsInWindow < 3) return [];
@@ -284,7 +290,7 @@ const unusedPluginDetector: Detector = {
         name: ps.pluginName,
         marketplace: ps.marketplace,
         detail: `not invoked in ${lookbackDays}d (${ps.marketplace})`,
-        tokens: 0,
+        tokens: pluginCosts.get(ps.pluginName) ?? 0,
         path: ps.installDir,
       });
     }

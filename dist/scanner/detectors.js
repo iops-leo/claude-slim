@@ -40,9 +40,11 @@ const duplicateDetector = {
         const pluginSkillNames = new Set(pluginSkills.map((s) => s.name));
         const issues = [];
         for (const skill of localSkills) {
-            // Check base name for nested skills (e.g. "org/ship" → "ship")
-            const baseName = skill.name.includes('/') ? skill.name.split('/').pop() : skill.name;
-            if (pluginSkillNames.has(baseName)) {
+            // Exact-name match only. A prior baseName fallback flagged nested local
+            // skills (e.g. `org/ship`) as duplicates of a bare plugin `ship`, but
+            // namespaced local skills are addressable independently and are not real
+            // duplicates — the fallback risked disabling user content.
+            if (pluginSkillNames.has(skill.name)) {
                 issues.push({
                     type: 'duplicate',
                     tier: 2,
@@ -177,7 +179,7 @@ const unusedSkillDetector = {
 };
 const unusedPluginDetector = {
     name: 'unused_plugin',
-    detect({ pluginSurfaces, enabledPlugins, recentSkillInvocations, recentMcpPrefixes, recentCommands, totalUserCallableInvocations, sessionsInWindow, lookbackDays, }) {
+    detect({ pluginSurfaces, enabledPlugins, recentSkillInvocations, recentMcpPrefixes, recentCommands, totalUserCallableInvocations, sessionsInWindow, lookbackDays, pluginCosts, }) {
         // (a) Global suppression: too few sessions to draw a conclusion
         if (sessionsInWindow < 3)
             return [];
@@ -211,7 +213,7 @@ const unusedPluginDetector = {
                 name: ps.pluginName,
                 marketplace: ps.marketplace,
                 detail: `not invoked in ${lookbackDays}d (${ps.marketplace})`,
-                tokens: 0,
+                tokens: pluginCosts.get(ps.pluginName) ?? 0,
                 path: ps.installDir,
             });
         }
