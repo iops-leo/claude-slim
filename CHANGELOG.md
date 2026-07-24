@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.3] — 2026-07-24
+
+### Docs
+- **README slimmed.** Replaced the v2.7.1 → v2.0 "What's new" stack (7 sections, ~66 lines duplicating CHANGELOG) with a single v2.7.2 section + a `[CHANGELOG.md](CHANGELOG.md)` link. README: 291 → 236 lines. Docs-only republish to refresh the npm package landing page — no functional, runtime, or test changes vs. v2.7.2.
+
 ## [2.7.2] — 2026-07-24
 
 ### Fixed
