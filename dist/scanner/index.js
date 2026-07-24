@@ -1,3 +1,8 @@
+// INVARIANT: nothing in the scanner (this file or anything under scanner/**)
+// may write to stdout. The CLI pipes stdout of `scan --json` to jq/other
+// tools; a stray console.log would silently corrupt machine-readable output.
+// Route diagnostics through console.error. Enforced by
+// src/__tests__/scan-stdout-invariant.test.ts.
 import { join } from 'node:path';
 import { countTokensCached } from '../tokenizer.js';
 import { getClaudeDir } from '../paths.js';

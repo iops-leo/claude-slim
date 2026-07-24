@@ -2,7 +2,7 @@ import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promis
 import { join, dirname, resolve, sep } from 'node:path';
 import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordDisabledPlugin, removeDisabledPlugin } from './manifest.js';
 import { assertInsideClaudeDir, getSkillsDir, getProjectsDir } from './paths.js';
-import { disablePlugin, enablePlugin } from './plugin-runtime.js';
+import { disablePlugin, enablePlugin, isClaudeCliAvailable, ClaudeCliMissingError } from './plugin-runtime.js';
 // Restrict a restore target to a specific subtree of ~/.claude/. Complements
 // assertInsideClaudeDir: a tampered manifest could still name a legal
 // ~/.claude/ path that belongs to a different type of asset (e.g. redirect a
@@ -45,6 +45,14 @@ export async function cleanIssues(issues) {
     const moved = [];
     const skipped = [];
     const errors = [];
+    // Pre-check: if any unused_plugin items are selected, verify `claude` CLI is
+    // reachable before we start. Failing fast with a single friendly message
+    // beats N raw ENOENTs mid-run. Skip the probe if no plugin items were picked.
+    const wantsPluginOps = issues.some((i) => i.type === 'unused_plugin');
+    let claudeCliMissing = false;
+    if (wantsPluginOps && !(await isClaudeCliAvailable())) {
+        claudeCliMissing = true;
+    }
     for (const issue of issues) {
         try {
             // unused_plugin and report-only types don't touch filesystem paths directly
@@ -132,6 +140,12 @@ export async function cleanIssues(issues) {
                 moved.push(entry);
             }
             else if (issue.type === 'unused_plugin') {
+                // Pre-check flagged `claude` missing — skip silently; the CLI prints
+                // one grouped message after cleanIssues returns.
+                if (claudeCliMissing) {
+                    skipped.push(issue.name);
+                    continue;
+                }
                 await disablePlugin(issue.name);
                 // Record in manifest; if that fails, roll back the disable
                 try {
@@ -150,13 +164,21 @@ export async function cleanIssues(issues) {
             }
         }
         catch (err) {
+            // Race window: `claude` was on PATH at pre-check but gone by the time we
+            // shelled out. Convert to the same grouped skip path instead of a raw
+            // ENOENT row.
+            if (err instanceof ClaudeCliMissingError) {
+                claudeCliMissing = true;
+                skipped.push(issue.name);
+                continue;
+            }
             const message = err instanceof Error ? err.message : String(err);
             errors.push({ name: issue.name, error: message });
         }
     }
     // Clean empty directories in skills/
     await cleanEmptyDirs(getSkillsDir());
-    return { moved, skipped, errors };
+    return { moved, skipped, errors, claudeCliMissing };
 }
 async function cleanEmptyDirs(dir) {
     try {
