@@ -326,6 +326,19 @@ async function runCleanPipeline(opts: {
   console.log(formatReportBox(reportData));
   console.log('');
 
+  if (cleanResult.claudeCliMissing) {
+    const skippedPluginCount = selectedIssues.filter((i) => i.type === 'unused_plugin').length;
+    console.log(
+      `  \x1b[33m⚠ \`claude\` CLI not found on PATH — skipped ${skippedPluginCount} plugin(s).\x1b[0m`,
+    );
+    console.log(
+      '    Install Claude Code and re-run to disable unused plugins,',
+    );
+    console.log(
+      '    or disable them manually via `claude plugin disable <name>`.\n',
+    );
+  }
+
   if (cleanResult.errors.length > 0) {
     console.log('  \x1b[31mErrors:\x1b[0m');
     for (const err of cleanResult.errors) {

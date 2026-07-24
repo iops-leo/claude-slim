@@ -2,7 +2,7 @@ import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promis
 import { join, dirname, resolve, sep } from 'node:path';
 import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordDisabledPlugin, removeDisabledPlugin } from './manifest.js';
 import { assertInsideClaudeDir, getSkillsDir, getProjectsDir } from './paths.js';
-import { disablePlugin, enablePlugin } from './plugin-runtime.js';
+import { disablePlugin, enablePlugin, isClaudeCliAvailable, ClaudeCliMissingError } from './plugin-runtime.js';
 import type { Issue, ManifestEntry, DisabledPluginEntry } from './types.js';
 
 // Restrict a restore target to a specific subtree of ~/.claude/. Complements
@@ -36,6 +36,12 @@ export interface CleanResult {
   moved: ManifestEntry[];
   skipped: string[];
   errors: Array<{ name: string; error: string }>;
+  /**
+   * Populated when one or more `unused_plugin` items were requested but the
+   * `claude` CLI is missing from PATH. The CLI surfaces this once at the top of
+   * the error block instead of N repeat rows.
+   */
+  claudeCliMissing?: boolean;
 }
 
 // Record the manifest entry; if it fails, run the caller's compensation to
@@ -59,6 +65,15 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
   const moved: ManifestEntry[] = [];
   const skipped: string[] = [];
   const errors: Array<{ name: string; error: string }> = [];
+
+  // Pre-check: if any unused_plugin items are selected, verify `claude` CLI is
+  // reachable before we start. Failing fast with a single friendly message
+  // beats N raw ENOENTs mid-run. Skip the probe if no plugin items were picked.
+  const wantsPluginOps = issues.some((i) => i.type === 'unused_plugin');
+  let claudeCliMissing = false;
+  if (wantsPluginOps && !(await isClaudeCliAvailable())) {
+    claudeCliMissing = true;
+  }
 
   for (const issue of issues) {
     try {
@@ -146,6 +161,12 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
         await recordOrRollback(entry, () => rename(backupDir, issue.path));
         moved.push(entry);
       } else if (issue.type === 'unused_plugin') {
+        // Pre-check flagged `claude` missing — skip silently; the CLI prints
+        // one grouped message after cleanIssues returns.
+        if (claudeCliMissing) {
+          skipped.push(issue.name);
+          continue;
+        }
         await disablePlugin(issue.name);
         // Record in manifest; if that fails, roll back the disable
         try {
@@ -161,6 +182,14 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
         skipped.push(issue.name);
       }
     } catch (err) {
+      // Race window: `claude` was on PATH at pre-check but gone by the time we
+      // shelled out. Convert to the same grouped skip path instead of a raw
+      // ENOENT row.
+      if (err instanceof ClaudeCliMissingError) {
+        claudeCliMissing = true;
+        skipped.push(issue.name);
+        continue;
+      }
       const message = err instanceof Error ? err.message : String(err);
       errors.push({ name: issue.name, error: message });
     }
@@ -169,7 +198,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
   // Clean empty directories in skills/
   await cleanEmptyDirs(getSkillsDir());
 
-  return { moved, skipped, errors };
+  return { moved, skipped, errors, claudeCliMissing };
 }
 
 async function cleanEmptyDirs(dir: string): Promise<void> {

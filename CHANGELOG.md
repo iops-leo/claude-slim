@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.2] — 2026-07-24
+
+### Fixed
+- **`unused_plugin` cleanup surfaced a raw `spawn claude ENOENT` when the `claude` CLI wasn't on PATH.** Users running `claude-slim` via `npx` outside a Claude Code install saw a scary Node error mid-cleanup, with one row per selected plugin. `cleanIssues` now probes the CLI once up front (via `isClaudeCliAvailable`), skips every `unused_plugin` item as `skipped` (not `errored`), and the CLI prints a single grouped `⚠ \`claude\` CLI not found on PATH — skipped N plugin(s)` notice pointing at the manual `claude plugin disable <name>` workaround. A defensive `ClaudeCliMissingError` catches the same case if `claude` was removed between the pre-check and the actual call (race window).
+- **Nested-skill scanner missed `SKILL.md` files at depth 3+.** The prior two-level unroll walked `skills/<a>/SKILL.md` and `skills/<a>/<b>/SKILL.md` only. Plugin-namespaced layouts like `skills/<org>/<group>/<skill>/SKILL.md` were silently invisible — token totals under-reported and `unused_skill` could never flag them. Replaced with a bounded recursive walk (`MAX_SKILL_DEPTH = 3`) that stops descending once a `SKILL.md` is found (so nested docs under a declared skill don't become phantom duplicates).
+
+### Changed
+- **Invariant enforced: scanner code path must not touch stdout.** `claude-slim scan --json` pipes to `jq`; a stray `console.log` anywhere under `scanner/**` or `tokenizer.ts` would silently corrupt the machine-readable output. Added `scan-stdout-invariant.test.ts` that spies on `console.log` / `console.info` during the full scan pipeline and fails if either fires. Route diagnostics through `console.error`. No stray writes exist today — this is preventive.
+
+### Added
+- `isClaudeCliAvailable()` and `ClaudeCliMissingError` in `src/plugin-runtime.ts` — best-effort `claude --version` probe with 5s timeout, and a sentinel error class the cleaner uses to distinguish "missing binary" from "real cleanup failure."
+- `CleanResult.claudeCliMissing?: boolean` — set when the pre-check or race-window catch fires, so the CLI can render one grouped message.
+
+### Tests
+- 190 → 206 (+16). New coverage: `scanLocalSkills` depth 1/2/3/4-boundary walk (`local-skills.test.ts`, 6 tests), `ClaudeCliMissingError` translation + `isClaudeCliAvailable` (`plugin-runtime.test.ts`, +6), pre-check skip semantics + no-probe-when-unneeded (`cleaner-plugin.test.ts`, +2), scan-pipeline stdout silence invariant with both minimal and rich fixtures — session logs, plugin cache, memory, CLAUDE.md (`scan-stdout-invariant.test.ts`, +2).
+
 ## [2.7.1] — 2026-07-20
 
 ### Fixed

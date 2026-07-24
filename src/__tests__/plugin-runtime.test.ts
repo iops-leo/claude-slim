@@ -6,7 +6,7 @@ vi.mock('node:child_process', () => ({
   execFile: vi.fn(),
 }));
 
-import { disablePlugin, enablePlugin } from '../plugin-runtime.js';
+import { disablePlugin, enablePlugin, isClaudeCliAvailable, ClaudeCliMissingError } from '../plugin-runtime.js';
 
 function makeExecFile(opts: {
   code?: number;
@@ -130,5 +130,77 @@ describe('enablePlugin', () => {
     vi.mocked(childProcess.execFile).mockImplementation(mock as never);
 
     await expect(enablePlugin('my-plugin')).rejects.toThrow('Command timed out');
+  });
+});
+
+// ─── ClaudeCliMissingError translation ────────────────────────────────────────
+
+function makeEnoent(): NodeJS.ErrnoException {
+  return Object.assign(new Error('spawn claude ENOENT'), {
+    code: 'ENOENT',
+    syscall: 'spawn claude',
+  });
+}
+
+describe('ENOENT → ClaudeCliMissingError translation', () => {
+  it('disablePlugin rejects with ClaudeCliMissingError when `claude` is not on PATH', async () => {
+    const mock = makeExecFile({ error: makeEnoent() });
+    vi.mocked(childProcess.execFile).mockImplementation(mock as never);
+
+    const err = await disablePlugin('my-plugin').catch((e) => e);
+    expect(err).toBeInstanceOf(ClaudeCliMissingError);
+    expect((err as Error).message).toContain('`claude` CLI not found');
+  });
+
+  it('enablePlugin rejects with ClaudeCliMissingError when `claude` is not on PATH', async () => {
+    const mock = makeExecFile({ error: makeEnoent() });
+    vi.mocked(childProcess.execFile).mockImplementation(mock as never);
+
+    const err = await enablePlugin('my-plugin').catch((e) => e);
+    expect(err).toBeInstanceOf(ClaudeCliMissingError);
+  });
+
+  it('does NOT translate an unrelated ENOENT (different syscall) into ClaudeCliMissingError', async () => {
+    const otherEnoent = Object.assign(new Error('ENOENT: some other file'), {
+      code: 'ENOENT',
+      syscall: 'open',
+    });
+    const mock = makeExecFile({ error: otherEnoent });
+    vi.mocked(childProcess.execFile).mockImplementation(mock as never);
+
+    const err = await disablePlugin('my-plugin').catch((e) => e);
+    expect(err).not.toBeInstanceOf(ClaudeCliMissingError);
+    expect((err as Error).message).toContain('ENOENT: some other file');
+  });
+});
+
+// ─── isClaudeCliAvailable ─────────────────────────────────────────────────────
+
+describe('isClaudeCliAvailable', () => {
+  it('returns false when execFile errors (e.g. ENOENT)', async () => {
+    const mock = makeExecFile({ error: makeEnoent() });
+    vi.mocked(childProcess.execFile).mockImplementation(mock as never);
+
+    await expect(isClaudeCliAvailable()).resolves.toBe(false);
+  });
+
+  it('returns true when execFile succeeds', async () => {
+    const mock = makeExecFile({});
+    vi.mocked(childProcess.execFile).mockImplementation(mock as never);
+
+    await expect(isClaudeCliAvailable()).resolves.toBe(true);
+  });
+
+  it('calls `claude --version` with a short timeout and does not throw', async () => {
+    const mock = makeExecFile({});
+    vi.mocked(childProcess.execFile).mockImplementation(mock as never);
+
+    await isClaudeCliAvailable();
+
+    expect(mock).toHaveBeenCalledOnce();
+    const [file, args, options] = mock.mock.calls[0] as [string, string[], { timeout: number }];
+    expect(file).toBe('claude');
+    expect(args).toEqual(['--version']);
+    expect(options.timeout).toBeLessThanOrEqual(5000);
   });
 });

@@ -7,11 +7,25 @@ import { resolveRestoreSelection } from '../selection.js';
 import { createTmpClaude, type TmpClaude } from './helpers/tmp-claude.js';
 import type { Issue, DisabledPluginEntry } from '../types.js';
 
-// Mock plugin-runtime so no real `claude` binary is invoked
-vi.mock('../plugin-runtime.js', () => ({
-  disablePlugin: vi.fn().mockResolvedValue(undefined),
-  enablePlugin: vi.fn().mockResolvedValue(undefined),
-}));
+// Mock plugin-runtime so no real `claude` binary is invoked.
+// isClaudeCliAvailable defaults to true so existing tests exercise the
+// happy path; individual tests override with mockResolvedValueOnce(false).
+// ClaudeCliMissingError stays a real class since cleaner.ts uses `instanceof`.
+// The factory is hoisted, so the class must be declared inline.
+vi.mock('../plugin-runtime.js', () => {
+  class ClaudeCliMissingError extends Error {
+    constructor() {
+      super('`claude` CLI not found on PATH.');
+      this.name = 'ClaudeCliMissingError';
+    }
+  }
+  return {
+    disablePlugin: vi.fn().mockResolvedValue(undefined),
+    enablePlugin: vi.fn().mockResolvedValue(undefined),
+    isClaudeCliAvailable: vi.fn().mockResolvedValue(true),
+    ClaudeCliMissingError,
+  };
+});
 
 let tmp: TmpClaude;
 
@@ -163,6 +177,52 @@ describe('restore selection deduplication', () => {
     }
     expect(pluginRuntime.enablePlugin).toHaveBeenCalledOnce();
     expect(pluginRuntime.enablePlugin).toHaveBeenCalledWith('plugA');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6a. Pre-check: claude CLI missing → unused_plugin items skipped, not errored
+// ---------------------------------------------------------------------------
+describe('cleanIssues — claude CLI missing pre-check', () => {
+  it('skips unused_plugin items with claudeCliMissing=true when `claude` is not on PATH', async () => {
+    vi.mocked(pluginRuntime.isClaudeCliAvailable).mockResolvedValueOnce(false);
+
+    const issue: Issue = {
+      type: 'unused_plugin',
+      tier: 3,
+      name: 'some-plugin',
+      marketplace: 'npm',
+      detail: 'not invoked in 60d (npm)',
+      tokens: 0,
+      path: '/fake/plugins/some-plugin',
+    };
+
+    const result = await cleanIssues([issue, { ...issue, name: 'another' }]);
+
+    // disablePlugin never called; both items in skipped; no errors surfaced
+    expect(pluginRuntime.disablePlugin).not.toHaveBeenCalled();
+    expect(result.errors).toHaveLength(0);
+    expect(result.skipped).toEqual(expect.arrayContaining(['some-plugin', 'another']));
+    expect(result.claudeCliMissing).toBe(true);
+  });
+
+  it('does NOT probe `claude` when no unused_plugin items are selected', async () => {
+    // Seed a non-plugin issue (broken_symlink is zero-token, filesystem-only).
+    // The unlink will fail because the path doesn't exist — we don't care;
+    // the point is that isClaudeCliAvailable is never invoked.
+    const symlinkPath = tmp.skillsDir + '/broken-link/SKILL.md';
+    const issue: Issue = {
+      type: 'broken_symlink',
+      tier: 1,
+      name: 'broken-link',
+      detail: 'dead link',
+      tokens: 0,
+      path: symlinkPath,
+    };
+
+    await cleanIssues([issue]);
+
+    expect(pluginRuntime.isClaudeCliAvailable).not.toHaveBeenCalled();
   });
 });
 

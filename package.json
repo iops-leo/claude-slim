@@ -1,6 +1,6 @@
 {
   "name": "claude-slim",
-  "version": "2.7.1",
+  "version": "2.7.2",
   "description": "Cut Claude Code startup token overhead — non-destructive scan, tiered proposals, one-command restore. Finds unused skills, duplicate registrations, stale memory, and heavyweight plugins in ~/.claude/.",
   "type": "module",
   "bin": {
