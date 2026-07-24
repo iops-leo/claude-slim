@@ -211,72 +211,17 @@ From a real cleanup session:
 
 ---
 
-## v2.7.1 — What's new
+## v2.7.2 — What's new
 
-Correctness patch cleaning up seven bugs found in post-2.7 review. No new features; no breaking changes.
+Correctness patch fixing three HIGH-severity issues from a post-2.7.1 review. No new features; no breaking changes.
 
-- **`unused_plugin` savings always showed 0.** The detector emitted `tokens: 0` for every flagged plugin, so both the dry-run summary and the final report box under-counted savings for what is typically the largest cleanup target. Cost is now threaded through `DetectorContext` and the detector uses the real per-plugin value.
-- **`duplicate` detector could disable namespaced local skills.** A `baseName` fallback flagged `org/ship` as a duplicate of a bare plugin `ship`, even though namespaced local skills are addressable independently. Only exact-name matches are flagged now.
-- **`stale_project` restore was scoped to all of `~/.claude/`.** A tampered manifest could redirect a project-memory backup into `~/.claude/skills/` and clobber an unrelated asset. Restores are now type-scoped — `stale_project` targets must live under `~/.claude/projects/`, skill restores under `~/.claude/skills/`.
-- **Non-interactive `claude-slim clean` refuses to auto-apply.** Prior behavior silently auto-selected Tier 1 in non-TTY without `--auto`/`--dry-run`, surprising users running from scripts. It now prints a warning and exits with status 1; opt in explicitly with `--auto` or `--dry-run`.
-- **`--lookback-days 0` / `--sessions-per-day 0` are respected.** `parseInt(x, 10) || N` was silently upgrading explicit `0` to the default. Replaced with a `parseNonNegativeInt` helper.
-- **`claude-slim report` recognizes zero-token cleanups.** Runs that only removed `broken_symlink` or `temp_cache` entries were being reported as "no previous cleanup"; every manifest entry now counts.
-- **Session parser regex hardened.** `extractCommandsFromTranscript` uses `String.matchAll` instead of a manual `lastIndex`-resetting loop — one fewer footgun for future refactors.
+- **Friendlier `unused_plugin` cleanup when the `claude` CLI is missing.** Users running claude-slim outside a Claude Code install used to see raw `spawn claude ENOENT` — one row per selected plugin. The cleaner now probes the CLI once up front via `isClaudeCliAvailable()`; failing items become `skipped` (not `errored`), and a single grouped warning points at the manual `claude plugin disable <name>` workaround.
+- **Nested-skill scanner now covers 3-deep layouts.** The prior 2-level walk silently missed `skills/<org>/<group>/<skill>/SKILL.md` — token totals under-reported and `unused_skill` could never flag them. Replaced with a bounded recursive walk (`MAX_SKILL_DEPTH = 3`) that stops descending once a `SKILL.md` is found, so nested docs under a declared skill don't become phantom duplicates.
+- **`scan --json` output contract locked in.** New test spies on `console.log` / `console.info` / `console.warn` during the full scan pipeline (both minimal and rich fixtures — session logs, plugin cache, memory, CLAUDE.md) and fails if any fires. No stray writes exist today; the invariant is now enforced so a future refactor can't silently break `claude-slim scan --json | jq`.
 
-Tests: 188 → 190 (+2 regression cases for the token-propagation fix).
+Tests: 190 → 206 (+16).
 
-## v2.7 — What's new
-
-- **Unused-plugin detection** — claude-slim now reads your session transcripts for MCP tool calls (`mcp__plugin_<plugin>_<server>__*`) and slash commands, and flags plugins whose surfaces you've never touched in the last 60 days. Tier 3 (Optional, never auto-selected). When you choose to clean one, `claude plugin disable <name>` runs automatically; `/claude-slim restore` re-enables it.
-- **PLUGIN BREAKDOWN table** — the scan report now includes a per-plugin cost breakdown: token estimate (CLAUDE.md section + skills + deferred MCP tools + commands) and usage status (used / unused / agent-only / insufficient data / disabled). In the owner's real env: `oh-my-claudecode` tops the list at ~6,210 tok; three plugins were flagged as unused despite being enabled.
-- **Session parser fix** — slash commands in string-form user messages were previously missed (only array-form content was parsed). All slash-command invocations are now captured correctly.
-- **+82 tests** for the new modules and the parser regression.
-
-## v2.6 — What's new
-
-- **`claude-slim doctor`** — Checks Node support, `~/.claude/` readability, local skill/plugin cache access, `claude plugin list`, and recent session-log signal quality. Use it when scan results look sparse or unused-skill detection is suppressed.
-- **Clearer safety wording** — Skills and project memory are reversible moves into `~/.claude/skills.disabled/`; broken symlink files and failed-install `temp_local_*` caches are permanent cleanup targets and are labeled before selection.
-- **Pinned development Node version** — `.nvmrc` and `.node-version` pin contributors to Node 22.12.0, matching the current Vitest/Vite/Rolldown patch-floor requirements.
-
-## v2.4 — What's new
-
-- **Unused-skill detection** — claude-slim now reads your `~/.claude/projects/*/*.jsonl` session transcripts, finds every `Skill` tool invocation in the last 60 days, and flags local skills you've installed but never actually used. Tier 3 (Optional, never auto-selected) so you decide. Configurable lookback via `--lookback-days <n>`. Falls back silently if there's not enough session history (≥3 sessions required) — no false-flagging when the data source is unreliable.
-- **Plugin skills are intentionally out of scope** for this detector. They live inside `~/.claude/plugins/cache/` and are managed by the Claude Code plugin runtime; moving them would partially uninstall the plugin. Use `claude plugin disable <name>` for plugin-level cleanup.
-- **Per-file session-usage cache** at `~/.claude/.skill-usage-cache.json` keyed by mtime. Warm rescans only re-parse session logs that have changed.
-- **Node 20+** is now the engine floor (previously `>=18`, but Node 18 was already dropped from CI in v2.3.0).
-
-## v2.3 — What's new
-
-- **Detector registry refactor (v2.3.0)** — Scanner split from a 588-line module into focused detectors under `src/scanner/`. Adding a new heuristic is a one-function addition; see CONTRIBUTING.md. Public API unchanged.
-- **Path-containment guard (v2.2.3)** — Every destructive op refuses any target path that escapes `~/.claude/`. `runCommand` no longer goes through a shell. `temp_cache` cleanup is symlink-safe.
-- **Report sign fix (v2.2.3)** — The breakdown table's Saved column was inverted in earlier 2.2.x; cleanup now shows correct savings per row.
-- **85 tests (was 73)** — New round-trip coverage for path containment, restore guards, breakdown sign, restore-selection dedup, atomic tokenizer flush, and custom detector injection.
-
-## v2.2 — What's new
-
-- **Atomic `stale_project` clean/restore** — Single directory `rename()` instead of per-file loop. No more partial-failure state if the operation is interrupted.
-- **Clear collision errors** — Cleaning a project whose backup already exists (or restoring onto an existing directory) now fails with an actionable message instead of a cryptic OS error.
-- **Manifest schema v2** — Single JSON file (`manifest.json`) containing only currently-disabled entries. Restore removes the entry entirely, so the manifest stays bounded across many clean/restore cycles.
-- **Automatic migration from v1** — Existing legacy manifests (`.claude-slim-manifest.jsonl`) are auto-migrated on first read; the original is preserved as `.jsonl.bak` for safety.
-- **Crash-safe manifest writes** — Write-to-tmp-then-rename pattern prevents partial-write corruption on power loss or SIGKILL.
-- **Expanded test coverage** — 66 tests (was 35). New round-trip tests per issue type: `broken_symlink`, `template`, `duplicate`, `skill_dup`, `oversized_skill`, `temp_cache`, `stale_project`. Plus manifest migration + bounded-growth cycle tests.
-
-## v2.0 — What's new
-
-- **TypeScript CLI** — Rewritten from bash. Faster, more accurate, extensible.
-- **Accurate token counting** — [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) with `cl100k_base` encoding.
-- **Savings report box** — Visual before/after with breakdown table and monthly savings estimate.
-- **`--dry-run`** — Preview changes without making them.
-- **`--json`** — Machine-readable output for automation.
-- **Token cache** — Instant repeat scans.
-- **Standalone CLI** — `npx claude-slim` works outside Claude Code.
-- **`--auto`** — Non-interactive cleanup for CI/scripts (Tier 1 only).
-- **Disabled plugin detection** — Finds plugins you disabled but didn't uninstall.
-- **Stale project detection** — Flags project memory untouched for 90+ days.
-- **CLAUDE.md section breakdown** — See which plugin instructions cost the most tokens.
-- **Plugin status** — Shows enabled/disabled status for each plugin.
-- **Non-TTY support** — Auto-selects Tier 1 when stdin is piped.
-- **Unit tests** — Vitest-based.
+For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
