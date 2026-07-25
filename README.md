@@ -3,7 +3,9 @@
 # claude-slim
 
 [![npm](https://img.shields.io/npm/v/claude-slim.svg)](https://www.npmjs.com/package/claude-slim)
+[![downloads](https://img.shields.io/npm/dm/claude-slim.svg)](https://www.npmjs.com/package/claude-slim)
 [![CI](https://github.com/iops-leo/claude-slim/actions/workflows/ci.yml/badge.svg)](https://github.com/iops-leo/claude-slim/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/claude-slim.svg)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/claude-slim.svg)](./LICENSE)
 
 **Your Claude Code session burns thousands of tokens before you even say "hello."**
@@ -28,17 +30,20 @@ No proxy, no compression, no changes to how Claude Code talks to the API — it 
   <img src="docs/demo.gif" alt="claude-slim cleanup: 11,442 tokens of overhead reduced to ~5,800 in 45 seconds" width="900" />
 </p>
 
-Where the bloat hides:
+Where the bloat hides — measured on one real install:
 
-| Source | Typical overhead |
-|--------|:---:|
-| 60+ registered skills | ~3,000 tokens |
-| CLAUDE.md (plugin instructions) | ~5,000 tokens |
-| Memory files | ~2,500 tokens |
-| Deferred tools list | ~1,500 tokens |
-| **Total** | **~12,000 tokens** |
+| Source | What it costs | |
+|--------|:---:|---|
+| Skill listings | ~10,100 tokens | 256 skills × their `name: description` line |
+| Agent catalog | ~2,250 tokens | `~/.claude/agents/`, 12 agents |
+| CLAUDE.md | ~2,000 tokens | plugin instructions |
+| Deferred tools list | ~1,500 tokens | MCP tool schemas |
+| Slash commands | ~80 tokens | `~/.claude/commands/` |
+| Memory files | **0 – 63,500 tokens** | current project only — varies wildly per project |
 
-That's slower responses. Hitting your usage cap faster. Paying for context you're not using.
+Skill listings are the part people underestimate: each installed skill contributes one `- name: description` line to the system prompt, and those run anywhere from **30 to 509 tokens each**. Sixty terse skills and sixty verbose ones are not the same bill.
+
+That's slower responses. Hitting your usage cap faster. Paying for context you're not using — on every turn, of every session.
 
 ---
 
@@ -176,6 +181,7 @@ npx claude-slim report                   # Show savings from last clean
 
 - **`~/.claude/CLAUDE.md`** — your system instructions, read-only.
 - **`~/.claude/settings.json`** — MCP server config, hooks, and any other settings. Read-only.
+- **`~/.claude/agents/` and `~/.claude/commands/`** — measured and reported since v2.8, never moved or deleted. There is no restore path for them yet, and a destructive action without its undo isn't worth shipping.
 - **Plugin internals** (`~/.claude/plugins/config.json`, individual `plugin.json` files) — left alone; use `claude plugin` to manage plugins.
 - **Git / project sources** — claude-slim only looks inside `~/.claude/`, never at your code.
 - **Anything outside `~/.claude/`** — a path-containment guard refuses destructive ops anywhere else, even if a tampered manifest asked it to.
@@ -213,6 +219,12 @@ From a real cleanup session:
 | System prompt skills | ~80 | ~48 | **-40%** |
 | Memory files | 15KB | 2KB | **-87%** |
 | **Est. token savings** | | **~4,300/session** | |
+
+### A note on the numbers
+
+claude-slim reports what a session in **this** directory pays. Memory is per-project — Claude Code loads `~/.claude/projects/<slug>/memory/` for the project you're in, not every project on disk — so running `scan` from two different repos will legitimately give you two different totals.
+
+Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) against the actual file contents. The only estimates left are marked with `~`: MCP tool schemas (~8 tokens/tool) and skills whose frontmatter can't be parsed (~30 tokens). Everything else is measured.
 
 ---
 
