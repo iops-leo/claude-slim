@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`initTokenizer()` rebuilt the cl100k_base encoder on every call.** Building it parses a large rank table — hundreds of milliseconds, and considerably more under CPU contention. The encoder is immutable once built, so it is now memoized; only the token cache is still reset per init. No user-visible behaviour change (the CLI initialises once per process), but the test suite calls it per-test and was intermittently blowing the 5s timeout. Reproduced under synthetic load: **45.6s with 1 failure → 16.6s with 0**.
+
+### Docs
+- README brought in line with v2.8.0 and the `ko` / `ja` / `zh` translations synced up from v2.7.1. The overhead table now carries measured values instead of estimates (skill listings ~10,100 tokens, agent catalog ~2,250, memory 0–63,500 depending on project), and a new section states plainly which figures are measured and which are still `~` estimates.
+- `~/.claude/agents/` and `~/.claude/commands/` added to the "never touches" list and the directory tree, with the reason they are read-only.
+- npm downloads and Node version badges added.
+
 ## [2.8.0] — 2026-07-25
 
 Accuracy release. Three of the numbers claude-slim reported were wrong, and the
