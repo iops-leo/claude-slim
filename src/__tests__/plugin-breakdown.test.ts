@@ -12,6 +12,7 @@ function makePs(override: Partial<PluginSurfaces> = {}): PluginSurfaces {
     installDir: '/home/.claude/plugins/npmjs.com/test-plugin/1.0.0',
     installedAt: Date.now() - 90 * 86400000,
     skills: ['skill-a'],
+    skillListingTokens: 30,
     mcpServerKeys: [],
     mcpToolPrefixes: [],
     commands: [],
@@ -144,9 +145,13 @@ describe('computePluginBreakdown', () => {
   // ----- 4. sorting by tokens descending -----
   it('4. sorted by tokens descending', () => {
     const surfaces: PluginSurfaces[] = [
-      makePs({ pluginName: 'small', skills: [] }),
-      makePs({ pluginName: 'large', skills: ['s1', 's2', 's3', 's4', 's5'] }),
-      makePs({ pluginName: 'medium', skills: ['s1', 's2'] }),
+      makePs({ pluginName: 'small', skills: [], skillListingTokens: 0 }),
+      makePs({
+        pluginName: 'large',
+        skills: ['s1', 's2', 's3', 's4', 's5'],
+        skillListingTokens: 150,
+      }),
+      makePs({ pluginName: 'medium', skills: ['s1', 's2'], skillListingTokens: 60 }),
     ];
     const installed = [
       makeInstalled('small'),

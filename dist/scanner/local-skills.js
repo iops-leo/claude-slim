@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { countTokensCached } from '../tokenizer.js';
 import { getSkillsDir } from '../paths.js';
 import { safeReadFile, safeReaddir, isDirectory, isBrokenSymlink, resolveRealPath, } from './fs-walk.js';
+import { listingTokensFromContent } from './skill-listing.js';
 export function dedupeBySymlink(candidates) {
     const seen = new Map();
     for (const { skill, realMdPath } of candidates) {
@@ -57,6 +58,7 @@ export async function scanLocalSkills() {
                     path: dirPath,
                     sizeBytes: Buffer.byteLength(content),
                     tokens,
+                    listingTokens: listingTokensFromContent(displayName, content),
                     source: 'local',
                 },
                 realMdPath,

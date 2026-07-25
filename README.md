@@ -6,9 +6,11 @@
 [![CI](https://github.com/iops-leo/claude-slim/actions/workflows/ci.yml/badge.svg)](https://github.com/iops-leo/claude-slim/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/claude-slim.svg)](./LICENSE)
 
-**You're burning thousands of tokens before you even say "hello."**
+**Your Claude Code session burns thousands of tokens before you even say "hello."**
 
-Every Claude Code session auto-loads every skill, memory file, and plugin instruction into the system prompt — even the ones you never use. If you run OMC, marketplace plugins, or a custom skill stack, you're paying for context you'll never touch. claude-slim finds and removes that waste.
+Every session auto-loads every skill, agent, slash command, memory file, and plugin instruction into the system prompt — even the ones you never use. If you run OMC, marketplace plugins, or a custom skill stack, you're paying for context you'll never touch on every single turn. claude-slim measures that startup overhead and removes what you don't need.
+
+No proxy, no compression, no changes to how Claude Code talks to the API — it reads `~/.claude/`, tells you what each skill and plugin actually costs, and moves the dead weight aside reversibly.
 
 ```
 /claude-slim
@@ -67,6 +69,7 @@ That's slower responses. Hitting your usage cap faster. Paying for context you'r
 | Empty templates | Placeholder skills with no content |
 | Oversized files | SKILL.md over 10KB |
 | **Unused skills** | **Local skills never invoked in your last N days of sessions (default 60d)** |
+| Agents & commands | `~/.claude/agents/` and `~/.claude/commands/` — measured and reported, never modified |
 | **Unused plugins** | **Plugins whose skill/mcp/cmd were never invoked in your last N days of sessions (default 60d). Tier 3, never auto-selected.** |
 | Stale memory | Large memory files loaded every session |
 | Disabled plugins | Installed but disabled plugins still in cache |
@@ -188,9 +191,11 @@ claude-slim scans these locations. No plugin-specific logic — pure filesystem 
 ```
 ~/.claude/
 ├── skills/                  ← user-installed skills
-├── plugins/cache/           ← plugin skills
+├── plugins/cache/           ← plugin skills, agents, commands, MCP servers
+├── agents/                  ← user agents (measured, read-only)
+├── commands/                ← user slash commands (measured, read-only)
 ├── CLAUDE.md                ← system instructions (read-only)
-├── projects/*/memory/       ← auto-memory files
+├── projects/*/memory/       ← auto-memory files (current project counts toward startup)
 └── settings.json            ← MCP server count (read-only)
 ```
 
@@ -211,15 +216,17 @@ From a real cleanup session:
 
 ---
 
-## v2.7.2 — What's new
+## v2.8.0 — What's new
 
-Correctness patch fixing three HIGH-severity issues from a post-2.7.1 review. No new features; no breaking changes.
+Accuracy release. Three reported numbers were wrong; the largest was wrong by an order of magnitude. **If your startup estimate drops sharply after upgrading, the old number was the inaccurate one.**
 
-- **Friendlier `unused_plugin` cleanup when the `claude` CLI is missing.** Users running claude-slim outside a Claude Code install used to see raw `spawn claude ENOENT` — one row per selected plugin. The cleaner now probes the CLI once up front via `isClaudeCliAvailable()`; failing items become `skipped` (not `errored`), and a single grouped warning points at the manual `claude plugin disable <name>` workaround.
-- **Nested-skill scanner now covers 3-deep layouts.** The prior 2-level walk silently missed `skills/<org>/<group>/<skill>/SKILL.md` — token totals under-reported and `unused_skill` could never flag them. Replaced with a bounded recursive walk (`MAX_SKILL_DEPTH = 3`) that stops descending once a `SKILL.md` is found, so nested docs under a declared skill don't become phantom duplicates.
-- **`scan --json` output contract locked in.** New test spies on `console.log` / `console.info` / `console.warn` during the full scan pipeline (both minimal and rich fixtures — session logs, plugin cache, memory, CLAUDE.md) and fails if any fires. No stray writes exist today; the invariant is now enforced so a future refactor can't silently break `claude-slim scan --json | jq`.
+- **Startup estimate no longer sums memory across every project on disk.** Claude Code loads `~/.claude/projects/<slug>/memory/` for the project you're in — not the other 40 project directories in your `~/.claude`. The old total scaled with how many projects you'd ever opened: on the dev machine it reported **116,259 tokens where the real per-session cost was 14,399**. Now scoped to the current project, with the cross-project total still shown and labelled as not a per-session cost.
+- **Skill listing cost is measured, not assumed.** Each skill adds a `- <name>: <description>` line to the system prompt. The flat 30-tokens-per-skill estimate stood in for all of them; measured across 68 installed skills the real spread is **30 → 509 tokens (mean 51)**. The per-plugin cost gradient can now tell five terse skills apart from five verbose ones.
+- **`~/.claude/agents/` and `~/.claude/commands/` are now scanned.** Previously invisible despite loading into every session — 12 agents worth ~2,254 tokens on the dev machine. Reported only; never moved or deleted, because there's no restore path for them yet.
+- **Fixed: plugin manifests were stuck at 2.7.0 for three releases**, so `claude plugin install` advertised a stale version. CI now fails on version drift.
+- **Fixed: the token cache grew without bound** — 355 of 776 entries (46%) pointed at deleted files. `flushCache()` now prunes them.
 
-Tests: 190 → 206 (+16).
+Tests: 206 → 241 (+35).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

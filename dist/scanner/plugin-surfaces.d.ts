@@ -5,6 +5,7 @@ export interface PluginSurfaces {
     installDir: string;
     installedAt: number;
     skills: string[];
+    skillListingTokens: number;
     mcpServerKeys: string[];
     mcpToolPrefixes: string[];
     commands: string[];

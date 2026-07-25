@@ -1,4 +1,4 @@
-import { SKILL_PROMPT_OVERHEAD_TOKENS, DEFERRED_TOOL_OVERHEAD_TOKENS, COMMAND_OVERHEAD_TOKENS, MCP_SERVER_TOOLS_AVG, } from './constants.js';
+import { DEFERRED_TOOL_OVERHEAD_TOKENS, COMMAND_OVERHEAD_TOKENS, MCP_SERVER_TOOLS_AVG, } from './constants.js';
 /**
  * Find a CLAUDE.md section whose name contains the plugin name as a substring
  * (case-insensitive). Returns the first match or null.
@@ -18,7 +18,7 @@ export function computePluginCosts(surfaces, claudeMdSections) {
     return surfaces.map((s) => {
         const matched = matchSection(s.pluginName, claudeMdSections);
         const claudeMdTokens = matched?.tokens ?? 0;
-        const skillTokens = SKILL_PROMPT_OVERHEAD_TOKENS * s.skills.length;
+        const skillTokens = s.skillListingTokens;
         const mcpToolTokens = DEFERRED_TOOL_OVERHEAD_TOKENS * MCP_SERVER_TOOLS_AVG * s.mcpServerKeys.length;
         const commandTokens = COMMAND_OVERHEAD_TOKENS * s.commands.length;
         const totalEstimatedTokens = claudeMdTokens + skillTokens + mcpToolTokens + commandTokens;

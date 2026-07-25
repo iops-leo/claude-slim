@@ -19,6 +19,7 @@ function makeSurface(overrides: Partial<PluginSurfaces>): PluginSurfaces {
     installDir: '/tmp/test',
     installedAt: 0,
     skills: [],
+    skillListingTokens: 0,
     mcpServerKeys: [],
     mcpToolPrefixes: [],
     commands: [],
@@ -41,9 +42,13 @@ describe('computePluginCosts', () => {
     expect(r.totalEstimatedTokens).toBe(0);
   });
 
-  it('case 2: skills-only plugin → skillTokens = SKILL_PROMPT_OVERHEAD_TOKENS * count, rest 0', () => {
+  it('case 2: skills-only plugin → skillTokens passes through measured listing cost, rest 0', () => {
     const surfaces = [
-      makeSurface({ pluginName: 'skill-plugin', skills: ['skill-a', 'skill-b', 'skill-c'] }),
+      makeSurface({
+        pluginName: 'skill-plugin',
+        skills: ['skill-a', 'skill-b', 'skill-c'],
+        skillListingTokens: SKILL_PROMPT_OVERHEAD_TOKENS * 3,
+      }),
     ];
     const results = computePluginCosts(surfaces, []);
     const r = results[0];
@@ -59,6 +64,7 @@ describe('computePluginCosts', () => {
       makeSurface({
         pluginName: 'full-plugin',
         skills: ['s1', 's2'],
+        skillListingTokens: SKILL_PROMPT_OVERHEAD_TOKENS * 2,
         mcpServerKeys: ['server1'],
         mcpToolPrefixes: ['plugin_full-plugin_server1'],
         commands: ['cmd1', 'cmd2', 'cmd3'],

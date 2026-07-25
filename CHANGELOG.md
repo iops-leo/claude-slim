@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] — 2026-07-25
+
+Accuracy release. Three of the numbers claude-slim reported were wrong, and the
+largest one was wrong by an order of magnitude. If your startup estimate drops
+sharply after upgrading, the old number was the inaccurate one.
+
+### Changed
+- **The startup estimate no longer sums memory across every project on disk.** Claude Code loads `~/.claude/projects/<slug>/memory/` for the project a session is running in — not the other 40 project directories in your `~/.claude`. `totalTokensBefore` summed all of them, so the headline "tokens at session start" scaled with how many projects you had ever opened. On the development machine this reported **116,259 tokens where the real per-session cost was 14,399**. The estimate is now scoped to the current project (derived from `cwd`, matching Claude Code's slug format); the cross-project total is still shown in the MEMORY section, labelled as not being a per-session cost. `ScanResult` gains `currentProjectSlug`, `currentProjectMemoryTokens`, and `allProjectsMemoryTokens`.
+- **Skill listing cost is measured, not assumed.** Every skill contributes a `- <name>: <description>` line to the system prompt, and the flat `SKILL_PROMPT_OVERHEAD_TOKENS = 30` estimate stood in for all of them. Measured across 68 installed skills the real spread is **30 → 509 tokens, mean 51** — a 70% under-count in aggregate, and the per-plugin cost gradient (v2.7.0) could not tell a plugin with five terse skills from one with five verbose ones. `SkillInfo` gains `listingTokens`, parsed from the frontmatter `description`. The flat constant remains as the fallback for a skill whose frontmatter is missing or unparseable, so malformed files degrade to pre-2.8 behaviour instead of reporting zero.
+
+### Added
+- **`~/.claude/agents/` and `~/.claude/commands/` are now scanned.** Plugin-supplied agents and commands were already counted; the user-level directories were invisible to every scanner despite being rendered into each session's system prompt (agents as the agent catalog, commands as the slash-command listing). On the development machine that was 12 agents worth ~2,254 tokens, absent from the total. Reported in a new `AGENTS & COMMANDS` section and included in `totalTokensBefore`. **Read-only:** they are measured and reported but never moved or deleted — there is no restore path for `~/.claude/agents/` yet, and shipping a destructive action without its undo would break the tool's central promise.
+- **`npm run check:versions`** — fails when `.claude-plugin/plugin.json` or `.claude-plugin/marketplace.json` drifts from `package.json`. Wired into CI and `prepublishOnly`.
+
+### Fixed
+- **Plugin manifests were stuck at 2.7.0 for three releases.** `package.json` shipped 2.7.1, 2.7.2, and 2.7.3 while `.claude-plugin/plugin.json` and `marketplace.json` still advertised 2.7.0. `claude plugin install` reads the plugin manifests, not `package.json`, so plugin users saw a stale version throughout. All three are now bumped together and the new CI check makes the drift unrepeatable.
+- **The token cache grew without bound.** `.token-cache.json` kept an entry for every file it had ever hashed, including skills long since uninstalled and session logs long since rotated. On the development machine **355 of 776 entries (46%, 139KB) pointed at files that no longer existed**. `flushCache()` now drops entries whose source file is gone — an entry for a missing path can never produce a hit again, so existence is a pruning predicate that cannot evict a live entry. The session-usage cache already pruned this way; the token cache did not.
+
+### Internal
+- `commander` 13 → 14, `vitest` 4.1.4 → 4.1.10, `@types/node` patch. TypeScript stays on 5.9: the 7.0 upgrade needs `@types/node` 26 and `tsconfig` changes, and belongs in its own PR.
+- Tests: 206 → 241 (+35), covering frontmatter parsing (including the CRLF, block-scalar, and wrapped-value cases that broke the first implementation), cache pruning, user-surface scanning, and memory scoping.
+
 ## [2.7.3] — 2026-07-24
 
 ### Docs

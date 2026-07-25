@@ -1,8 +1,19 @@
+import type { UserSurfaceEntry } from './scanner/user-surfaces.js';
+
+export type { UserSurfaceEntry };
+
 export interface SkillInfo {
   name: string;
   path: string;
   sizeBytes: number;
+  /** Full SKILL.md body tokens — what the skill costs once invoked. */
   tokens: number;
+  /**
+   * Tokens this skill adds to the system prompt just by being installed
+   * (its `- <name>: <description>` listing line). Measured from the
+   * frontmatter description; see scanner/skill-listing.ts.
+   */
+  listingTokens: number;
   source: 'local' | 'plugin';
   pluginName?: string;
 }
@@ -78,6 +89,16 @@ export interface ScanResult {
   issues: Issue[];
   totalTokensBefore: number;
   pluginBreakdown: PluginBreakdown[];
+  /** ~/.claude/agents/*.md — loaded into the system prompt as the agent catalog. */
+  userAgents: UserSurfaceEntry[];
+  /** ~/.claude/commands/*.md — loaded as the slash-command listing. */
+  userCommands: UserSurfaceEntry[];
+  /** Project slug (cwd with `/` → `-`) whose memory a session here would load. */
+  currentProjectSlug: string;
+  /** Memory tokens actually loaded at startup — current project only. */
+  currentProjectMemoryTokens: number;
+  /** Memory tokens across every project on disk. Not a per-session cost. */
+  allProjectsMemoryTokens: number;
 }
 
 // Flat "skill/memory moved" record written by the cleaner.

@@ -2,6 +2,8 @@ import { join } from 'node:path';
 import { statSync } from 'node:fs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { getPluginsDir } from '../paths.js';
+import { listingTokensFromContent } from './skill-listing.js';
+import { SKILL_PROMPT_OVERHEAD_TOKENS } from './constants.js';
 
 export interface PluginSurfaces {
   pluginName: string;
@@ -10,6 +12,9 @@ export interface PluginSurfaces {
   installDir: string;        // absolute path
   installedAt: number;       // installDir mtime (ms)
   skills: string[];          // skill names (directory names)
+  // Measured system-prompt listing cost of `skills`, summed. Replaces the flat
+  // 30-tokens-per-skill estimate used before v2.8.
+  skillListingTokens: number;
   mcpServerKeys: string[];   // mcpServers keys from .mcp.json
   mcpToolPrefixes: string[]; // expected mcp tool prefix: `plugin_<pluginName>_<serverKey>`
   commands: string[];        // commands/*.md basenames (without extension)
@@ -56,20 +61,31 @@ function parseMcpServerKeys(installDir: string): string[] {
   }
 }
 
-function scanSkills(installDir: string): string[] {
+interface ScannedSkills {
+  names: string[];
+  listingTokens: number;
+}
+
+function scanSkills(installDir: string): ScannedSkills {
   const skillsDir = join(installDir, 'skills');
-  if (!isDir(skillsDir)) return [];
+  if (!isDir(skillsDir)) return { names: [], listingTokens: 0 };
   const names: string[] = [];
+  let listingTokens = 0;
   for (const entry of safeReaddir(skillsDir)) {
     const skillDir = join(skillsDir, entry);
     if (!isDir(skillDir)) continue;
     const upper = join(skillDir, 'SKILL.md');
     const lower = join(skillDir, 'skill.md');
-    if (isFile(upper) || isFile(lower)) {
-      names.push(entry);
-    }
+    const present = isFile(upper) ? upper : isFile(lower) ? lower : null;
+    if (present === null) continue;
+    names.push(entry);
+    let content = '';
+    try { content = readFileSync(present, 'utf-8'); } catch { /* unreadable */ }
+    listingTokens += content
+      ? listingTokensFromContent(entry, content)
+      : SKILL_PROMPT_OVERHEAD_TOKENS;
   }
-  return names;
+  return { names, listingTokens };
 }
 
 function scanCommands(installDir: string): string[] {
@@ -113,7 +129,7 @@ export function scanPluginSurfaces(): PluginSurfaces[] {
         const dirStat = safeStat(installDir);
         const installedAt = dirStat ? Number(dirStat.mtimeMs) : 0;
 
-        const skills = scanSkills(installDir);
+        const { names: skills, listingTokens: skillListingTokens } = scanSkills(installDir);
         const mcpServerKeys = parseMcpServerKeys(installDir);
         const mcpToolPrefixes = mcpServerKeys.map(
           (key) => `plugin_${pluginName}_${key}`,
@@ -129,6 +145,7 @@ export function scanPluginSurfaces(): PluginSurfaces[] {
           installDir,
           installedAt,
           skills,
+          skillListingTokens,
           mcpServerKeys,
           mcpToolPrefixes,
           commands,

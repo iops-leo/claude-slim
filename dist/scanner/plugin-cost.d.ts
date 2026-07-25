@@ -4,7 +4,7 @@ export interface PluginCostBreakdown {
     marketplace: string;
     /** Tokens from the matching CLAUDE.md section (0 if no match). */
     claudeMdTokens: number;
-    /** SKILL_PROMPT_OVERHEAD_TOKENS × skills.length */
+    /** Measured sum of each skill's `- <name>: <description>` listing line. */
     skillTokens: number;
     /** DEFERRED_TOOL_OVERHEAD_TOKENS × MCP_SERVER_TOOLS_AVG × mcpServerKeys.length */
     mcpToolTokens: number;

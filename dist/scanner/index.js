@@ -5,7 +5,7 @@
 // src/__tests__/scan-stdout-invariant.test.ts.
 import { join } from 'node:path';
 import { countTokensCached } from '../tokenizer.js';
-import { getClaudeDir } from '../paths.js';
+import { getClaudeDir, getCurrentProjectSlug } from '../paths.js';
 import { safeReadFile } from './fs-walk.js';
 import { scanLocalSkills } from './local-skills.js';
 import { scanPluginSkills } from './plugin-skills.js';
@@ -18,17 +18,18 @@ import { classifyIssues } from './detectors.js';
 import { scanPluginSurfaces } from './plugin-surfaces.js';
 import { computePluginBreakdown } from './plugin-breakdown.js';
 import { computePluginCosts } from './plugin-cost.js';
-import { SKILL_PROMPT_OVERHEAD_TOKENS } from './constants.js';
+import { scanUserSurfaces } from './user-surfaces.js';
 const DEFAULT_LOOKBACK_DAYS = 60;
 export async function scan(opts = {}) {
     const lookbackDays = opts.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
-    const [{ skills: localSkills, brokenSymlinks, contents }, { skills: pluginSkills, plugins, tempCaches }, { memoryFiles, staleProjects }, mcp, disabledPlugins, sessionUsage,] = await Promise.all([
+    const [{ skills: localSkills, brokenSymlinks, contents }, { skills: pluginSkills, plugins, tempCaches }, { memoryFiles, staleProjects }, mcp, disabledPlugins, sessionUsage, userSurfaces,] = await Promise.all([
         scanLocalSkills(),
         scanPluginSkills(),
         scanMemoryFiles(),
         scanMcpServers(),
         getDisabledPlugins(),
         scanSessionUsage(lookbackDays),
+        scanUserSurfaces(),
     ]);
     const pluginSurfaces = scanPluginSurfaces();
     // Annotate plugin status
@@ -84,10 +85,28 @@ export async function scan(opts = {}) {
         sessionsInWindow: sessionUsage.sessionsInWindow,
         claudeMdSections,
     });
-    // Estimate total tokens at startup
-    const skillListingTokens = (localSkills.length + pluginSkills.length) * SKILL_PROMPT_OVERHEAD_TOKENS;
-    const memoryTokens = memoryFiles.reduce((sum, m) => sum + m.tokens, 0);
-    const totalTokensBefore = skillListingTokens + claudeMdTokens + memoryTokens;
+    // Estimate total tokens at startup. Skill/agent/command listing costs are
+    // measured from each file's frontmatter description rather than assumed
+    // (see scanner/skill-listing.ts) — the real spread is 30–500+ tokens apiece.
+    const sumListing = (entries) => entries.reduce((sum, e) => sum + e.listingTokens, 0);
+    const skillListingTokens = sumListing(localSkills) + sumListing(pluginSkills);
+    const agentListingTokens = sumListing(userSurfaces.agents);
+    const commandListingTokens = sumListing(userSurfaces.commands);
+    // Memory is per-project: a session loads ~/.claude/projects/<slug>/memory/
+    // for the project it is running in, and nothing from the other projects on
+    // disk. Summing all of them (pre-2.8 behaviour) inflated the startup estimate
+    // by a factor of however many projects the user had — 100k+ tokens on a busy
+    // machine, for a number labelled "tokens at session start".
+    const currentProjectSlug = getCurrentProjectSlug();
+    const currentProjectMemoryTokens = memoryFiles
+        .filter((m) => m.project === currentProjectSlug)
+        .reduce((sum, m) => sum + m.tokens, 0);
+    const allProjectsMemoryTokens = memoryFiles.reduce((sum, m) => sum + m.tokens, 0);
+    const totalTokensBefore = skillListingTokens +
+        agentListingTokens +
+        commandListingTokens +
+        claudeMdTokens +
+        currentProjectMemoryTokens;
     return {
         localSkills,
         pluginSkills,
@@ -102,5 +121,10 @@ export async function scan(opts = {}) {
         issues,
         totalTokensBefore,
         pluginBreakdown,
+        userAgents: userSurfaces.agents,
+        userCommands: userSurfaces.commands,
+        currentProjectSlug,
+        currentProjectMemoryTokens,
+        allProjectsMemoryTokens,
     };
 }

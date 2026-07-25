@@ -1,6 +1,5 @@
 import type { PluginSurfaces } from './plugin-surfaces.js';
 import {
-  SKILL_PROMPT_OVERHEAD_TOKENS,
   DEFERRED_TOOL_OVERHEAD_TOKENS,
   COMMAND_OVERHEAD_TOKENS,
   MCP_SERVER_TOOLS_AVG,
@@ -11,7 +10,7 @@ export interface PluginCostBreakdown {
   marketplace: string;
   /** Tokens from the matching CLAUDE.md section (0 if no match). */
   claudeMdTokens: number;
-  /** SKILL_PROMPT_OVERHEAD_TOKENS × skills.length */
+  /** Measured sum of each skill's `- <name>: <description>` listing line. */
   skillTokens: number;
   /** DEFERRED_TOOL_OVERHEAD_TOKENS × MCP_SERVER_TOOLS_AVG × mcpServerKeys.length */
   mcpToolTokens: number;
@@ -53,7 +52,7 @@ export function computePluginCosts(
   return surfaces.map((s) => {
     const matched = matchSection(s.pluginName, claudeMdSections);
     const claudeMdTokens = matched?.tokens ?? 0;
-    const skillTokens = SKILL_PROMPT_OVERHEAD_TOKENS * s.skills.length;
+    const skillTokens = s.skillListingTokens;
     const mcpToolTokens =
       DEFERRED_TOOL_OVERHEAD_TOKENS * MCP_SERVER_TOOLS_AVG * s.mcpServerKeys.length;
     const commandTokens = COMMAND_OVERHEAD_TOKENS * s.commands.length;
