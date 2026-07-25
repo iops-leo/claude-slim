@@ -149,7 +149,7 @@ Then just type `/claude-slim` in any session.
 /claude-slim scan --json              # Machine-readable JSON output
 /claude-slim scan --lookback-days 30  # Treat skills idle for 30+ days as unused
 /claude-slim doctor                   # Check scanner prerequisites and data fidelity
-/claude-slim check-update              # Is a newer version published?
+/claude-slim check-update             # Is a newer version published?
 /claude-slim restore                  # Bring back anything you disabled
 ```
 
