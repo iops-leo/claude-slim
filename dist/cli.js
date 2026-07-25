@@ -10,6 +10,7 @@ import { cleanIssues, restoreItem } from './cleaner.js';
 import { readManifest } from './manifest.js';
 import { formatScanSummary, formatReportBox, calculateReport, } from './report.js';
 import { collectDoctorReport, formatDoctorReport } from './doctor.js';
+import { checkForUpdate, formatUpdateNotice } from './update-check.js';
 import { resolveSelection, resolveRestoreSelection } from './selection.js';
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
 const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8'));
@@ -52,15 +53,42 @@ program
     .description('Check local Claude Code environment and scanner fidelity')
     .option('--json', 'Output raw JSON')
     .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
+    .option('--offline', 'Skip the npm version check (no outbound request)')
     .action(async (opts) => {
     const report = await collectDoctorReport({
         lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60),
+        checkUpdate: !opts.offline,
     });
     if (opts.json) {
         console.log(JSON.stringify(report, null, 2));
     }
     else {
         console.log(formatDoctorReport(report));
+    }
+});
+// --- check-update ---
+// Detection only. Updating is the package manager's job — claude-slim writing
+// into a directory `claude plugin` owns is how installs get corrupted.
+program
+    .command('check-update')
+    .description('Check whether a newer claude-slim is published (no changes made)')
+    .option('--json', 'Output raw JSON')
+    .option('--force', 'Ignore the 24h cache and re-query the registry')
+    .action(async (opts) => {
+    const result = await checkForUpdate({ force: Boolean(opts.force) });
+    if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+    }
+    const notice = formatUpdateNotice(result);
+    if (notice) {
+        console.log(`\n  \x1b[33m${notice}\x1b[0m\n`);
+    }
+    else if (result.latest === null) {
+        console.log(`\n  Could not reach the npm registry. Installed: ${result.installed}\n`);
+    }
+    else {
+        console.log(`\n  \x1b[32m✓\x1b[0m claude-slim ${result.installed} is up to date.\n`);
     }
 });
 // --- clean ---

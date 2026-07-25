@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] — 2026-07-25
+
+Version-drift detection. Prompted by finding a real install running **2.0.0 while 2.8.1 was published** — eight releases behind, with nothing anywhere in the tool or the plugin system telling the user. Since versions before 2.8.0 inflate the startup estimate ~8×, a stale install does not merely lack features: it reports numbers that are wrong.
+
+### Added
+- **`claude-slim check-update`** — reports whether a newer version is published, and prints the upgrade command matching how this copy was actually installed (Claude Code plugin, global npm, npx, or source checkout). `--json` for machine output, `--force` to bypass the cache.
+- **Version check in `doctor`** — the same comparison as a normal check row. `doctor --offline` skips it entirely.
+- **Version gate in the skill (`SKILL.md` Phase 0)** — `/claude-slim` now checks before scanning and, if the install is outdated, tells the user what they are about to get and asks whether to update first or proceed. It also states that plugin updates need a session restart to take effect, which is otherwise an easy way to update, re-run, and see identical stale numbers with no explanation.
+
+### Changed
+- **`SECURITY.md` no longer claims zero network access.** That guarantee was accurate until this release and is now stated precisely: `scan`, `clean`, `restore`, and `report` still make no outbound requests; the version check in `doctor` / `check-update` is the sole exception. It sends nothing about the user, times out in 2.5s, fails open, caches for 24h, and is skippable with `--offline`.
+
+### Notes
+- **claude-slim does not update itself.** Updating is the package manager's job (`claude plugin update`, `npm install -g`); writing into a directory the plugin manager owns is a reliable way to corrupt an install. This release detects and advises, nothing more.
+- The plugin upgrade hint uses the qualified `claude-slim@claude-slim` id — the bare name fails with `Plugin "claude-slim" not found` when a marketplace shares the plugin's name, which is exactly the case here.
+- Tests: 241 → 266 (+25), covering numeric version ordering (`2.10.0 > 2.9.0`), install-method detection, cache hit/expiry/force, atomic cache writes, and fail-open behaviour on both a `null` return and a throwing fetcher.
+
 ## [2.8.1] — 2026-07-25
 
 ### Fixed

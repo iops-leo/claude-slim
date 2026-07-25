@@ -149,6 +149,7 @@ Then just type `/claude-slim` in any session.
 /claude-slim scan --json              # Machine-readable JSON output
 /claude-slim scan --lookback-days 30  # Treat skills idle for 30+ days as unused
 /claude-slim doctor                   # Check scanner prerequisites and data fidelity
+/claude-slim check-update              # Is a newer version published?
 /claude-slim restore                  # Bring back anything you disabled
 ```
 
@@ -161,9 +162,25 @@ npx claude-slim clean --auto             # Non-interactive, Tier 1 only (CI/scri
 npx claude-slim clean --lookback-days N  # Tune the unused-skill detection window
 npx claude-slim scan                     # Report only
 npx claude-slim doctor                   # Diagnose Node/Claude/session-log readiness
+npx claude-slim doctor --offline         # Same, without the version check (no network)
+npx claude-slim check-update             # Report-only version check
 npx claude-slim restore                  # Undo
 npx claude-slim report                   # Show savings from last clean
 ```
+
+### Staying current
+
+An outdated claude-slim doesn't just miss features — it reports **wrong numbers**. Versions before 2.8.0 inflated the startup estimate roughly 8×, and nothing told you that you were behind.
+
+`doctor` now compares your installed version against npm and prints the upgrade command for how you actually installed it:
+
+```
+! Version: 2.0.0 installed, 2.8.1 available
+    Outdated versions report wrong token totals. Update with:
+    claude plugin marketplace update claude-slim && claude plugin update claude-slim@claude-slim
+```
+
+claude-slim never updates itself — that's your package manager's job, and writing into a directory `claude plugin` owns is how installs get corrupted. It only tells you. The check is the tool's only outbound request, is skipped with `--offline`, caches for 24h, and fails open when you're offline.
 
 ---
 

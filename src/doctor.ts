@@ -2,6 +2,7 @@ import { access, readdir } from 'node:fs/promises';
 import { getClaudeDir, getPluginsDir, getProjectsDir, getSkillsDir } from './paths.js';
 import { runCommand } from './scanner/fs-walk.js';
 import { scanSessionUsage } from './scanner/sessions.js';
+import { checkForUpdate, type UpdateCheckResult } from './update-check.js';
 
 export type DoctorStatus = 'ok' | 'warn' | 'fail';
 
@@ -42,7 +43,7 @@ async function countEntries(path: string): Promise<number | null> {
 }
 
 export async function collectDoctorReport(
-  opts: { lookbackDays?: number } = {},
+  opts: { lookbackDays?: number; checkUpdate?: boolean | (() => Promise<UpdateCheckResult>) } = {},
 ): Promise<DoctorReport> {
   const lookbackDays = opts.lookbackDays ?? 60;
   const checks: DoctorCheck[] = [];
@@ -109,6 +110,36 @@ export async function collectDoctorReport(
         ? undefined
         : 'Unused-skill detection will be suppressed until enough reliable session data exists.',
     });
+  }
+
+  // Version drift, last: it is the only check that touches the network, and it
+  // is opt-in so `doctor` stays offline-safe when the caller wants that.
+  if (opts.checkUpdate) {
+    const run = typeof opts.checkUpdate === 'function' ? opts.checkUpdate : checkForUpdate;
+    const update = await run();
+    if (update.latest === null) {
+      checks.push({
+        label: 'Version',
+        status: 'warn',
+        detail: `${update.installed} installed, latest unknown`,
+        hint: 'Could not reach the npm registry. This does not affect scanning.',
+      });
+    } else if (update.outdated) {
+      checks.push({
+        label: 'Version',
+        status: 'warn',
+        detail: `${update.installed} installed, ${update.latest} available`,
+        hint: update.upgradeCommand
+          ? `Outdated versions report wrong token totals. Update with: ${update.upgradeCommand}`
+          : 'Outdated versions report wrong token totals — update via your package manager.',
+      });
+    } else {
+      checks.push({
+        label: 'Version',
+        status: 'ok',
+        detail: `${update.installed} (latest)`,
+      });
+    }
   }
 
   return { checks };
