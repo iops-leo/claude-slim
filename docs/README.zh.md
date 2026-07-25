@@ -172,66 +172,7 @@ token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对
 
 测试: 241 → **266 (+25)**。
 
----
-
-## v2.8.0 更新 (2026-07-25)
-
-精度修正版本。此前报告的数字中有三个是错的，其中最大的一个错了一个数量级。**如果升级后启动token估算值大幅下降，那么错的是旧数字。**
-
-- **启动token估算不再累加磁盘上所有项目的记忆文件。** Claude Code只加载当前项目的`memory/`，而旧版本把所有项目都加了进去。也就是说，一个名为"tokens at session start"的数值，会随着你打开过的项目数量而膨胀。在开发机器上，**报告值为116,259 tokens，而真实的单次会话成本是14,399**。现在该估算已限定为当前项目，跨项目总计仍会显示，但明确标注为"非单次会话成本"。
-- **技能列表成本改为实测，不再使用常量。** 每个技能都会向系统提示词添加一行`- 名称: 描述`，旧版本一律按固定值30 tokens计算。对68个已安装技能的实测分布为**30~509 tokens（均值51）** — 总量上低估了70%。v2.7.0的插件成本梯度此前无法区分"5个描述冗长的技能"和"5个描述简短的技能"，此问题一并解决。
-- **新增`~/.claude/agents/`和`~/.claude/commands/`扫描。** 它们会进入每次会话的系统提示词，却完全不在扫描范围内（开发机器上为12个代理，约2,254 tokens）。**仅测量与报告** — 不移动、不删除。在没有恢复路径的情况下加入破坏性操作，会破坏这个工具的核心承诺。
-- **修复插件清单版本停滞。** `.claude-plugin/*`连续三个版本停留在2.7.0。`claude plugin install`读取的是清单而非`package.json`，因此插件用户一直看到旧版本号。现由CI检查（`npm run check:versions`）防止复发。
-- **修复token缓存无限增长。** 开发机器上776条记录中有355条（46%，139KB）指向已删除的文件。
-
-测试: 206 → **241 (+35)**。
-
----
-
-## v2.7 更新
-
-- **未使用插件检测** — 从会话记录中同时解析 MCP 工具调用(`mcp__plugin_<插件>_<服务器>__*`)与斜杠命令,标记出最近 60 天内技能、MCP、命令都未被调用过的插件。归为 Tier 3(Optional,默认不选中),由用户自行判断。清理时会自动执行 `claude plugin disable <name>`,可通过 `/claude-slim restore` 恢复。
-- **PLUGIN BREAKDOWN 表格** — 扫描报告新增按插件划分的 token 明细(CLAUDE.md 章节 + 技能注册 + MCP deferred 工具 + 命令)与使用状态(used / unused / agent-only / insufficient data / disabled)。真实环境头部示例:`oh-my-claudecode` ~6,210 tok,`pm-skills` 系列合计 ~2,500 tok。
-- **会话解析器 Bug 修复** — 字符串形式的用户消息(直接使用的斜杠命令)以往会被跳过,现在字符串与数组两种内容形态都能正确统计。
-- **新增 +82 项测试**(新模块与解析器回归)。
-
-## v2.7.1 (2026-07-20)
-
-- **修复 `unused_plugin` 节省量始终为 0 的问题** — 检测器未能使用已计算好的插件成本,导致 dry-run 与报告低估了节省量。`pluginCosts` 映射现已接入 DetectorContext,使用真实值。
-- **修复 `duplicate` 检测器的命名空间误报** — 带命名空间的本地技能(如 `org/ship`)会被错误标记为插件同名 `ship` 的重复。现在只有完全一致的名称才判定为重复。
-- **加强 `stale_project` 恢复的路径范围** — 通过按类型划分的子树守卫,阻断被篡改的清单把项目内存备份重定向到技能目录的攻击面。
-- **非交互式 shell 中若未附带 `--auto`/`--dry-run`,`clean` 会被拒绝** — 之前会默默应用 Tier 1,现在会给出警告并以 exit 1 结束,要求用户显式 opt-in。
-- **正确处理 `--lookback-days 0` 与 `--sessions-per-day 0`** — 修复 `parseInt() || N` 把显式的 0 升级为默认值的问题。
-- **`claude-slim report` 现在也会展示仅包含 zero-token 清理(broken_symlink / temp_cache)的历史记录**。
-
-## v2.6 更新
-
-- **`claude-slim doctor`** — 检查 Node 支持、`~/.claude/` 可读性、本地技能/插件缓存、`claude plugin list` 以及近期会话日志信号质量。适合在扫描结果过少或未使用技能检测被抑制时诊断原因。
-- **更准确的安全说明** — 技能和项目记忆会移动到 `~/.claude/skills.disabled/`，可恢复；断开的 symlink 文件和失败安装的 `temp_local_*` 缓存会作为 permanent 清理目标标记。
-- **固定开发 Node 版本** — `.nvmrc` 和 `.node-version` 固定为 Node 22.12.0，以匹配当前 Vitest/Vite/Rolldown 的 patch-floor 要求。
-
-## v2.4 更新
-
-- **未使用技能检测** — 读取 `~/.claude/projects/*/*.jsonl` 会话记录，找出最近 60 天内从未被 `Skill` 工具调用过的本地技能并标记。归为 Tier 3（Optional，默认不选中），由用户自行决定。可通过 `--lookback-days <n>` 调整窗口。会话数不足 3 个或一次调用都没有（可能是 schema 变更）时整体抑制分类，避免在数据不可靠时产生错误信号。
-- **插件技能被特意排除**。`~/.claude/plugins/cache/` 下的技能由 Claude Code 插件运行时管理，移动文件会让插件处于部分卸载状态。插件级清理请用 `claude plugin disable <name>`。
-- **会话使用缓存** — 保存在 `~/.claude/.skill-usage-cache.json`，按 mtime 索引。热扫描只会重新解析有变更的会话日志。
-- **Node 20+** 成为新的引擎最低版本（此前为 `>=18`，但 Node 18 已在 v2.3.0 时从 CI matrix 中移除）。
-
-## v2.3 更新
-
-- **detector 注册表重构 (v2.3.0)** — 将 588 行的单体扫描模块拆分为 `src/scanner/` 下的细粒度 detector。新增启发式规则只需新增一个函数（详见 CONTRIBUTING.md）。公共 API 保持不变。
-- **路径封锁守卫 (v2.2.3)** — 所有破坏性操作都会拒绝逃出 `~/.claude/` 的目标路径。`runCommand` 不再经过 shell。`temp_cache` 清理是 symlink-safe 的。
-- **报告符号修正 (v2.2.3)** — 修复 2.2.x 早期分解表 Saved 列符号反转的 bug,现在每行显示正确的节省量。
-- **85 项测试（此前 73）** — 新增路径封锁、restore 守卫、分解表符号、restore-selection 去重、token 缓存原子 flush、自定义 detector 注入等 round-trip 测试。
-
-## v2.2 更新
-
-- **`stale_project` 的原子化 clean/restore** — 用单次目录 `rename()` 代替按文件循环。即使中途中断，也不会出现文件分散在源目录与备份目录的"部分失败"状态。
-- **清晰的冲突错误提示** — 对已有备份的项目再次 clean，或把 restore 目标写到已有目录上时，会给出可操作的错误信息，而不是晦涩的 OS 错误。
-- **清单 schema v2** — 仅包含当前被禁用条目的单一 JSON 文件（`manifest.json`）。restore 会直接移除该条目,多次 clean/restore 循环后文件大小不会无限增长。
-- **v1 自动迁移** — 已有的旧清单(`.claude-slim-manifest.jsonl`)会在首次读取时自动转换为 v2;原文件以 `.jsonl.bak` 保留。
-- **崩溃安全写入** — 采用"写临时文件后原子重命名"模式;停电或 SIGKILL 都不会破坏清单文件。
-- **测试覆盖扩展** — 66 项测试(此前 35)。为每种 issue 类型新增 round-trip 测试:`broken_symlink`、`template`、`duplicate`、`skill_dup`、`oversized_skill`、`temp_cache`、`stale_project`。另含清单迁移与 bounded-growth 循环测试。
+历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 
 ---
 
