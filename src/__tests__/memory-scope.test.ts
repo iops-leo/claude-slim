@@ -5,6 +5,14 @@ import { getCurrentProjectSlug } from '../paths.js';
 import { initTokenizer } from '../tokenizer.js';
 import { createTmpClaude, writeStaleProject, type TmpClaude } from './helpers/tmp-claude.js';
 
+// See scan-stdout-invariant.test.ts: `scan()` spawns `claude plugin list` twice
+// per call, and these tests call it four times. Stubbing the spawn keeps the
+// suite deterministic instead of hostage to how fast an external CLI starts.
+vi.mock('../scanner/fs-walk.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../scanner/fs-walk.js')>()),
+  runCommand: async () => '',
+}));
+
 let tmp: TmpClaude;
 
 beforeEach(async () => {

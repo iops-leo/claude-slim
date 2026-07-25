@@ -5,6 +5,17 @@ import { scan } from '../scanner.js';
 import { initTokenizer, flushCache } from '../tokenizer.js';
 import { createTmpClaude, writeSkill, writeStaleProject, type TmpClaude } from './helpers/tmp-claude.js';
 
+// `scan()` shells out to `claude plugin list` twice per call (disabled + installed
+// plugins). Each spawn costs 300–500ms, so a handful of scans eats most of the 5s
+// test budget and the suite goes intermittently red on a loaded machine. Stub the
+// spawn — these tests exercise the scanner against a tmp ~/.claude that has no
+// plugins installed anyway, so an empty plugin list is the honest fixture.
+// Everything else in fs-walk stays real.
+vi.mock('../scanner/fs-walk.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../scanner/fs-walk.js')>()),
+  runCommand: async () => '',
+}));
+
 let tmp: TmpClaude;
 
 beforeEach(async () => {
