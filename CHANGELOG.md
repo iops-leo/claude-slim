@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.1] — 2026-07-25
+
 ### Fixed
 - **`initTokenizer()` rebuilt the cl100k_base encoder on every call.** Building it parses a large rank table — hundreds of milliseconds, and considerably more under CPU contention. The encoder is immutable once built, so it is now memoized; only the token cache is still reset per init. No user-visible behaviour change (the CLI initialises once per process), but the test suite calls it per-test and was intermittently blowing the 5s timeout. Reproduced under synthetic load: **45.6s with 1 failure → 16.6s with 0**.
 
