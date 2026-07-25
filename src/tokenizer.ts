@@ -16,12 +16,17 @@ let cache: TokenCache = { version: 1, entries: {} };
 let cacheDirty = false;
 
 export async function initTokenizer(): Promise<void> {
-  try {
-    // cl100k_base is closest to Claude's tokenizer (gpt-4o uses o200k_base which undercounts by ~15%)
-    const { getEncoding } = await import('js-tiktoken');
-    encoder = getEncoding('cl100k_base') as { encode: (text: string) => number[] };
-  } catch {
-    useFallback = true;
+  // Building the cl100k_base encoder parses a large rank table — hundreds of
+  // milliseconds, and far more under CPU contention. It is immutable once
+  // built, so reuse it across calls. Only the cache is per-init state.
+  if (encoder === null && !useFallback) {
+    try {
+      // cl100k_base is closest to Claude's tokenizer (gpt-4o uses o200k_base which undercounts by ~15%)
+      const { getEncoding } = await import('js-tiktoken');
+      encoder = getEncoding('cl100k_base') as { encode: (text: string) => number[] };
+    } catch {
+      useFallback = true;
+    }
   }
 
   // Reset in-memory state so repeated initTokenizer() calls (e.g. across
