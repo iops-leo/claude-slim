@@ -13,7 +13,35 @@ Analyze the user's Claude Code environment for token waste and perform non-destr
 - `/claude-slim scan` → report only, no changes
 - `/claude-slim scan --json` → raw JSON output
 - `/claude-slim doctor` → check scanner prerequisites and session-log signal quality
+- `/claude-slim check-update` → report whether a newer version is published
 - `/claude-slim restore` → restore previously disabled items
+
+---
+
+## Phase 0 — Version gate (run before every scan)
+
+An outdated claude-slim does not merely lack features — it reports **wrong numbers**. Versions before 2.8.0 summed memory across every project on disk and inflated the startup estimate roughly 8×. Presenting those figures as fact is worse than not running at all, so check first:
+
+```bash
+cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js check-update --json
+```
+
+The check is cached for 24h and fails open — if it errors, times out, or returns `"latest": null`, **proceed silently**. Never block the user because a version lookup failed.
+
+If `"outdated": true`, stop and tell the user before scanning:
+
+> 설치된 claude-slim이 {installed}이고 최신은 {latest}입니다.
+> 2.8.0 이전 버전은 시작 토큰을 약 8배 부풀려 보고합니다 — 지금 스캔하면 그 숫자가 나옵니다.
+>
+> {upgradeCommand}
+>
+> 업데이트 후 진행할까요, 아니면 현재 버전으로 계속할까요?
+
+Then honour their answer. If they choose to continue, run the scan but **label the numbers as coming from an outdated version** in your report.
+
+**Plugin installs need a restart.** `claude plugin update` writes the new version to disk, but the running session keeps the loaded copy. Tell the user this explicitly — otherwise they update, re-run, and see the same stale numbers with no idea why.
+
+If `"outdated": false`, say nothing and continue to Phase 1.
 
 ---
 

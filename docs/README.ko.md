@@ -139,6 +139,7 @@ npx claude-slim scan
 /claude-slim scan         # 리포트만 (변경 없음)
 /claude-slim scan --json  # JSON 출력
 /claude-slim doctor       # 스캐너 전제조건과 세션 로그 신뢰도 점검
+/claude-slim check-update # 더 새 버전이 나왔는지 확인
 /claude-slim restore      # 비활성화한 항목 복원
 ```
 
@@ -150,6 +151,8 @@ npx claude-slim clean --dry-run   # 변경 없이 미리보기
 npx claude-slim clean --auto      # 비대화형, Tier 1만 자동 정리 (CI/스크립트용)
 npx claude-slim scan              # 리포트만
 npx claude-slim doctor            # Node/Claude/세션 로그 준비 상태 진단
+npx claude-slim doctor --offline  # 버전 확인 없이 진단 (네트워크 미사용)
+npx claude-slim check-update      # 버전 확인만 (변경 없음)
 npx claude-slim restore           # 복원
 npx claude-slim report            # 지난 정리의 절감 리포트
 ```
@@ -203,6 +206,21 @@ claude-slim은 아래 위치를 스캔합니다. 플러그인 특화 로직 없�
 claude-slim은 **지금 이 디렉터리**에서 세션을 열었을 때의 비용을 보고합니다. 메모리는 프로젝트 단위입니다 — Claude Code는 현재 프로젝트의 `~/.claude/projects/<slug>/memory/`만 로드하지, 디스크에 있는 모든 프로젝트를 로드하지 않습니다. 그래서 서로 다른 저장소에서 `scan`을 돌리면 총합이 다르게 나오는 게 정상입니다.
 
 토큰 수는 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken)으로 실제 파일 내용을 세서 구합니다. 추정값으로 남은 건 `~` 표시가 붙은 두 가지뿐입니다: MCP 툴 스키마(툴당 ~8토큰), 그리고 frontmatter를 파싱할 수 없는 스킬(~30토큰). 나머지는 전부 실측입니다.
+
+---
+
+## v2.9.0 변경사항 (2026-07-25)
+
+버전 드리프트 감지. **실제로 2.8.1이 나와 있는데 2.0.0을 쓰고 있던 설치본**을 발견한 게 계기였습니다. 8개 릴리스나 뒤처져 있었는데 도구도 플러그인 시스템도 아무 말을 하지 않았습니다. 2.8.0 이전 버전은 시작 토큰을 약 8배 부풀려 보고하므로, 구버전을 쓴다는 건 기능이 없는 정도가 아니라 **틀린 숫자를 사실처럼 받는 것**입니다.
+
+- **`claude-slim check-update` 추가** — 더 새 버전이 있는지 확인하고, **이 설치본이 실제로 어떻게 깔렸는지**(플러그인 / 전역 npm / npx / 소스)에 맞는 업데이트 명령어를 알려줍니다.
+- **`doctor`에 버전 점검 추가** — 다른 점검 항목과 같은 형태로 표시됩니다. `doctor --offline`이면 건너뜁니다.
+- **스킬에 버전 게이트 추가** — `/claude-slim` 실행 시 스캔 전에 확인하고, 구버전이면 무슨 숫자를 보게 될지 알려준 뒤 업데이트 후 진행할지 물어봅니다. **플러그인 업데이트는 세션 재시작이 필요하다**는 점도 함께 알립니다(모르면 업데이트하고 다시 돌렸는데 같은 숫자가 나와 혼란스럽습니다).
+- **SECURITY.md의 "네트워크 호출 없음" 보증 수정** — 이 릴리스 전까지는 정확한 서술이었습니다. 이제 `scan`·`clean`·`restore`·`report`는 여전히 아무 요청도 하지 않고, `doctor`·`check-update`의 버전 확인만 예외입니다. 사용자 정보는 전송하지 않고, 2.5초 타임아웃, 실패 시 조용히 통과, 24시간 캐시, `--offline`으로 완전히 생략 가능합니다.
+
+**자체 업데이트는 하지 않습니다.** 업데이트는 패키지 매니저의 일이고, 플러그인 매니저가 소유한 디렉터리에 도구가 직접 쓰면 설치가 깨집니다. 이 릴리스는 감지하고 알려줄 뿐입니다.
+
+테스트: 241 → **266 (+25)**.
 
 ---
 

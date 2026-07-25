@@ -25,8 +25,14 @@ guarantees it aims to hold:
   shell, so filenames cannot be read as shell metacharacters.
 - **No symlink traversal on delete.** `temp_cache` removal unlinks a symlink
   rather than following it into its target.
-- **No network access.** claude-slim makes no outbound requests. It never reads
-  your project source, only `~/.claude/`.
+- **One network request, and only on request.** `scan`, `clean`, `restore`, and
+  `report` make no outbound requests at all. The sole exception is the version
+  check in `doctor` and `check-update`, which fetches
+  `https://registry.npmjs.org/claude-slim/latest` to see whether a newer release
+  exists. It sends no data about you, times out in 2.5s, fails open, caches for
+  24h, and is skipped entirely with `doctor --offline`.
+- **Never reads your code.** claude-slim only looks inside `~/.claude/`, never at
+  your project source.
 - **Read-only surfaces.** `CLAUDE.md`, `settings.json`, plugin configs, and
   `~/.claude/agents/` are measured but never modified.
 
