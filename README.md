@@ -245,17 +245,17 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.8.0 — What's new
+## v2.9.0 — What's new
 
-Accuracy release. Three reported numbers were wrong; the largest was wrong by an order of magnitude. **If your startup estimate drops sharply after upgrading, the old number was the inaccurate one.**
+Version-drift detection. Prompted by finding a real install running **2.0.0 while 2.8.1 was published** — eight releases behind, with nothing in the tool or the plugin system saying so. Since versions before 2.8.0 inflate the startup estimate ~8×, a stale install doesn't merely lack features: it reports numbers that are wrong.
 
-- **Startup estimate no longer sums memory across every project on disk.** Claude Code loads `~/.claude/projects/<slug>/memory/` for the project you're in — not the other 40 project directories in your `~/.claude`. The old total scaled with how many projects you'd ever opened: on the dev machine it reported **116,259 tokens where the real per-session cost was 14,399**. Now scoped to the current project, with the cross-project total still shown and labelled as not a per-session cost.
-- **Skill listing cost is measured, not assumed.** Each skill adds a `- <name>: <description>` line to the system prompt. The flat 30-tokens-per-skill estimate stood in for all of them; measured across 68 installed skills the real spread is **30 → 509 tokens (mean 51)**. The per-plugin cost gradient can now tell five terse skills apart from five verbose ones.
-- **`~/.claude/agents/` and `~/.claude/commands/` are now scanned.** Previously invisible despite loading into every session — 12 agents worth ~2,254 tokens on the dev machine. Reported only; never moved or deleted, because there's no restore path for them yet.
-- **Fixed: plugin manifests were stuck at 2.7.0 for three releases**, so `claude plugin install` advertised a stale version. CI now fails on version drift.
-- **Fixed: the token cache grew without bound** — 355 of 776 entries (46%) pointed at deleted files. `flushCache()` now prunes them.
+- **`claude-slim check-update`** — reports whether a newer version exists and prints the upgrade command for how this copy was *actually* installed (Claude Code plugin, global npm, npx, or source checkout). The plugin hint uses the qualified `claude-slim@claude-slim` id, because the bare name fails with `Plugin "claude-slim" not found` when a marketplace shares the plugin's name.
+- **Version check in `doctor`** — one more check row. `doctor --offline` skips it.
+- **Version gate in the skill** — `/claude-slim` checks before scanning and, if the install is outdated, says what you're about to get and asks whether to update first. It also notes that plugin updates need a session restart, which is otherwise an easy way to update, re-run, and see identical stale numbers with no explanation.
+- **claude-slim still never updates itself.** That's your package manager's job; writing into a directory `claude plugin` owns is how installs get corrupted. It detects and advises, nothing more.
+- **`SECURITY.md` no longer claims zero network access.** That was accurate until this release. `scan`, `clean`, `restore`, and `report` still make no outbound requests; the version check is the sole exception — no user data sent, 2.5s timeout, fails open, cached 24h, skippable with `--offline`.
 
-Tests: 206 → 241 (+35).
+Tests: 241 → 266 (+25).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 
