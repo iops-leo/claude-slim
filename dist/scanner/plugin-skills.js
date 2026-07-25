@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { countTokensCached } from '../tokenizer.js';
 import { getPluginsDir } from '../paths.js';
 import { safeReadFile, safeReaddir, isDirectory, getDirSize } from './fs-walk.js';
+import { listingTokensFromContent } from './skill-listing.js';
 export async function scanPluginSkills() {
     const skills = [];
     const plugins = [];
@@ -40,6 +41,7 @@ export async function scanPluginSkills() {
                                 path: skillPath,
                                 sizeBytes: Buffer.byteLength(content),
                                 tokens: countTokensCached(content, skillMd),
+                                listingTokens: listingTokensFromContent(skillDir, content),
                                 source: 'plugin',
                                 pluginName,
                             });

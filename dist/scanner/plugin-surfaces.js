@@ -2,6 +2,8 @@ import { join } from 'node:path';
 import { statSync } from 'node:fs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { getPluginsDir } from '../paths.js';
+import { listingTokensFromContent } from './skill-listing.js';
+import { SKILL_PROMPT_OVERHEAD_TOKENS } from './constants.js';
 function safeReaddir(p) {
     try {
         return readdirSync(p);
@@ -49,19 +51,29 @@ function parseMcpServerKeys(installDir) {
 function scanSkills(installDir) {
     const skillsDir = join(installDir, 'skills');
     if (!isDir(skillsDir))
-        return [];
+        return { names: [], listingTokens: 0 };
     const names = [];
+    let listingTokens = 0;
     for (const entry of safeReaddir(skillsDir)) {
         const skillDir = join(skillsDir, entry);
         if (!isDir(skillDir))
             continue;
         const upper = join(skillDir, 'SKILL.md');
         const lower = join(skillDir, 'skill.md');
-        if (isFile(upper) || isFile(lower)) {
-            names.push(entry);
+        const present = isFile(upper) ? upper : isFile(lower) ? lower : null;
+        if (present === null)
+            continue;
+        names.push(entry);
+        let content = '';
+        try {
+            content = readFileSync(present, 'utf-8');
         }
+        catch { /* unreadable */ }
+        listingTokens += content
+            ? listingTokensFromContent(entry, content)
+            : SKILL_PROMPT_OVERHEAD_TOKENS;
     }
-    return names;
+    return { names, listingTokens };
 }
 function scanCommands(installDir) {
     const commandsDir = join(installDir, 'commands');
@@ -103,7 +115,7 @@ export function scanPluginSurfaces() {
                     continue;
                 const dirStat = safeStat(installDir);
                 const installedAt = dirStat ? Number(dirStat.mtimeMs) : 0;
-                const skills = scanSkills(installDir);
+                const { names: skills, listingTokens: skillListingTokens } = scanSkills(installDir);
                 const mcpServerKeys = parseMcpServerKeys(installDir);
                 const mcpToolPrefixes = mcpServerKeys.map((key) => `plugin_${pluginName}_${key}`);
                 const commands = scanCommands(installDir);
@@ -116,6 +128,7 @@ export function scanPluginSurfaces() {
                     installDir,
                     installedAt,
                     skills,
+                    skillListingTokens,
                     mcpServerKeys,
                     mcpToolPrefixes,
                     commands,

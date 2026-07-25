@@ -6,6 +6,7 @@ import type { SkillInfo, BrokenSymlink } from '../types.js';
 import {
   safeReadFile, safeReaddir, isDirectory, isBrokenSymlink, resolveRealPath,
 } from './fs-walk.js';
+import { listingTokensFromContent } from './skill-listing.js';
 
 export interface SkillCandidate {
   skill: SkillInfo;
@@ -74,6 +75,7 @@ export async function scanLocalSkills(): Promise<LocalSkillsResult> {
           path: dirPath,
           sizeBytes: Buffer.byteLength(content),
           tokens,
+          listingTokens: listingTokensFromContent(displayName, content),
           source: 'local',
         },
         realMdPath,

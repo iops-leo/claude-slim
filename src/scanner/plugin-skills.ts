@@ -3,6 +3,7 @@ import { countTokensCached } from '../tokenizer.js';
 import { getPluginsDir } from '../paths.js';
 import type { SkillInfo, PluginInfo } from '../types.js';
 import { safeReadFile, safeReaddir, isDirectory, getDirSize } from './fs-walk.js';
+import { listingTokensFromContent } from './skill-listing.js';
 
 export interface TempCache {
   name: string;
@@ -57,6 +58,7 @@ export async function scanPluginSkills(): Promise<PluginSkillsResult> {
                 path: skillPath,
                 sizeBytes: Buffer.byteLength(content),
                 tokens: countTokensCached(content, skillMd),
+                listingTokens: listingTokensFromContent(skillDir, content),
                 source: 'plugin',
                 pluginName,
               });

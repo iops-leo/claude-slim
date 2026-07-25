@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename, access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { getClaudeDir } from './paths.js';
 import type { TokenCache } from './types.js';
@@ -61,8 +61,35 @@ export function countTokensCached(text: string, filePath: string): number {
   return tokens;
 }
 
+/**
+ * Drop cache entries whose source file no longer exists.
+ *
+ * Skills get uninstalled, plugins get removed, sessions get rotated — but the
+ * entry keyed by that path stayed forever, so the cache grew without bound. A
+ * path that is gone can never produce a hit again, which makes existence the
+ * safe pruning predicate: it cannot evict an entry that is still reachable.
+ * (Measured on a real install before this fix: 355 of 776 entries were dead.)
+ */
+async function pruneMissingEntries(): Promise<void> {
+  const paths = Object.keys(cache.entries);
+  const alive = await Promise.all(
+    paths.map(async (p) => {
+      try {
+        await access(p);
+        return true;
+      } catch {
+        return false;
+      }
+    }),
+  );
+  for (let i = 0; i < paths.length; i++) {
+    if (!alive[i]) delete cache.entries[paths[i]];
+  }
+}
+
 export async function flushCache(): Promise<void> {
   if (!cacheDirty) return;
+  await pruneMissingEntries();
   const target = getCachePath();
   const tmp = target + '.tmp';
   try {

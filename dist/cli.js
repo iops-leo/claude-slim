@@ -201,6 +201,10 @@ program
                 path: e.from,
                 sizeBytes: 0,
                 tokens: e.tokenCount || 0,
+                // The file is gone, so its real listing cost is unrecoverable. Fall
+                // back to the flat estimate — the same one `totalBefore` above uses,
+                // keeping the reconstructed before-state internally consistent.
+                listingTokens: SKILL_PROMPT_OVERHEAD_TOKENS,
                 source: 'local',
             })),
         ],

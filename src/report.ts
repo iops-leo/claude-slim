@@ -237,7 +237,6 @@ export function formatScanSummary(result: ScanResult): string {
   // --- MEMORY FILES ---
   lines.push('');
   const memTotal = result.memoryFiles.reduce((s, m) => s + m.sizeBytes, 0);
-  const memTokTotal = result.memoryFiles.reduce((s, m) => s + m.tokens, 0);
   lines.push(`\x1b[1m  MEMORY FILES\x1b[0m (${result.memoryFiles.length} files, ${(memTotal / 1024).toFixed(1)}KB)`);
   const sortedMem = [...result.memoryFiles].sort((a, b) => b.sizeBytes - a.sizeBytes);
   for (const mem of sortedMem) {
@@ -250,7 +249,18 @@ export function formatScanSummary(result: ScanResult): string {
       project = rest ? '~' + rest : '~';
     }
     const label = `${project}/${mem.name}`;
-    lines.push(`    ${label.padEnd(52)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok`);
+    // Mark the only project whose memory this session would actually load.
+    const active = mem.project === result.currentProjectSlug ? ' \x1b[32m←\x1b[0m' : '';
+    lines.push(`    ${label.padEnd(52)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok${active}`);
+  }
+  if (result.memoryFiles.length > 0) {
+    lines.push('');
+    lines.push(
+      `    \x1b[32m←\x1b[0m loaded in this project: ` +
+        `${result.currentProjectMemoryTokens.toLocaleString()} tok  ` +
+        `\x1b[90m(${result.allProjectsMemoryTokens.toLocaleString()} tok across all projects, ` +
+        `not a per-session cost)\x1b[0m`,
+    );
   }
 
   // --- MCP SERVERS ---
@@ -262,6 +272,34 @@ export function formatScanSummary(result: ScanResult): string {
     }
   } else {
     lines.push(`\x1b[1m  MCP SERVERS\x1b[0m: ${result.mcpServers}`);
+  }
+
+  // --- USER AGENTS & COMMANDS ---
+  // Read-only in v2.8: these are measured and reported, but never moved or
+  // deleted. There is no restore path for ~/.claude/agents yet, and shipping a
+  // destructive action without its undo would break the tool's core promise.
+  const agentTokens = result.userAgents.reduce((s, a) => s + a.listingTokens, 0);
+  const commandTokens = result.userCommands.reduce((s, c) => s + c.listingTokens, 0);
+
+  if (result.userAgents.length > 0 || result.userCommands.length > 0) {
+    lines.push('');
+    lines.push(
+      `\x1b[1m  AGENTS & COMMANDS\x1b[0m ` +
+        `(${result.userAgents.length} agents, ${result.userCommands.length} commands)`,
+    );
+    if (result.userAgents.length > 0) {
+      lines.push(
+        `    ~/.claude/agents/`.padEnd(56) +
+          `${agentTokens.toLocaleString().padStart(7)} tok`,
+      );
+    }
+    if (result.userCommands.length > 0) {
+      lines.push(
+        `    ~/.claude/commands/`.padEnd(56) +
+          `${commandTokens.toLocaleString().padStart(7)} tok`,
+      );
+    }
+    lines.push(`    \x1b[90mreported only — not touched by clean\x1b[0m`);
   }
 
   // --- SUMMARY ---
