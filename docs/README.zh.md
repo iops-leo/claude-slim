@@ -62,6 +62,7 @@
 | 空模板 | 没有内容的占位技能 |
 | 超大文件 | 超过10KB的SKILL.md |
 | **未使用技能** | **最近 N 天（默认 60 天）会话中从未被调用过的本地技能** |
+| 代理与命令 | `~/.claude/agents/` 和 `~/.claude/commands/` — 仅测量与报告，绝不修改 |
 | 过期记忆 | 每次会话加载的大型记忆文件 |
 
 **Propose** — 三级分类，你来决定：
@@ -114,7 +115,8 @@ claude plugin install claude-slim
 | **不破坏用户数据** | 技能和项目记忆移至 `~/.claude/skills.disabled/` |
 | **可恢复** | 已移动的技能和项目记忆可通过 `/claude-slim restore` 恢复 |
 | **用户可控** | 交互式运行会在更改前确认。`--dry-run` 可预览，`--auto` 只选择 Tier 1 |
-| **不触碰危险区** | 绝不修改CLAUDE.md、settings.json或插件配置 |
+| **不触碰危险区** | 绝不修改CLAUDE.md、settings.json、插件配置、`~/.claude/agents/`、`~/.claude/commands/` |
+| **路径封闭** | 目标路径一旦超出 `~/.claude/`，所有破坏性操作一律拒绝 |
 
 ---
 
@@ -147,6 +149,12 @@ claude-slim扫描以下位置。无插件特定逻辑 — 纯文件系统分析�
 | 系统提示词技能 | ~80 | ~48 | **-40%** |
 | 记忆文件 | 15KB | 2KB | **-87%** |
 | **预估token节省** | | **~4,300/会话** | |
+
+### 关于这些数字
+
+claude-slim 报告的是**在当前目录**开启会话所需的成本。记忆是按项目划分的 — Claude Code 只加载当前项目的 `~/.claude/projects/<slug>/memory/`，不会加载磁盘上的其他项目。因此在两个不同仓库中运行 `scan` 得到不同的总量，属于正常现象。
+
+token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对文件实际内容计算得出。仅剩两项仍为估算值，均以 `~` 标注：MCP 工具 schema（每个工具约 8 tokens），以及 frontmatter 无法解析的技能（约 30 tokens）。其余全部为实测值。
 
 ---
 
