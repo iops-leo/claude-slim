@@ -39,11 +39,72 @@ export async function initTokenizer() {
 function hashContent(content) {
     return createHash('md5').update(content).digest('hex');
 }
+// js-tiktoken's BPE is quadratic in the length of a single whitespace-free run.
+// Ordinary prose of any length is fine — the pre-tokenizer splits on whitespace,
+// so 8,000 characters of normal text encodes in ~1ms. One long unbroken run does
+// not: measured on cl100k_base, 800 characters of Hangul costs ~450ms, 3,200
+// costs ~6.8s, and a 60,000-character run wedges the scan for minutes with no
+// output at all. Real SKILL.md files reach this with base64 blobs, minified
+// snippets, rule separators, and CJK text.
+//
+// 512 sits above anything a normal word, path, or URL produces and well below
+// where the curve turns painful.
+const MAX_ENCODE_RUN = 512;
+const LONG_RUN_PATTERN = /\S{513,}/;
+const FALLBACK_CHARS_PER_TOKEN = 4;
+/**
+ * Estimate an over-long run by encoding a bounded prefix and scaling.
+ *
+ * A fixed characters-per-token divisor cannot work here: measured over 1,000-char
+ * runs, cl100k_base yields 0.8 chars/token for Hangul but 8.0 for a repeated
+ * ASCII character — a 10× spread. Sampling the run's own prefix adapts to
+ * whatever it actually contains (base64, hex, minified JSON, CJK) at the cost of
+ * exactly one bounded encode.
+ */
+function estimateRun(segment, encode) {
+    const sample = segment.slice(0, MAX_ENCODE_RUN);
+    const sampleTokens = encode(sample).length;
+    if (sampleTokens === 0)
+        return 0;
+    return Math.ceil((sampleTokens * segment.length) / sample.length);
+}
+/**
+ * Encode `text`, estimating any whitespace-free run longer than
+ * {@link MAX_ENCODE_RUN} instead of feeding the whole run to the BPE.
+ *
+ * Text without such a run takes the fast path and is encoded whole, so counts
+ * for well-formed files are identical to encoding directly.
+ */
+function encodeBounded(text, encode) {
+    if (!LONG_RUN_PATTERN.test(text)) {
+        return encode(text).length;
+    }
+    let total = 0;
+    let buffered = '';
+    // Splitting on a captured group keeps the whitespace in the stream, so the
+    // buffered pieces still look to the encoder like the original text.
+    for (const segment of text.split(/(\s+)/)) {
+        if (segment.length > MAX_ENCODE_RUN) {
+            if (buffered) {
+                total += encode(buffered).length;
+                buffered = '';
+            }
+            total += estimateRun(segment, encode);
+            continue;
+        }
+        buffered += segment;
+    }
+    if (buffered) {
+        total += encode(buffered).length;
+    }
+    return total;
+}
 export function countTokens(text) {
     if (useFallback || !encoder) {
-        return Math.ceil(text.length / 4);
+        return Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
     }
-    return encoder.encode(text).length;
+    const enc = encoder;
+    return encodeBounded(text, (s) => enc.encode(s));
 }
 export function countTokensCached(text, filePath) {
     const hash = hashContent(text);

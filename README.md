@@ -245,17 +245,14 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.9.0 — What's new
+## v2.9.1 — What's new
 
-Version-drift detection. Prompted by finding a real install running **2.0.0 while 2.8.1 was published** — eight releases behind, with nothing in the tool or the plugin system saying so. Since versions before 2.8.0 inflate the startup estimate ~8×, a stale install doesn't merely lack features: it reports numbers that are wrong.
+Found while stress-testing the scanner against deliberately hostile `~/.claude` fixtures.
 
-- **`claude-slim check-update`** — reports whether a newer version exists and prints the upgrade command for how this copy was *actually* installed (Claude Code plugin, global npm, npx, or source checkout). The plugin hint uses the qualified `claude-slim@claude-slim` id, because the bare name fails with `Plugin "claude-slim" not found` when a marketplace shares the plugin's name.
-- **Version check in `doctor`** — one more check row. `doctor --offline` skips it.
-- **Version gate in the skill** — `/claude-slim` checks before scanning and, if the install is outdated, says what you're about to get and asks whether to update first. It also notes that plugin updates need a session restart, which is otherwise an easy way to update, re-run, and see identical stale numbers with no explanation.
-- **claude-slim still never updates itself.** That's your package manager's job; writing into a directory `claude plugin` owns is how installs get corrupted. It detects and advises, nothing more.
-- **`SECURITY.md` no longer claims zero network access.** That was accurate until this release. `scan`, `clean`, `restore`, and `report` still make no outbound requests; the version check is the sole exception — no user data sent, 2.5s timeout, fails open, cached 24h, skippable with `--offline`.
+- **Fixed: `scan` could hang forever on a single long line.** js-tiktoken's BPE is quadratic in the length of one whitespace-free run. Normal prose is fine (8,000 characters encodes in ~1ms), but 800 characters of Hangul cost ~450ms, 3,200 cost ~6.8s, and a 60,000-character run wedged `scan` past 20 seconds with **no output at all** — indistinguishable from a freeze. `SKILL.md` files hit this via base64 blobs, minified snippets, embedded JSON schemas, and CJK text. Long runs are now estimated by encoding a bounded prefix and scaling; **files without one produce byte-identical counts** (verified across 71 installed skills: 70 exact, one moved 0.01%). Hostile fixture: 20s+ → 1.78s, with no measurable cost on ordinary input.
+- **Fixed: a mistyped subcommand blamed the wrong thing.** `claude-slim scam` printed `error: too many arguments. Expected 0 arguments but got 1`. It now names the unknown command and lists the real ones.
 
-Tests: 241 → 266 (+25).
+Tests: 266 → 279 (+13).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

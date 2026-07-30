@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.1] — 2026-07-30
+
+Found while stress-testing the scanner against deliberately hostile `~/.claude` fixtures before submitting the project for public feedback.
+
+### Fixed
+- **`scan` could hang indefinitely on a single long line.** js-tiktoken's BPE is quadratic in the length of one whitespace-free run. Ordinary prose is unaffected — the pre-tokenizer splits on whitespace, so 8,000 characters of normal text encodes in ~1ms — but an unbroken run is not. Measured on cl100k_base: 800 characters of Hangul cost ~450ms, 3,200 cost ~6.8s, and a 60,000-character run wedged `scan` past 20 seconds with **no output and no error**, which reads as a freeze rather than a failure. Real `SKILL.md` files reach this through base64 blobs, minified snippets, embedded JSON schemas, and CJK text; an installed skill on the development machine already carried a 530-character schema line. `countTokens` now encodes only a bounded prefix of any run over 512 characters and scales the result. A fixed characters-per-token divisor was tried first and rejected: measured density ranges from 0.8 chars/token for Hangul to 8.0 for repeated ASCII, so it was off by up to 100%, whereas sampling the run's own prefix stays within 2% for every type tested. **Files without a long run take a fast path and produce byte-identical counts** — verified across all 71 installed skills, where 70 matched exactly and the one containing a long run moved by 0.01%. Hostile fixture: 20s+ hang → 1.78s. No measurable change on ordinary input (1.68s → 1.76s, within noise).
+- **A mistyped subcommand reported the wrong problem.** `claude-slim scam` printed commander's internal `error: too many arguments. Expected 0 arguments but got 1`, because the bare program carries an action and the stray token was routed to it. It now names the unknown command and lists the real ones.
+
+### Internal
+- Tests: 266 → 279 (+13), asserting both halves of the tokenizer fix — bounded time on pathological input, and exact agreement with the encoder on well-formed text including at the 512-character boundary. Two of the new tests failed on first write and corrected the implementation: the fixed-divisor estimate was off by ~100% on repeated ASCII, and the accuracy test itself timed out because verifying the fix requires calling the slow unbounded encoder it exists to avoid.
+
 ## [2.9.0] — 2026-07-25
 
 Version-drift detection. Prompted by finding a real install running **2.0.0 while 2.8.1 was published** — eight releases behind, with nothing anywhere in the tool or the plugin system telling the user. Since versions before 2.8.0 inflate the startup estimate ~8×, a stale install does not merely lack features: it reports numbers that are wrong.

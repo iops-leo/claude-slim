@@ -244,7 +244,21 @@ program
     await flushCache();
 });
 // --- default (no subcommand) → run clean ---
+// Because the program itself carries an action, commander routes a mistyped
+// subcommand here and reports its own "too many arguments. Expected 0 arguments
+// but got 1" — which says nothing about what the user actually got wrong.
+// Accept the excess argument so we can name it instead.
+program.allowExcessArguments(true);
 program.action(async () => {
+    const stray = program.args;
+    if (stray.length > 0) {
+        const names = program.commands.map((c) => c.name()).join(', ');
+        console.error(`error: unknown command '${stray[0]}'`);
+        console.error(`available commands: ${names}`);
+        console.error(`run 'claude-slim --help' for usage`);
+        process.exitCode = 1;
+        return;
+    }
     await runCleanPipeline({ dryRun: false, auto: false, sessionsPerDay: 2, lookbackDays: 60 });
 });
 // --- shared clean pipeline ---
