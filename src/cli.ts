@@ -16,6 +16,7 @@ import {
 } from './report.js';
 import { collectDoctorReport, formatDoctorReport } from './doctor.js';
 import { checkForUpdate, formatUpdateNotice } from './update-check.js';
+import { confirmDecision, planUpdate, renderStep, runUpdate } from './update-run.js';
 import { scanCodex } from './codex/index.js';
 import { formatCodexSummary } from './codex/report.js';
 import { classifyCodexIssues } from './codex/detectors.js';
@@ -111,6 +112,85 @@ program
       );
     } else {
       console.log(`\n  \x1b[32m✓\x1b[0m claude-slim ${result.installed} is up to date.\n`);
+    }
+  });
+
+
+// --- update ---
+// Detection lives in `check-update`; this runs the command that detection
+// identified. claude-slim still never writes into a package manager's
+// directories itself — it invokes the manager, the same way cleanup already
+// invokes `claude plugin disable`.
+program
+  .command('update')
+  .description('Run the upgrade command for however this copy was installed')
+  .option('--yes', 'Skip the confirmation prompt')
+  .option('--dry-run', 'Show the commands without running them')
+  .action(async (opts) => {
+    const result = await checkForUpdate({ force: true });
+    const plan = planUpdate(result.installMethod);
+
+    console.log('');
+    console.log(`  Installed: ${result.installed}   Latest: ${result.latest ?? 'unknown'}`);
+    console.log(`  Install method: ${result.installMethod}`);
+    console.log('');
+
+    if (result.latest === null) {
+      console.log('  Could not reach the npm registry, so there is nothing to compare against.');
+      console.log('');
+      process.exitCode = 1;
+      return;
+    }
+    if (!result.outdated) {
+      console.log('  \x1b[32m✓\x1b[0m Already up to date.\n');
+      return;
+    }
+    if (!plan.runnable) {
+      console.log(`  ${plan.guidance}\n`);
+      return;
+    }
+
+    console.log('  Will run:');
+    for (const step of plan.steps) console.log(`    ${renderStep(step)}`);
+    console.log('');
+
+    if (opts.dryRun) {
+      console.log('  \x1b[90mDry run — nothing was executed.\x1b[0m\n');
+      return;
+    }
+    const gate = confirmDecision(opts, Boolean(process.stdin.isTTY));
+    if (gate === 'refuse') {
+      console.error('  Refusing to run unattended. Re-run with --yes to confirm.\n');
+      process.exitCode = 1;
+      return;
+    }
+    if (gate === 'prompt') {
+      const answer = await askUser('  Proceed? [y/N] ');
+      if (!/^y(es)?$/i.test(answer)) {
+        console.log('  Cancelled.\n');
+        return;
+      }
+      console.log('');
+    }
+
+    const results = await runUpdate(plan);
+    for (const r of results) {
+      const mark = r.ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';
+      console.log(`  ${mark} ${renderStep(r.step)}`);
+      if (r.output) console.log(r.output.split('\n').map((l) => `      ${l}`).join('\n'));
+    }
+
+    const failed = results.find((r) => !r.ok);
+    console.log('');
+    if (failed) {
+      console.log('  Update did not complete. Run the commands above manually to see the full error.\n');
+      process.exitCode = 1;
+    } else if (result.installMethod === 'plugin') {
+      // The new version is on disk but the running session still holds the old
+      // one — without saying so, users update, re-run, and see identical output.
+      console.log('  \x1b[33m!\x1b[0m Restart Claude Code for the update to take effect.\n');
+    } else {
+      console.log('  \x1b[32m✓\x1b[0m Updated.\n');
     }
   });
 

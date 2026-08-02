@@ -165,6 +165,7 @@ npx claude-slim scan --no-codex          # Skip the ~/.codex scan
 npx claude-slim doctor                   # Diagnose Node/Claude/session-log readiness
 npx claude-slim doctor --offline         # Same, without the version check (no network)
 npx claude-slim check-update             # Report-only version check
+npx claude-slim update                   # Run the upgrade for this install method
 npx claude-slim restore                  # Undo
 npx claude-slim report                   # Show savings from last clean
 ```
@@ -247,16 +248,12 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.11.0 — What's new
+## v2.12.0 — What's new
 
-Codex gets the same tiered propose-and-choose cleanup Claude Code has, minus the two categories Codex cannot honestly support.
+- **`claude-slim update`** — runs the upgrade command for however this copy was installed, after showing it and asking. `--dry-run` to preview, `--yes` to skip the prompt. Plugin installs get the marketplace refresh first, then the qualified `claude-slim@claude-slim` id, and are reminded that a restart is needed. npx and source checkouts run nothing and say why — npx already resolves the latest every invocation, and pulling your own repository is not claude-slim's to do.
+- **This corrects v2.9.0's reasoning.** That release stopped at detection, arguing updating belonged to the package manager. Half held: claude-slim must not write into a directory `claude plugin` owns. The other half did not — invoking the package manager is something this tool already does during cleanup (`claude plugin disable`), so refusing to here was inconsistent. It still writes nothing itself.
 
-- **Codex cleanup, tiered.** Five of seven categories carry over because they are filesystem facts, not usage inferences: broken symlinks and unfilled templates (Tier 1), install leftovers in `~/.codex/.tmp` (Tier 1 — 146MB on the dev machine), backup copies and plugin-shadowed duplicates (Tier 2), oversized skills (Tier 3). Codex items join the same numbered list tagged `[codex]`. `--no-codex` opts out.
-- **`~/.codex/skills.disabled/`** — moves are reversible through the same `restore`, and manifest entries record which agent they came from.
-- **The path guard is now per-agent.** Not "inside any known root" — a Codex issue must not resolve into `~/.claude/` and vice versa, so a tampered manifest cannot cross between agents.
-- `unused_skill` and `oversized_memory` remain unavailable for Codex: no invocation record, and no `~/.codex/projects/*/memory/`.
-
-Tests: 347 → 374 (+27), the guard suite being the point — cross-agent isolation both directions, traversal escapes, and a `~/.claude-backup` sibling a naive `startsWith` would have allowed.
+Tests: 374 → 392 (+18), pinning the safety properties — every argv a fixed literal, no shell metacharacters, executable only ever `claude` or `npm`, and a refusal to run unattended with no TTY and no `--yes`.
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

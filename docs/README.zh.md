@@ -155,16 +155,12 @@ token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对
 
 ---
 
-## v2.11.0 更新 (2026-08-02)
+## v2.12.0 更新 (2026-08-02)
 
-Codex 现在也拥有与 Claude Code 相同的三级"建议—选择"清理流程，仅排除 Codex 无法诚实支持的两个类别。
+- **`claude-slim update`** — 根据本副本的实际安装方式，**先展示并征得同意**后执行相应的升级命令。`--dry-run` 可预览，`--yes` 可跳过确认。插件安装会先刷新市场，再使用限定 ID（`claude-slim@claude-slim`），并在完成后提示需要重启。npx 与源码检出不执行任何命令并说明原因 — npx 每次调用都会获取最新版本，而拉取用户自己的仓库不是 claude-slim 该做的事。
+- **修正 v2.9.0 的论证。** 那次发布止步于检测，理由是"更新属于包管理器的职责"。这话对了一半：claude-slim 确实不应直接写入 `claude plugin` 所拥有的目录。另一半则不成立 — **调用**包管理器本就是本工具在清理时已经在做的事（`claude plugin disable`），仅在此处拒绝并非原则而是前后不一。不自行写入这一点保持不变。
 
-- **Codex 清理，分级一致。** 七个类别中有五个可直接迁移，因为它们是文件系统事实而非使用推断 — 断开的符号链接与未填写的模板（Tier 1）、`~/.codex/.tmp` 中的安装残留（Tier 1，开发机上为 146MB）、备份副本与被插件遮蔽的重复项（Tier 2）、超大技能（Tier 3）。Codex 条目会以 `[codex]` 标记出现在同一列表中，选择方式相同。可用 `--no-codex` 跳过。
-- **新增 `~/.codex/skills.disabled/`。** 通过同一个 `restore` 即可还原，清单条目会记录其所属代理。
-- **路径守卫改为按代理隔离。** 并非"位于任一已知根目录即可" — Codex 条目不得解析到 `~/.claude/`，反之亦然，从而使被篡改的清单无法跨代理越界。
-- Codex 仍不提供 `unused_skill` 与 `oversized_memory`：前者没有调用记录，后者没有 `~/.codex/projects/*/memory/`。
-
-测试: 347 → **374 (+27)**。守卫测试是本次发布的核心 — 双向代理隔离、路径逃逸，以及朴素 `startsWith` 检查会放行的 `~/.claude-backup` 同级目录。
+测试: 374 → **392 (+18)**。已固定安全属性 — 所有 argv 均为固定字面量、不含 shell 元字符，可执行文件仅限 `claude` 或 `npm`，且在没有 TTY 也没有 `--yes` 时拒绝执行。
 
 历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 
