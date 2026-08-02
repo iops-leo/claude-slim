@@ -32,12 +32,44 @@ export function getManifestPath() {
 export function getLegacyManifestPath() {
     return join(getDisabledDir(), '.claude-slim-manifest.jsonl');
 }
-// Refuse to operate on a path outside ~/.claude/. Guards destructive operations
-// (rename/rm/unlink) from acting on attacker-tampered manifests or scanner bugs.
-export function assertInsideClaudeDir(p) {
-    const resolved = resolve(p);
-    const root = resolve(getClaudeDir());
-    if (resolved !== root && !resolved.startsWith(root + sep)) {
-        throw new Error(`Refusing to operate on path outside ~/.claude/: ${p}`);
+export function getCodexDir() {
+    return join(homedir(), '.codex');
+}
+export function getAgentRoot(agent) {
+    return agent === 'claude' ? getClaudeDir() : getCodexDir();
+}
+export function getAgentDisabledDir(agent) {
+    return join(getAgentRoot(agent), 'skills.disabled');
+}
+function isInside(child, root) {
+    const c = resolve(child);
+    const r = resolve(root);
+    return c === r || c.startsWith(r + sep);
+}
+/**
+ * Refuse to operate on a path outside the given agent's root. Guards destructive
+ * operations (rename/rm/unlink) against tampered manifests and scanner bugs.
+ *
+ * Deliberately per-agent rather than "inside any known root": a Codex issue must
+ * not be able to reach into ~/.claude/ and vice versa. Widening this to a single
+ * combined check would let one bad manifest entry cross between agents, which is
+ * exactly the failure this exists to prevent.
+ */
+export function assertInsideAgentRoot(p, agent) {
+    if (!isInside(p, getAgentRoot(agent))) {
+        const label = agent === 'claude' ? '~/.claude/' : '~/.codex/';
+        throw new Error(`Refusing to operate on path outside ${label}: ${p}`);
     }
+}
+/** Back-compat wrapper — the Claude path is by far the most common caller. */
+export function assertInsideClaudeDir(p) {
+    assertInsideAgentRoot(p, 'claude');
+}
+/** Which agent owns this path, or null if it belongs to neither. */
+export function agentForPath(p) {
+    if (isInside(p, getClaudeDir()))
+        return 'claude';
+    if (isInside(p, getCodexDir()))
+        return 'codex';
+    return null;
 }

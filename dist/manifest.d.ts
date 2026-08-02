@@ -1,6 +1,8 @@
 import type { Manifest, ManifestEntry, AnyManifestEntry, DisabledPluginEntry } from './types.js';
+import type { AgentId } from './paths.js';
 export declare function getDisabledDir(): string;
-export declare function ensureDisabledDir(): Promise<void>;
+/** Create (if needed) and return the disabled-skill store for one agent. */
+export declare function ensureDisabledDir(agent?: AgentId): Promise<string>;
 export declare function migrateLegacyIfNeeded(): Promise<void>;
 export declare function readManifestV2(): Promise<Manifest>;
 export declare function writeManifestV2(manifest: Manifest): Promise<void>;

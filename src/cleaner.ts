@@ -1,7 +1,8 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve, sep } from 'node:path';
 import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordDisabledPlugin, removeDisabledPlugin } from './manifest.js';
-import { assertInsideClaudeDir, getSkillsDir, getProjectsDir } from './paths.js';
+import { assertInsideAgentRoot, getAgentRoot, getAgentDisabledDir, getSkillsDir, getProjectsDir } from './paths.js';
+import type { AgentId } from './paths.js';
 import { disablePlugin, enablePlugin, isClaudeCliAvailable, ClaudeCliMissingError } from './plugin-runtime.js';
 import type { Issue, ManifestEntry, DisabledPluginEntry } from './types.js';
 
@@ -59,8 +60,6 @@ async function recordOrRollback(
 }
 
 export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
-  await ensureDisabledDir();
-  const disabledDir = getDisabledDir();
 
   const moved: ManifestEntry[] = [];
   const skipped: string[] = [];
@@ -76,15 +75,20 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
   }
 
   for (const issue of issues) {
+    // Scope every path decision to the issue's own agent, so a Codex issue can
+    // never resolve into ~/.claude/ (or the reverse).
+    const agent: AgentId = issue.agent ?? 'claude';
+    const disabledDir = await ensureDisabledDir(agent);
     try {
       // unused_plugin and report-only types don't touch filesystem paths directly
       if (issue.type !== 'unused_plugin' && issue.type !== 'oversized_memory' && issue.type !== 'disabled_plugin') {
-        assertInsideClaudeDir(issue.path);
+        assertInsideAgentRoot(issue.path, agent);
       }
       if (issue.type === 'broken_symlink') {
         await unlink(issue.path);
         const entry: ManifestEntry = {
           date: new Date().toISOString(),
+          agent,
           name: issue.name,
           from: issue.path,
           type: issue.type,
@@ -108,6 +112,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
         await rename(issue.path, dest);
         const entry: ManifestEntry = {
           date: new Date().toISOString(),
+          agent,
           name: issue.name,
           from: issue.path,
           type: issue.type,
@@ -129,6 +134,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
         }
         const entry: ManifestEntry = {
           date: new Date().toISOString(),
+          agent,
           name: issue.name,
           from: issue.path,
           type: issue.type,
@@ -153,6 +159,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
         await rename(issue.path, backupDir);
         const entry: ManifestEntry = {
           date: new Date().toISOString(),
+          agent,
           name: issue.name,
           from: issue.path,
           type: issue.type,
@@ -231,7 +238,7 @@ export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry): P
   }
 
   const legacyEntry = entry as ManifestEntry;
-  assertInsideClaudeDir(legacyEntry.from);
+  assertInsideAgentRoot(legacyEntry.from, legacyEntry.agent ?? 'claude');
   if (legacyEntry.type === 'broken_symlink') {
     throw new Error(`Broken symlinks cannot be restored (${legacyEntry.name})`);
   }
@@ -242,7 +249,11 @@ export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry): P
     throw new Error(`Temp caches were deleted and cannot be restored (${legacyEntry.name})`);
   }
 
-  const disabledDir = getDisabledDir();
+  // Resolve the store from the entry's own agent — a Codex skill was parked
+  // under ~/.codex/skills.disabled and must be looked for there.
+  const disabledDir = getAgentDisabledDir(
+    ('agent' in entry ? entry.agent : undefined) ?? 'claude',
+  );
 
   if (legacyEntry.type === 'stale_project') {
     // Type-scoped path guard: stale-project backups must restore under
@@ -263,7 +274,13 @@ export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry): P
     await rename(backupDir, legacyEntry.from);
   } else {
     // Type-scoped path guard: skill restores must land under ~/.claude/skills/.
-    assertInsideSubtree(legacyEntry.from, getSkillsDir(), 'skill');
+    // Per-agent skills/ subtree: a Codex entry restores under ~/.codex/skills,
+    // never ~/.claude/skills.
+    assertInsideSubtree(
+      legacyEntry.from,
+      join(getAgentRoot(legacyEntry.agent ?? 'claude'), 'skills'),
+      'skill',
+    );
     // Restore skill directory using the same naming as cleanIssues
     const safeName = legacyEntry.name.replace(/\//g, '--');
     const src = join(disabledDir, safeName);

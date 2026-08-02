@@ -102,7 +102,7 @@ export function parseTomlDescription(content: string): string | null {
   return unescaped || null;
 }
 
-async function scanLocalSkills(): Promise<CodexSkill[]> {
+async function scanLocalSkills(contents?: Map<string, string>): Promise<CodexSkill[]> {
   const dir = join(getCodexDir(), 'skills');
   const entries = await safeReaddir(dir);
   const results: CodexSkill[] = [];
@@ -116,6 +116,7 @@ async function scanLocalSkills(): Promise<CodexSkill[]> {
     if (await isBrokenSymlink(md)) continue;
     const content = await safeReadFile(md);
     if (content === null) continue;
+    contents?.set(md, content);
 
     results.push({
       name: entry,
@@ -200,11 +201,16 @@ async function scanAgents(): Promise<CodexAgent[]> {
   return results;
 }
 
-export async function scanCodex(): Promise<CodexScanResult | null> {
+/**
+ * @param contents optional sink for SKILL.md bodies, so detectors can inspect
+ *   them without a second pass over the filesystem. Deliberately an out-param
+ *   rather than part of the result: it must not land in `scan --json`.
+ */
+export async function scanCodex(contents?: Map<string, string>): Promise<CodexScanResult | null> {
   if (!(await isCodexInstalled())) return null;
 
   const [local, plugin, agents] = await Promise.all([
-    scanLocalSkills(),
+    scanLocalSkills(contents),
     scanPluginSkills(),
     scanAgents(),
   ]);

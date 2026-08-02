@@ -332,7 +332,10 @@ export function formatScanSummary(result: ScanResult): string {
       const tokStr = issue.tokens > 0 ? ` ~${issue.tokens.toLocaleString()} tok` : '';
       const permanent = permanentTypes.has(issue.type) ? ' \x1b[31m(permanent)\x1b[0m' : '';
 
-      lines.push(`  ${selected} ${i + 1}. \x1b[${color}m[${tierLabel}]\x1b[0m ${issue.type}: ${issue.name}${detail}${tokStr}${permanent}`);
+      // Tag the agent when it is not Claude Code, so a ~/.codex item is never
+      // mistaken for one under ~/.claude.
+      const agentTag = issue.agent && issue.agent !== 'claude' ? ` \x1b[36m[${issue.agent}]\x1b[0m` : '';
+      lines.push(`  ${selected} ${i + 1}. \x1b[${color}m[${tierLabel}]\x1b[0m${agentTag} ${issue.type}: ${issue.name}${detail}${tokStr}${permanent}`);
     }
   }
 

@@ -14,4 +14,23 @@ export declare function getDisabledDir(): string;
 export declare function getCurrentProjectSlug(cwd?: string): string;
 export declare function getManifestPath(): string;
 export declare function getLegacyManifestPath(): string;
+/** The agents claude-slim is allowed to touch. Adding one widens what every
+ *  destructive operation may reach, so this list is the security boundary. */
+export type AgentId = 'claude' | 'codex';
+export declare function getCodexDir(): string;
+export declare function getAgentRoot(agent: AgentId): string;
+export declare function getAgentDisabledDir(agent: AgentId): string;
+/**
+ * Refuse to operate on a path outside the given agent's root. Guards destructive
+ * operations (rename/rm/unlink) against tampered manifests and scanner bugs.
+ *
+ * Deliberately per-agent rather than "inside any known root": a Codex issue must
+ * not be able to reach into ~/.claude/ and vice versa. Widening this to a single
+ * combined check would let one bad manifest entry cross between agents, which is
+ * exactly the failure this exists to prevent.
+ */
+export declare function assertInsideAgentRoot(p: string, agent: AgentId): void;
+/** Back-compat wrapper — the Claude path is by far the most common caller. */
 export declare function assertInsideClaudeDir(p: string): void;
+/** Which agent owns this path, or null if it belongs to neither. */
+export declare function agentForPath(p: string): AgentId | null;

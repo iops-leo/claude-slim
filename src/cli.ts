@@ -18,6 +18,7 @@ import { collectDoctorReport, formatDoctorReport } from './doctor.js';
 import { checkForUpdate, formatUpdateNotice } from './update-check.js';
 import { scanCodex } from './codex/index.js';
 import { formatCodexSummary } from './codex/report.js';
+import { classifyCodexIssues } from './codex/detectors.js';
 import { resolveSelection, resolveRestoreSelection } from './selection.js';
 import type { Issue, ScanResult, ManifestEntry, DisabledPluginEntry, AnyManifestEntry } from './types.js';
 
@@ -121,12 +122,14 @@ program
   .option('--auto', 'Non-interactive: auto-select Tier 1 items only')
   .option('--sessions-per-day <n>', 'Sessions per day for savings estimate', '2')
   .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
+  .option('--no-codex', 'Skip ~/.codex entirely')
   .action(async (opts) => {
     await runCleanPipeline({
       dryRun: !!opts.dryRun,
       auto: !!opts.auto,
       sessionsPerDay: parseNonNegativeInt(opts.sessionsPerDay, 2),
       lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60),
+      codex: opts.codex !== false,
     });
   });
 
@@ -305,7 +308,7 @@ program.action(async () => {
     process.exitCode = 1;
     return;
   }
-  await runCleanPipeline({ dryRun: false, auto: false, sessionsPerDay: 2, lookbackDays: 60 });
+  await runCleanPipeline({ dryRun: false, auto: false, sessionsPerDay: 2, lookbackDays: 60, codex: true });
 });
 
 // --- shared clean pipeline ---
@@ -315,9 +318,20 @@ async function runCleanPipeline(opts: {
   auto: boolean;
   sessionsPerDay: number;
   lookbackDays: number;
+  /** false skips ~/.codex entirely. */
+  codex: boolean;
 }): Promise<void> {
   await initTokenizer();
   const result = await scan({ lookbackDays: opts.lookbackDays });
+
+  // Codex issues join the same tiered list. They carry `agent: 'codex'`, which
+  // is what keeps the cleaner's path guard pointed at ~/.codex/.
+  const codexContents = new Map<string, string>();
+  const codexScan = opts.codex ? await scanCodex(codexContents) : null;
+  if (codexScan) {
+    result.issues.push(...(await classifyCodexIssues({ scan: codexScan, contents: codexContents })));
+    result.issues.sort((a, b) => a.tier - b.tier || b.tokens - a.tokens);
+  }
 
   if (result.issues.length === 0) {
     console.log('\n  \x1b[32mAlready slim!\x1b[0m No issues found.\n');
