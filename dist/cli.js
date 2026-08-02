@@ -11,6 +11,8 @@ import { readManifest } from './manifest.js';
 import { formatScanSummary, formatReportBox, calculateReport, } from './report.js';
 import { collectDoctorReport, formatDoctorReport } from './doctor.js';
 import { checkForUpdate, formatUpdateNotice } from './update-check.js';
+import { scanCodex } from './codex/index.js';
+import { formatCodexSummary } from './codex/report.js';
 import { resolveSelection, resolveRestoreSelection } from './selection.js';
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
 const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8'));
@@ -36,15 +38,22 @@ program
     .description('Scan environment and report issues')
     .option('--json', 'Output raw JSON')
     .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
+    .option('--no-codex', 'Skip the ~/.codex scan even if Codex is installed')
     .action(async (opts) => {
     await initTokenizer();
     const result = await scan({ lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60) });
+    // Codex is scanned when present. Reported only — it is never modified, and
+    // unused-skill detection is suppressed there for lack of a usage signal.
+    // commander maps `--no-codex` to `opts.codex === false`, not `opts.noCodex`.
+    const codex = opts.codex === false ? null : await scanCodex();
     await flushCache();
     if (opts.json) {
-        console.log(JSON.stringify(result, null, 2));
+        console.log(JSON.stringify({ ...result, codex }, null, 2));
     }
     else {
         console.log(formatScanSummary(result));
+        if (codex)
+            console.log(formatCodexSummary(codex));
     }
 });
 // --- doctor ---
