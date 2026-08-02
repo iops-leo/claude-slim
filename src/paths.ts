@@ -33,6 +33,25 @@ export function getCurrentProjectSlug(cwd: string = process.cwd()): string {
   return resolve(cwd).replace(/\//g, '-');
 }
 
+/**
+ * True when `cwd` sits inside claude-slim's own install rather than a project.
+ *
+ * The `/claude-slim` skill invokes the CLI with `cd "${CLAUDE_PLUGIN_ROOT}"`,
+ * which makes `process.cwd()` the plugin cache directory. The project slug then
+ * resolves to that path, no memory matches it, and the startup estimate silently
+ * drops every project-memory token — 108,570 of them on the machine where this
+ * was found. Detecting it lets the caller fail loudly or be told to pass
+ * `--project-dir` instead of quietly reporting zero.
+ */
+export function looksLikeToolInstallDir(cwd: string = process.cwd()): boolean {
+  const p = resolve(cwd).replace(/\\/g, '/');
+  return (
+    p.includes('/.claude/plugins/') ||
+    p.includes('/_npx/') ||
+    /\/node_modules\/claude-slim(\/|$)/.test(p)
+  );
+}
+
 export function getManifestPath(): string {
   return join(getDisabledDir(), 'manifest.json');
 }

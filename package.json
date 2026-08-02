@@ -1,6 +1,6 @@
 {
   "name": "claude-slim",
-  "version": "2.12.0",
+  "version": "2.12.1",
   "description": "Audit and shrink your Claude Code startup context. Measures what every skill, plugin, agent, command, and memory file costs in the system prompt, then reversibly disables the dead weight. Non-destructive scan, tiered proposals, one-command restore — no proxy, no compression.",
   "type": "module",
   "bin": {

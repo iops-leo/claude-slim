@@ -97,7 +97,7 @@ export async function scan(opts = {}) {
     // disk. Summing all of them (pre-2.8 behaviour) inflated the startup estimate
     // by a factor of however many projects the user had — 100k+ tokens on a busy
     // machine, for a number labelled "tokens at session start".
-    const currentProjectSlug = getCurrentProjectSlug();
+    const currentProjectSlug = getCurrentProjectSlug(opts.projectDir);
     const currentProjectMemoryTokens = memoryFiles
         .filter((m) => m.project === currentProjectSlug)
         .reduce((sum, m) => sum + m.tokens, 0);

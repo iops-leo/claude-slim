@@ -248,12 +248,12 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.12.0 — What's new
+## v2.12.1 — What's new
 
-- **`claude-slim update`** — runs the upgrade command for however this copy was installed, after showing it and asking. `--dry-run` to preview, `--yes` to skip the prompt. Plugin installs get the marketplace refresh first, then the qualified `claude-slim@claude-slim` id, and are reminded that a restart is needed. npx and source checkouts run nothing and say why — npx already resolves the latest every invocation, and pulling your own repository is not claude-slim's to do.
-- **This corrects v2.9.0's reasoning.** That release stopped at detection, arguing updating belonged to the package manager. Half held: claude-slim must not write into a directory `claude plugin` owns. The other half did not — invoking the package manager is something this tool already does during cleanup (`claude plugin disable`), so refusing to here was inconsistent. It still writes nothing itself.
+- **Fixed: the `/claude-slim` skill reported project memory as zero.** It invoked the CLI with `cd "${CLAUDE_PLUGIN_ROOT}"`, making `cwd` the plugin cache directory; the project slug resolved there, matched nothing, and every project-memory token silently left the startup total — **108,570** on the machine where this surfaced. `SKILL.md` no longer `cd`s. This hit the tool's primary entry point, and quietly: a zero reads as a clean result.
+- **`--project-dir <path>`** for callers that cannot run from the project directory, plus a warning when the CLI notices it is running from its own install without one.
 
-Tests: 374 → 392 (+18), pinning the safety properties — every argv a fixed literal, no shell metacharacters, executable only ever `claude` or `npm`, and a refusal to run unattended with no TTY and no `--yes`.
+Tests: 392 → 401 (+9).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

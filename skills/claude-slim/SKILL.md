@@ -23,7 +23,7 @@ Analyze the user's Claude Code environment for token waste and perform non-destr
 An outdated claude-slim does not merely lack features — it reports **wrong numbers**. Versions before 2.8.0 summed memory across every project on disk and inflated the startup estimate roughly 8×. Presenting those figures as fact is worse than not running at all, so check first:
 
 ```bash
-cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js check-update --json
+node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" check-update --json
 ```
 
 The check is cached for 24h and fails open — if it errors, times out, or returns `"latest": null`, **proceed silently**. Never block the user because a version lookup failed.
@@ -50,13 +50,13 @@ If `"outdated": false`, say nothing and continue to Phase 1.
 Run the CLI to collect environment data:
 
 ```bash
-cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js scan --json
+node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" scan --json
 ```
 
 If `CLAUDE_PLUGIN_ROOT` is not set:
 ```bash
 PLUGIN_DIR=$(find ~/.claude/plugins -path "*/claude-slim/dist/cli.js" -type f 2>/dev/null | head -1 | xargs dirname | xargs dirname)
-cd "$PLUGIN_DIR" && node dist/cli.js scan --json
+node "$PLUGIN_DIR/dist/cli.js" scan --json
 ```
 
 If `node` is not available, fall back to the legacy bash scanner:
@@ -134,18 +134,18 @@ If subcommand is `scan`, stop here. Ask a localized equivalent of "Proceed with 
 Run the interactive clean command:
 
 ```bash
-cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js clean
+node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" clean
 ```
 
 Or with dry-run:
 ```bash
-cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js clean --dry-run
+node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" clean --dry-run
 ```
 
 After cleanup, re-run scan to get updated numbers, then show the savings report:
 
 ```bash
-cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js report
+node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" report
 ```
 
 Present the report box AND the before/after breakdown table to the user.
@@ -157,7 +157,7 @@ Present the report box AND the before/after breakdown table to the user.
 When `/claude-slim restore` is invoked:
 
 ```bash
-cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js restore
+node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" restore
 ```
 
 ## Doctor
@@ -165,7 +165,7 @@ cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js restore
 When `/claude-slim doctor` is invoked:
 
 ```bash
-cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js doctor
+node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" doctor
 ```
 
 Explain warnings in the user's language. Pay special attention to session-log warnings because they explain why unused-skill detection may be suppressed.
