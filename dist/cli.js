@@ -220,6 +220,7 @@ program
     // temp_cache never counted toward totalTokensBefore).
     const SKILL_TYPES = new Set([
         'template', 'duplicate', 'skill_dup', 'oversized_skill', 'unused_skill',
+        'backup_artifact',
     ]);
     const removedSkillEntries = movedEntries.filter((e) => SKILL_TYPES.has(e.type));
     const removedMemoryTokens = movedEntries

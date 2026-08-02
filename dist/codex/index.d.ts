@@ -10,6 +10,8 @@ export interface CodexSkill {
     listingTokens: number;
     source: 'local' | 'plugin';
     pluginName?: string;
+    /** Set when the name looks like a leftover copy; reported, never acted on. */
+    backupArtifact?: string;
 }
 export interface CodexAgent {
     name: string;

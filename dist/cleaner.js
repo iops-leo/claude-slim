@@ -77,7 +77,8 @@ export async function cleanIssues(issues) {
                 issue.type === 'duplicate' ||
                 issue.type === 'skill_dup' ||
                 issue.type === 'oversized_skill' ||
-                issue.type === 'unused_skill') {
+                issue.type === 'unused_skill' ||
+                issue.type === 'backup_artifact') {
                 // Move skill directory to disabled — use name (not basename) to avoid namespace collisions
                 const safeName = issue.name.replace(/\//g, '--');
                 const dest = join(disabledDir, safeName);

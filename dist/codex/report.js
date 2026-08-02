@@ -36,6 +36,16 @@ export function formatCodexSummary(result) {
             lines.push(`    ${name.padEnd(30)} ${String(s.listingTokens).padStart(5)} tok  \x1b[90m${origin}\x1b[0m`);
         }
     }
+    const backups = result.skills.filter((s) => s.backupArtifact);
+    if (backups.length > 0) {
+        lines.push('');
+        lines.push(`\x1b[1m  LIKELY BACKUP COPIES\x1b[0m (${backups.length})`);
+        for (const b of backups) {
+            lines.push(`    ${b.name.length > 30 ? `${b.name.slice(0, 29)}…` : b.name.padEnd(30)} ` +
+                `${String(b.listingTokens).padStart(5)} tok  \x1b[90m${b.backupArtifact}\x1b[0m`);
+        }
+        lines.push(`    \x1b[90mNot removed — ~/.codex/ is read-only here. Delete manually if stale.\x1b[0m`);
+    }
     lines.push('');
     lines.push(`  \x1b[33m!\x1b[0m Unused-skill detection unavailable for Codex.`);
     lines.push(`    \x1b[90m${result.unusedDetectionReason}\x1b[0m`);

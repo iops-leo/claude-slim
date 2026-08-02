@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { countTokensCached } from '../tokenizer.js';
 import { listingTokens, listingTokensFromContent, parseFrontmatterDescription } from '../scanner/skill-listing.js';
 import { safeReadFile, safeReaddir, isDirectory, isBrokenSymlink } from '../scanner/fs-walk.js';
+import { detectBackupArtifact } from '../scanner/backup-artifacts.js';
 
 // Codex support.
 //
@@ -41,6 +42,8 @@ export interface CodexSkill {
   listingTokens: number;
   source: 'local' | 'plugin';
   pluginName?: string;
+  /** Set when the name looks like a leftover copy; reported, never acted on. */
+  backupArtifact?: string;
 }
 
 export interface CodexAgent {
@@ -121,6 +124,7 @@ async function scanLocalSkills(): Promise<CodexSkill[]> {
       tokens: countTokensCached(content, md),
       listingTokens: listingTokensFromContent(entry, content),
       source: 'local',
+      backupArtifact: detectBackupArtifact(entry)?.label,
     });
   }
   return results;

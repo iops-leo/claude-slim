@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { countTokensCached } from '../tokenizer.js';
 import { listingTokens, listingTokensFromContent, parseFrontmatterDescription } from '../scanner/skill-listing.js';
 import { safeReadFile, safeReaddir, isDirectory, isBrokenSymlink } from '../scanner/fs-walk.js';
+import { detectBackupArtifact } from '../scanner/backup-artifacts.js';
 // Codex support.
 //
 // The Claude Code scanner is deliberately left untouched: it is the
@@ -83,6 +84,7 @@ async function scanLocalSkills() {
             tokens: countTokensCached(content, md),
             listingTokens: listingTokensFromContent(entry, content),
             source: 'local',
+            backupArtifact: detectBackupArtifact(entry)?.label,
         });
     }
     return results;

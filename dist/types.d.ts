@@ -34,7 +34,7 @@ export interface PluginInfo {
     status?: 'enabled' | 'disabled';
 }
 export type IssueTier = 1 | 2 | 3;
-export type IssueType = 'broken_symlink' | 'template' | 'skill_dup' | 'duplicate' | 'oversized_memory' | 'oversized_skill' | 'unused_skill' | 'unused_plugin' | 'disabled_plugin' | 'stale_project' | 'temp_cache';
+export type IssueType = 'broken_symlink' | 'template' | 'skill_dup' | 'duplicate' | 'oversized_memory' | 'oversized_skill' | 'unused_skill' | 'unused_plugin' | 'disabled_plugin' | 'stale_project' | 'temp_cache' | 'backup_artifact';
 export interface Issue {
     type: IssueType;
     tier: IssueTier;

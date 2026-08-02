@@ -256,7 +256,9 @@ Codex support, scoped to what Codex can actually be asked.
 - **Unused-skill detection is not offered for Codex, and `scan` says so.** Codex session logs record the skill *catalog* injected into each prompt, not invocations — every skill shows up in nearly every session, so using them as a usage signal would mark everything "used". Checked against 408 session files, a 56,724-row log database, and the tool-registry table before concluding.
 - **`~/.codex/` is read-only.** Nothing is moved or deleted there, same as `~/.claude/agents/`.
 
-Tests: 279 → 302 (+23).
+- **Backup-artifact detection, on both agents.** `foo.bak.20260711`, `foo (1)`, `foo~` and similar are flagged — Tier 2 on Claude Code (movable, restorable), report-only on Codex. Matching is limited to artifact *shapes*, so `backup-manager` and `test-engineer` are never touched.
+
+Tests: 279 → 347 (+68).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 
