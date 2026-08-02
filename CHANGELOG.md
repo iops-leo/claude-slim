@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.0] — 2026-08-02
+
+### Added
+- **`claude-slim update`** — runs the upgrade command for however this copy was installed, after showing it and asking. `--dry-run` prints the commands without running them; `--yes` skips the prompt. Plugin installs get the marketplace refresh first, then the qualified `claude-slim@claude-slim` id, and are told a restart is needed afterwards. npx and source checkouts run nothing and say why: npx already resolves the latest on every invocation, and pulling the user's own repository is not claude-slim's to do.
+
+### Changed
+- **Corrects the reasoning behind v2.9.0's detection-only stance.** That release argued updating belonged to the package manager and stopped at `check-update`. Half of that held: claude-slim must not write into a directory `claude plugin` owns. The other half did not — *invoking* the package manager is something this tool already does during unused-plugin cleanup (`claude plugin disable`), so refusing to invoke it here was inconsistent rather than principled. It still writes nothing itself; it runs the command the user would have typed.
+
+### Internal
+- Tests: 374 → 392 (+18). Beyond the per-method plans, the suite pins the safety properties: every argv is a fixed literal with no interpolation and no shell metacharacters, the executable is only ever `claude` or `npm`, plans are identical across calls so nothing is environment-derived, and a failing step halts the sequence instead of running the next one against a stale manifest. The confirmation gate is extracted from the CLI action so the unattended case is testable — with no TTY and no `--yes` it refuses, because there is nobody there to agree to modifying an installation.
+
 ## [2.11.0] — 2026-08-02
 
 Codex gets the same tiered propose-and-choose cleanup that Claude Code has, minus the two categories Codex cannot honestly support.
