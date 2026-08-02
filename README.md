@@ -161,6 +161,7 @@ npx claude-slim clean --dry-run          # See what would happen (no changes)
 npx claude-slim clean --auto             # Non-interactive, Tier 1 only (CI/scripts)
 npx claude-slim clean --lookback-days N  # Tune the unused-skill detection window
 npx claude-slim scan                     # Report only
+npx claude-slim scan --no-codex          # Skip the ~/.codex scan
 npx claude-slim doctor                   # Diagnose Node/Claude/session-log readiness
 npx claude-slim doctor --offline         # Same, without the version check (no network)
 npx claude-slim check-update             # Report-only version check
@@ -201,6 +202,7 @@ claude-slim never updates itself — that's your package manager's job, and writ
 - **`~/.claude/agents/` and `~/.claude/commands/`** — measured and reported since v2.8, never moved or deleted. There is no restore path for them yet, and a destructive action without its undo isn't worth shipping.
 - **Plugin internals** (`~/.claude/plugins/config.json`, individual `plugin.json` files) — left alone; use `claude plugin` to manage plugins.
 - **Git / project sources** — claude-slim only looks inside `~/.claude/`, never at your code.
+- **`~/.codex/`** — scanned and reported when Codex is installed, never modified. Unused-skill detection is not offered there: Codex session logs record the skill catalog, not invocations, so there is no honest usage signal to act on.
 - **Anything outside `~/.claude/`** — a path-containment guard refuses destructive ops anywhere else, even if a tampered manifest asked it to.
 
 Only touched: entries under `~/.claude/skills/`, `~/.claude/plugins/cache/temp_local_*`, and `~/.claude/projects/*/memory/`. Skill and memory entries are moved to `skills.disabled/`; broken symlink files are unlinked and `temp_local_*` failed-install caches are removed outright.
@@ -245,14 +247,18 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.9.1 — What's new
+## v2.10.0 — What's new
 
-Found while stress-testing the scanner against deliberately hostile `~/.claude` fixtures.
+Codex support, scoped to what Codex can actually be asked.
 
-- **Fixed: `scan` could hang forever on a single long line.** js-tiktoken's BPE is quadratic in the length of one whitespace-free run. Normal prose is fine (8,000 characters encodes in ~1ms), but 800 characters of Hangul cost ~450ms, 3,200 cost ~6.8s, and a 60,000-character run wedged `scan` past 20 seconds with **no output at all** — indistinguishable from a freeze. `SKILL.md` files hit this via base64 blobs, minified snippets, embedded JSON schemas, and CJK text. Long runs are now estimated by encoding a bounded prefix and scaling; **files without one produce byte-identical counts** (verified across 71 installed skills: 70 exact, one moved 0.01%). Hostile fixture: 20s+ → 1.78s, with no measurable cost on ordinary input.
-- **Fixed: a mistyped subcommand blamed the wrong thing.** `claude-slim scam` printed `error: too many arguments. Expected 0 arguments but got 1`. It now names the unknown command and lists the real ones.
+- **`~/.codex/` is scanned when present.** `scan` auto-detects a Codex install and reports its startup cost — local skills, plugin skills, agents, and `AGENTS.md`. `scan --json` gains a `codex` key; `--no-codex` skips it. On the dev machine this surfaced **10,926 tokens** nothing was measuring, including a `.bak` copy of a skill still costing 285 tokens every session.
+- Codex `SKILL.md` frontmatter matches Claude Code's exactly, so the existing listing parser is reused unchanged. Agents differ (`<name>.toml` with `description = "…"`) and get a small parser, verified against all 18 installed agents.
+- **Unused-skill detection is not offered for Codex, and `scan` says so.** Codex session logs record the skill *catalog* injected into each prompt, not invocations — every skill shows up in nearly every session, so using them as a usage signal would mark everything "used". Checked against 408 session files, a 56,724-row log database, and the tool-registry table before concluding.
+- **`~/.codex/` is read-only.** Nothing is moved or deleted there, same as `~/.claude/agents/`.
 
-Tests: 266 → 279 (+13).
+- **Backup-artifact detection, on both agents.** `foo.bak.20260711`, `foo (1)`, `foo~` and similar are flagged — Tier 2 on Claude Code (movable, restorable), report-only on Codex. Matching is limited to artifact *shapes*, so `backup-manager` and `test-engineer` are never touched.
+
+Tests: 279 → 347 (+68).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

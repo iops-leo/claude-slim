@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.0] — 2026-08-02
+
+Codex support, scoped to what Codex can actually be asked.
+
+### Added
+- **`~/.codex/` is scanned when present.** `scan` auto-detects a Codex install and appends a section reporting its startup cost: local skills, plugin skills, agents, and `AGENTS.md`. `scan --json` gains a `codex` key (`null` when Codex is absent). `--no-codex` skips it. On the development machine this surfaced **10,926 tokens** of Codex startup context that nothing was measuring — including a `humanize-korean.bak.20260711-100101` backup copy still costing 285 tokens per session.
+- Codex's `SKILL.md` frontmatter is byte-identical in shape to Claude Code's, so the v2.8.0 listing parser is reused unchanged across all 36 local and 55 plugin skills. Agents differ — `<name>.toml` with `description = "…"` — and get a small dedicated parser, verified against all 18 installed agents.
+
+- **Backup-artifact detection, on both agents.** A name like `humanize-korean.bak.20260711-100101` announces itself as a leftover copy without needing any usage signal, which makes it the one cleanup hint that also works on Codex. Claude Code raises it as a Tier 2 (Recommended) issue, movable and restorable like any other skill; Codex reports it under `LIKELY BACKUP COPIES` and leaves it alone. Matching is restricted to artifact *shapes* — dotted segments (`.bak`, `.orig`, `.old`), timestamp and dated suffixes, trailing `copy`, `~`, `(1)` — never a bare substring, so `backup-manager`, `test-engineer`, and `old-school-linter` are not touched. 25 such names are pinned in tests.
+
+### Notes
+- **Unused-skill detection is deliberately not offered for Codex,** and `scan` says so rather than staying quiet. Codex session logs record the skill *catalog* injected into each system prompt, not invocations: every skill appears in nearly every session, so treating them as a usage signal would mark everything "used". This was checked against 408 session files, a 56,724-row log database, and the `thread_dynamic_tools` table (a tool registry, not a history) before concluding. The same principle already governs the Claude path, which suppresses the check when session data is too thin to support it.
+- **`~/.codex/` is read-only.** Nothing there is moved or deleted, matching how `~/.claude/agents/` is handled — measurement without a restore path, not cleanup without an undo.
+- The Claude Code scanner is untouched. Codex lives in `src/codex/` and reuses only the tokenizer and frontmatter parser, so the 279 existing tests keep guarding the same code they always did.
+
+### Internal
+- Tests: 279 → 347 (+68). Two caught real defects during development: the TOML parser matched a `description = "…"` line sitting inside a `developer_instructions = """…"""` prose block, and `--no-codex` was inert because commander maps a negated flag to `opts.codex === false`, not `opts.noCodex`. The backup detector's false-positive suite is deliberately larger than its positive one: telling someone a working skill is disposable is worse than missing a stale copy.
+
 ## [2.9.1] — 2026-07-30
 
 Found while stress-testing the scanner against deliberately hostile `~/.claude` fixtures before submitting the project for public feedback.

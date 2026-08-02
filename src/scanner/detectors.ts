@@ -7,6 +7,7 @@ import type { PluginSurfaces } from './plugin-surfaces.js';
 import {
   OVERSIZED_SKILL_BYTES, OVERSIZED_MEMORY_BYTES, SKILL_PROMPT_OVERHEAD_TOKENS,
 } from './constants.js';
+import { detectBackupArtifact } from './backup-artifacts.js';
 
 // Everything a detector needs — threaded explicitly through context instead of
 // relying on module-global state, so detectors are pure functions of their input.
@@ -321,6 +322,31 @@ const disabledPluginDetector: Detector = {
 
 // The full registry. Order only matters for ties in the tier sort.
 // New detectors: define above, add here, update CONTRIBUTING.md's issue-type table.
+
+// Backup leftovers are the one cleanup hint that needs no usage signal: a name
+// like `foo.bak.20260711` announces itself. Tier 2 rather than Tier 1 — a
+// backup still has some value, so the user confirms rather than it being
+// pre-selected. The move is reversible via `restore` like any other skill.
+const backupArtifactDetector: Detector = {
+  name: 'backup_artifact',
+  detect({ localSkills }) {
+    const issues: Issue[] = [];
+    for (const skill of localSkills) {
+      const match = detectBackupArtifact(skill.name);
+      if (!match) continue;
+      issues.push({
+        type: 'backup_artifact',
+        tier: 2,
+        name: skill.name,
+        detail: `looks like a backup copy (${match.label})`,
+        tokens: skill.tokens,
+        path: skill.path,
+      });
+    }
+    return issues;
+  },
+};
+
 export const detectors: Detector[] = [
   brokenSymlinkDetector,
   templateDetector,
@@ -333,6 +359,7 @@ export const detectors: Detector[] = [
   unusedSkillDetector,
   unusedPluginDetector,
   disabledPluginDetector,
+  backupArtifactDetector,
 ];
 
 export function classifyIssues(

@@ -52,7 +52,8 @@ export type IssueType =
   | 'unused_plugin'
   | 'disabled_plugin'
   | 'stale_project'
-  | 'temp_cache';
+  | 'temp_cache'
+  | 'backup_artifact';
 
 export interface Issue {
   type: IssueType;
