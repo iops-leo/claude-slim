@@ -41,6 +41,11 @@ export declare function isCodexInstalled(): Promise<boolean>;
  * back to the flat estimate.
  */
 export declare function parseTomlDescription(content: string): string | null;
-export declare function scanCodex(): Promise<CodexScanResult | null>;
+/**
+ * @param contents optional sink for SKILL.md bodies, so detectors can inspect
+ *   them without a second pass over the filesystem. Deliberately an out-param
+ *   rather than part of the result: it must not land in `scan --json`.
+ */
+export declare function scanCodex(contents?: Map<string, string>): Promise<CodexScanResult | null>;
 /** Re-exported so callers can reuse the frontmatter parser without a deep import. */
 export { parseFrontmatterDescription };

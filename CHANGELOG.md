@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] — 2026-08-02
+
+Codex gets the same tiered propose-and-choose cleanup that Claude Code has, minus the two categories Codex cannot honestly support.
+
+### Added
+- **Codex cleanup, tiered like Claude Code.** Five of the seven categories carry over unchanged, because they are filesystem facts rather than usage inferences: broken symlinks and unfilled templates (Tier 1), install leftovers in `~/.codex/.tmp` (Tier 1 — 146MB on the development machine), backup copies and plugin-shadowed duplicates (Tier 2), and oversized skills (Tier 3). Codex items appear in the same numbered list, tagged `[codex]`, and are selected the same way. `--no-codex` opts out of both `scan` and `clean`.
+- **`~/.codex/skills.disabled/`,** the Codex counterpart of the Claude store. Moves are reversible through the same `restore` command; manifest entries now record which agent they came from.
+
+### Changed
+- **The path guard is now per-agent.** `assertInsideAgentRoot(path, agent)` replaces the single `~/.claude/` check, and each issue carries the agent it belongs to. This is deliberately *not* "inside any known root": a Codex issue must not resolve into `~/.claude/` and vice versa, so a tampered manifest cannot cross between agents. The per-agent scoping extends to the restore subtree guard and the disabled-store lookup.
+- `unused_skill` and `oversized_memory` are still not produced for Codex — the first has no invocation record to work from, the second has no `~/.codex/projects/*/memory/` to look at.
+
+### Internal
+- Tests: 347 → 374 (+27). The guard suite is the point of this release: cross-agent isolation in both directions, traversal escapes, and a sibling directory (`~/.claude-backup`) that a naive `startsWith` check would have let through. Two cleanup tests forge an issue whose `agent` disagrees with its `path` and assert the operation is refused with the target left untouched.
+- Three bugs surfaced while wiring this up, all caught by the round-trip test rather than by reading: the manifest entry for moved skills was missing its `agent` field, the restore subtree guard was still hardcoded to `~/.claude/skills`, and the disabled-store lookup during restore ignored the entry's agent.
+
 ## [2.10.0] — 2026-08-02
 
 Codex support, scoped to what Codex can actually be asked.

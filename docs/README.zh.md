@@ -112,7 +112,8 @@ claude plugin install claude-slim
 | **用户可控** | 交互式运行会在更改前确认。`--dry-run` 可预览，`--auto` 只选择 Tier 1 |
 | **不触碰危险区** | 绝不修改CLAUDE.md、settings.json、插件配置、`~/.claude/agents/`、`~/.claude/commands/` |
 | **路径封闭** | 目标路径一旦超出 `~/.claude/`，所有破坏性操作一律拒绝 |
-| **Codex 只读** | 存在 `~/.codex/` 时仅测量与报告，不移动也不删除 |
+| **Codex 同规则** | `~/.codex/` 同样按三级清理。移动至 `~/.codex/skills.disabled/`，可通过 `restore` 还原 |
+| **代理间隔离** | 路径守卫按代理隔离，Codex 条目无法解析到 `~/.claude/`，反之亦然 |
 
 ---
 
@@ -154,18 +155,16 @@ token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对
 
 ---
 
-## v2.10.0 更新 (2026-08-02)
+## v2.11.0 更新 (2026-08-02)
 
-新增 Codex 支持，范围限定在 Codex 真正能回答的部分。
+Codex 现在也拥有与 Claude Code 相同的三级"建议—选择"清理流程，仅排除 Codex 无法诚实支持的两个类别。
 
-- **检测到 `~/.codex/` 时自动扫描。** 以独立小节报告其启动开销：本地技能、插件技能、代理以及 `AGENTS.md`。`scan --json` 新增 `codex` 字段，`--no-codex` 可跳过。在开发机上，这暴露出**此前无人计量的 10,926 tokens**，其中包括一个每次会话仍消耗 285 tokens 的技能备份副本（`.bak`）。
-- Codex 的 `SKILL.md` frontmatter 与 Claude Code 格式一致，因此沿用现有解析器。仅代理不同（`<名称>.toml` 中的 `description = "…"`），为此新增了小型解析器，并已用全部 18 个已安装代理验证。
-- **不为 Codex 提供未使用技能检测，并在报告中明确说明。** Codex 会话日志记录的是注入系统提示词的技能**目录**，而非调用记录 — 几乎每个技能都出现在几乎每个会话中，若以此作为使用信号，会把全部技能判定为"使用中"。此结论基于对 408 个会话文件、56,724 行日志数据库以及工具注册表的核查。
-- **`~/.codex/` 为只读。** 与 `~/.claude/agents/` 一致，不移动也不删除。
+- **Codex 清理，分级一致。** 七个类别中有五个可直接迁移，因为它们是文件系统事实而非使用推断 — 断开的符号链接与未填写的模板（Tier 1）、`~/.codex/.tmp` 中的安装残留（Tier 1，开发机上为 146MB）、备份副本与被插件遮蔽的重复项（Tier 2）、超大技能（Tier 3）。Codex 条目会以 `[codex]` 标记出现在同一列表中，选择方式相同。可用 `--no-codex` 跳过。
+- **新增 `~/.codex/skills.disabled/`。** 通过同一个 `restore` 即可还原，清单条目会记录其所属代理。
+- **路径守卫改为按代理隔离。** 并非"位于任一已知根目录即可" — Codex 条目不得解析到 `~/.claude/`，反之亦然，从而使被篡改的清单无法跨代理越界。
+- Codex 仍不提供 `unused_skill` 与 `oversized_memory`：前者没有调用记录，后者没有 `~/.codex/projects/*/memory/`。
 
-- **备份残留检测 — 两侧均支持。** 识别 `foo.bak.20260711`、`foo (1)`、`foo~` 等遗留副本。在 Claude Code 中为 Tier 2（可移动、可恢复），在 Codex 中仅报告。仅匹配**残留物的形态**而非名称中的任意子串，因此 `backup-manager`、`test-engineer` 等正常技能不会被误判。
-
-测试: 279 → **347 (+68)**。
+测试: 347 → **374 (+27)**。守卫测试是本次发布的核心 — 双向代理隔离、路径逃逸，以及朴素 `startsWith` 检查会放行的 `~/.claude-backup` 同级目录。
 
 历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 

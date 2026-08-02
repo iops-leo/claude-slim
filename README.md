@@ -202,7 +202,7 @@ claude-slim never updates itself — that's your package manager's job, and writ
 - **`~/.claude/agents/` and `~/.claude/commands/`** — measured and reported since v2.8, never moved or deleted. There is no restore path for them yet, and a destructive action without its undo isn't worth shipping.
 - **Plugin internals** (`~/.claude/plugins/config.json`, individual `plugin.json` files) — left alone; use `claude plugin` to manage plugins.
 - **Git / project sources** — claude-slim only looks inside `~/.claude/`, never at your code.
-- **`~/.codex/`** — scanned and reported when Codex is installed, never modified. Unused-skill detection is not offered there: Codex session logs record the skill catalog, not invocations, so there is no honest usage signal to act on.
+- **`~/.codex/`** — scanned and, since v2.11, cleanable under the same tiers. Moves go to `~/.codex/skills.disabled/` and reverse with `restore`. The path guard is per-agent, so a Codex item can never resolve into `~/.claude/`. Unused-skill detection is still not offered there: Codex session logs record the skill catalog, not invocations, so there is no honest usage signal to act on.
 - **Anything outside `~/.claude/`** — a path-containment guard refuses destructive ops anywhere else, even if a tampered manifest asked it to.
 
 Only touched: entries under `~/.claude/skills/`, `~/.claude/plugins/cache/temp_local_*`, and `~/.claude/projects/*/memory/`. Skill and memory entries are moved to `skills.disabled/`; broken symlink files are unlinked and `temp_local_*` failed-install caches are removed outright.
@@ -247,18 +247,16 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.10.0 — What's new
+## v2.11.0 — What's new
 
-Codex support, scoped to what Codex can actually be asked.
+Codex gets the same tiered propose-and-choose cleanup Claude Code has, minus the two categories Codex cannot honestly support.
 
-- **`~/.codex/` is scanned when present.** `scan` auto-detects a Codex install and reports its startup cost — local skills, plugin skills, agents, and `AGENTS.md`. `scan --json` gains a `codex` key; `--no-codex` skips it. On the dev machine this surfaced **10,926 tokens** nothing was measuring, including a `.bak` copy of a skill still costing 285 tokens every session.
-- Codex `SKILL.md` frontmatter matches Claude Code's exactly, so the existing listing parser is reused unchanged. Agents differ (`<name>.toml` with `description = "…"`) and get a small parser, verified against all 18 installed agents.
-- **Unused-skill detection is not offered for Codex, and `scan` says so.** Codex session logs record the skill *catalog* injected into each prompt, not invocations — every skill shows up in nearly every session, so using them as a usage signal would mark everything "used". Checked against 408 session files, a 56,724-row log database, and the tool-registry table before concluding.
-- **`~/.codex/` is read-only.** Nothing is moved or deleted there, same as `~/.claude/agents/`.
+- **Codex cleanup, tiered.** Five of seven categories carry over because they are filesystem facts, not usage inferences: broken symlinks and unfilled templates (Tier 1), install leftovers in `~/.codex/.tmp` (Tier 1 — 146MB on the dev machine), backup copies and plugin-shadowed duplicates (Tier 2), oversized skills (Tier 3). Codex items join the same numbered list tagged `[codex]`. `--no-codex` opts out.
+- **`~/.codex/skills.disabled/`** — moves are reversible through the same `restore`, and manifest entries record which agent they came from.
+- **The path guard is now per-agent.** Not "inside any known root" — a Codex issue must not resolve into `~/.claude/` and vice versa, so a tampered manifest cannot cross between agents.
+- `unused_skill` and `oversized_memory` remain unavailable for Codex: no invocation record, and no `~/.codex/projects/*/memory/`.
 
-- **Backup-artifact detection, on both agents.** `foo.bak.20260711`, `foo (1)`, `foo~` and similar are flagged — Tier 2 on Claude Code (movable, restorable), report-only on Codex. Matching is limited to artifact *shapes*, so `backup-manager` and `test-engineer` are never touched.
-
-Tests: 279 → 347 (+68).
+Tests: 347 → 374 (+27), the guard suite being the point — cross-agent isolation both directions, traversal escapes, and a `~/.claude-backup` sibling a naive `startsWith` would have allowed.
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

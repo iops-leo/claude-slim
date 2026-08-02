@@ -1,5 +1,6 @@
 import type { UserSurfaceEntry } from './scanner/user-surfaces.js';
-export type { UserSurfaceEntry };
+import type { AgentId } from './paths.js';
+export type { UserSurfaceEntry, AgentId };
 export interface SkillInfo {
     name: string;
     path: string;
@@ -37,6 +38,8 @@ export type IssueTier = 1 | 2 | 3;
 export type IssueType = 'broken_symlink' | 'template' | 'skill_dup' | 'duplicate' | 'oversized_memory' | 'oversized_skill' | 'unused_skill' | 'unused_plugin' | 'disabled_plugin' | 'stale_project' | 'temp_cache' | 'backup_artifact';
 export interface Issue {
     type: IssueType;
+    /** Which agent root this issue lives under. Absent means Claude Code. */
+    agent?: AgentId;
     tier: IssueTier;
     name: string;
     detail?: string;
@@ -85,6 +88,8 @@ export interface ScanResult {
 }
 export interface ManifestEntry {
     date: string;
+    /** Which agent root `from` belongs to. Absent means Claude Code (pre-2.11 entries). */
+    agent?: AgentId;
     name: string;
     from: string;
     type: IssueType;

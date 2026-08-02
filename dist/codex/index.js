@@ -60,7 +60,7 @@ export function parseTomlDescription(content) {
     const unescaped = single[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim();
     return unescaped || null;
 }
-async function scanLocalSkills() {
+async function scanLocalSkills(contents) {
     const dir = join(getCodexDir(), 'skills');
     const entries = await safeReaddir(dir);
     const results = [];
@@ -77,6 +77,7 @@ async function scanLocalSkills() {
         const content = await safeReadFile(md);
         if (content === null)
             continue;
+        contents?.set(md, content);
         results.push({
             name: entry,
             path: skillDir,
@@ -161,11 +162,16 @@ async function scanAgents() {
     }
     return results;
 }
-export async function scanCodex() {
+/**
+ * @param contents optional sink for SKILL.md bodies, so detectors can inspect
+ *   them without a second pass over the filesystem. Deliberately an out-param
+ *   rather than part of the result: it must not land in `scan --json`.
+ */
+export async function scanCodex(contents) {
     if (!(await isCodexInstalled()))
         return null;
     const [local, plugin, agents] = await Promise.all([
-        scanLocalSkills(),
+        scanLocalSkills(contents),
         scanPluginSkills(),
         scanAgents(),
     ]);

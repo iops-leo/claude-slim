@@ -2,16 +2,21 @@ import { readFile, writeFile, mkdir, rename, access } from 'node:fs/promises';
 import type { Manifest, ManifestEntry, AnyManifestEntry, DisabledPluginEntry } from './types.js';
 import {
   getDisabledDir as getDir,
+  getAgentDisabledDir,
   getManifestPath,
   getLegacyManifestPath,
 } from './paths.js';
+import type { AgentId } from './paths.js';
 
 export function getDisabledDir(): string {
   return getDir();
 }
 
-export async function ensureDisabledDir(): Promise<void> {
-  await mkdir(getDisabledDir(), { recursive: true });
+/** Create (if needed) and return the disabled-skill store for one agent. */
+export async function ensureDisabledDir(agent: AgentId = 'claude'): Promise<string> {
+  const dir = getAgentDisabledDir(agent);
+  await mkdir(dir, { recursive: true });
+  return dir;
 }
 
 async function pathExists(p: string): Promise<boolean> {
