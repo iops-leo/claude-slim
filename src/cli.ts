@@ -15,6 +15,7 @@ import {
   calculateReport,
 } from './report.js';
 import { collectDoctorReport, formatDoctorReport } from './doctor.js';
+import { looksLikeToolInstallDir } from './paths.js';
 import { checkForUpdate, formatUpdateNotice } from './update-check.js';
 import { confirmDecision, planUpdate, renderStep, runUpdate } from './update-run.js';
 import { scanCodex } from './codex/index.js';
@@ -49,10 +50,15 @@ program
   .description('Scan environment and report issues')
   .option('--json', 'Output raw JSON')
   .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
+  .option('--project-dir <path>', 'Directory whose project memory counts toward the total (default: cwd)')
   .option('--no-codex', 'Skip the ~/.codex scan even if Codex is installed')
   .action(async (opts) => {
     await initTokenizer();
-    const result = await scan({ lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60) });
+    const projectDir = resolveProjectDir(opts.projectDir);
+    const result = await scan({
+      lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60),
+      projectDir,
+    });
     // Codex is scanned when present. Reported only — it is never modified, and
     // unused-skill detection is suppressed there for lack of a usage signal.
     // commander maps `--no-codex` to `opts.codex === false`, not `opts.noCodex`.
@@ -202,6 +208,7 @@ program
   .option('--auto', 'Non-interactive: auto-select Tier 1 items only')
   .option('--sessions-per-day <n>', 'Sessions per day for savings estimate', '2')
   .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
+  .option('--project-dir <path>', 'Directory whose project memory counts toward the total (default: cwd)')
   .option('--no-codex', 'Skip ~/.codex entirely')
   .action(async (opts) => {
     await runCleanPipeline({
@@ -210,6 +217,7 @@ program
       sessionsPerDay: parseNonNegativeInt(opts.sessionsPerDay, 2),
       lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60),
       codex: opts.codex !== false,
+      projectDir: opts.projectDir,
     });
   });
 
@@ -391,6 +399,27 @@ program.action(async () => {
   await runCleanPipeline({ dryRun: false, auto: false, sessionsPerDay: 2, lookbackDays: 60, codex: true });
 });
 
+
+/**
+ * Resolve which directory's project memory counts toward the startup estimate.
+ *
+ * Warns when the CLI is running from its own install directory and no explicit
+ * directory was given: the slug would resolve to the plugin cache, match no
+ * project, and silently zero out every project-memory token. Warning beats
+ * guessing — we cannot know which project the user meant.
+ */
+function resolveProjectDir(explicit?: string): string | undefined {
+  if (explicit) return explicit;
+  if (looksLikeToolInstallDir()) {
+    console.error(
+      '  \x1b[33m!\x1b[0m Running from claude-slim\'s own install directory, so project memory\n' +
+      '    cannot be attributed and is reported as 0. Pass --project-dir <path>\n' +
+      '    (or run from your project) for an accurate startup total.\n',
+    );
+  }
+  return undefined;
+}
+
 // --- shared clean pipeline ---
 
 async function runCleanPipeline(opts: {
@@ -400,9 +429,11 @@ async function runCleanPipeline(opts: {
   lookbackDays: number;
   /** false skips ~/.codex entirely. */
   codex: boolean;
+  /** Directory whose project memory counts; defaults to cwd. */
+  projectDir?: string;
 }): Promise<void> {
   await initTokenizer();
-  const result = await scan({ lookbackDays: opts.lookbackDays });
+  const result = await scan({ lookbackDays: opts.lookbackDays, projectDir: resolveProjectDir(opts.projectDir) });
 
   // Codex issues join the same tiered list. They carry `agent: 'codex'`, which
   // is what keeps the cleaner's path guard pointed at ~/.codex/.

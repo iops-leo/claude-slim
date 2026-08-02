@@ -26,6 +26,15 @@ export interface ScanOptions {
   // Default 60: long enough to absorb a month-off-then-resume cadence,
   // short enough that "stale by inactivity" remains meaningful.
   lookbackDays?: number;
+  /**
+   * Directory whose project memory counts toward the startup estimate.
+   *
+   * Defaults to `process.cwd()`, which is wrong whenever the CLI is launched
+   * from its own install directory — the `/claude-slim` skill does exactly that
+   * via `cd "${CLAUDE_PLUGIN_ROOT}"`, and every project-memory token silently
+   * dropped out of the total as a result.
+   */
+  projectDir?: string;
 }
 
 const DEFAULT_LOOKBACK_DAYS = 60;
@@ -129,7 +138,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
   // disk. Summing all of them (pre-2.8 behaviour) inflated the startup estimate
   // by a factor of however many projects the user had — 100k+ tokens on a busy
   // machine, for a number labelled "tokens at session start".
-  const currentProjectSlug = getCurrentProjectSlug();
+  const currentProjectSlug = getCurrentProjectSlug(opts.projectDir);
   const currentProjectMemoryTokens = memoryFiles
     .filter((m) => m.project === currentProjectSlug)
     .reduce((sum, m) => sum + m.tokens, 0);

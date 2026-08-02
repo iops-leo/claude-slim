@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.1] — 2026-08-02
+
+### Fixed
+- **The `/claude-slim` skill reported project memory as zero.** The skill invoked the CLI with `cd "${CLAUDE_PLUGIN_ROOT}" && node dist/cli.js scan`, which made `process.cwd()` the plugin cache directory. The project slug then resolved to that path, matched no project, and every project-memory token dropped out of the startup estimate — **108,570 of them** on the machine where this surfaced. The slug is derived from `cwd` by design (v2.8.0), so the invocation, not the scanner, was wrong: `SKILL.md` no longer `cd`s and calls the CLI by absolute path, leaving the working directory as the user's project. This affected the tool's primary entry point, and silently: a zero looks like a clean result.
+- **`--project-dir <path>`** for callers that genuinely cannot run from the project directory, and a warning when the CLI detects it is running from its own install (plugin cache, npx cache, or `node_modules/claude-slim`) without one. Guessing which project was meant is not possible, so it says so rather than reporting a confident zero.
+
+### Internal
+- Tests: 392 → 401 (+9), reproducing the bug directly — `process.cwd()` stubbed to a plugin cache path, asserting memory is zero without `projectDir` and non-zero with it. Install-directory detection is pinned against a checkout of claude-slim itself, which is an ordinary working directory and must not be flagged.
+
 ## [2.12.0] — 2026-08-02
 
 ### Added
