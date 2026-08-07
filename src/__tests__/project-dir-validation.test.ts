@@ -57,13 +57,14 @@ describe('scan — currentProjectKnown', () => {
     expect(result.currentProjectMemoryTokens).toBe(0);
   });
 
-  it('is false when the slug matches nothing — an unattributed zero', async () => {
+  it('is false when Claude holds no state for the slug', async () => {
     await writeStaleProject(tmp.projectsDir, '-Users-me-real', { 'MEMORY.md': 'notes' });
     const result = await scan({ projectDir: '/Users/me/typo' });
     expect(result.currentProjectKnown).toBe(false);
     expect(result.currentProjectMemoryTokens).toBe(0);
-    // The distinction the flag exists to make: 0 here means "could not
-    // attribute", and the JSON now says which kind of 0 it is.
+    // The distinction the flag exists to make: memory does exist on this
+    // machine, just not under this slug, so the 0 may be answering the wrong
+    // question. The JSON now says which kind of 0 it is.
     expect(result.allProjectsMemoryTokens).toBeGreaterThan(0);
   });
 });

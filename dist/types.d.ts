@@ -82,13 +82,15 @@ export interface ScanResult {
     /** Project slug (cwd with `/` → `-`) whose memory a session here would load. */
     currentProjectSlug: string;
     /**
-     * Whether `~/.claude/projects/<currentProjectSlug>/` actually exists.
+     * Whether `~/.claude/projects/<currentProjectSlug>/` exists — i.e. whether
+     * Claude Code holds any state for this project.
      *
-     * False means the slug matched nothing on disk, so
-     * `currentProjectMemoryTokens` is 0 because attribution failed — not because
-     * the project is clean. Consumers reading the JSON have no other way to tell
-     * those apart, and reporting an unattributed 0 as fact is the exact failure
-     * v2.12.1 was cut for.
+     * When false, `currentProjectMemoryTokens` is 0 because nothing is stored
+     * under this slug. That 0 is arithmetically correct either way; what the flag
+     * adds is *why*. A directory Claude has never opened genuinely has no memory,
+     * while a slug pointing somewhere the user did not mean — the plugin cache, a
+     * git worktree — produces the same 0 for a very different reason. Consumers
+     * of `--json` had no way to tell a scanned project from a mis-aimed one.
      */
     currentProjectKnown: boolean;
     /** Memory tokens actually loaded at startup — current project only. */

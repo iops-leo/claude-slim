@@ -54,12 +54,24 @@ describe('sumRecoverableStartupTokens', () => {
   });
 
   it('counts current-project memory but not another project\'s', () => {
+    // stale_project.tokens is the sum of that project's memory files, so it is
+    // necessarily >= any single oversized file inside it (7,100 = 6,371 + rest).
     const issues = [
       issue('oversized_memory', '-Users-me-app/MEMORY.md', 6371, '/m/1'),
       issue('oversized_memory', '-Users-me-other/MEMORY.md', 5000, '/m/2'),
-      issue('stale_project', '-Users-me-app', 800, '/m/3'),
+      issue('stale_project', '-Users-me-app', 7100, '/m/3'),
     ];
-    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(6371 + 800);
+    // The other project contributes nothing; the current one is counted once,
+    // through the stale-project total that already contains MEMORY.md.
+    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(7100);
+  });
+
+  it('counts only the current project when nothing is stale', () => {
+    const issues = [
+      issue('oversized_memory', '-Users-me-app/MEMORY.md', 6371, '/m/1'),
+      issue('oversized_memory', '-Users-me-other/MEMORY.md', 5000, '/m/2'),
+    ];
+    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(6371);
   });
 
   it('does not let a sibling slug pass as the current project', () => {
@@ -81,6 +93,48 @@ describe('sumRecoverableStartupTokens', () => {
     expect(sumRecoverableStartupTokens(issues, [], '-none')).toBe(20);
   });
 
+  it('counts a plugin once even when several versions are cached', () => {
+    // scanPluginSurfaces walks version directories, so a plugin with two cached
+    // versions yields two unused_plugin issues — and pluginCosts is keyed by
+    // plugin name, so each carries the same aggregate. Adding both billed the
+    // plugin's whole cost twice.
+    const issues = [
+      issue('unused_plugin', 'superpowers', 431, '/cache/mkt/superpowers/1.0.0'),
+      issue('unused_plugin', 'superpowers', 431, '/cache/mkt/superpowers/1.1.0'),
+    ];
+    expect(sumRecoverableStartupTokens(issues, [], '-none')).toBe(431);
+  });
+
+  it('does not bill a memory file twice via its stale project', () => {
+    // stale_project.tokens is the sum of every memory file in that project;
+    // oversized_memory names one of those same files. Counting both charged
+    // the oversized file twice and could exceed the project's whole memory.
+    const issues = [
+      issue('stale_project', '-Users-me-app', 9000, '/p/app'),
+      issue('oversized_memory', '-Users-me-app/MEMORY.md', 6371, '/p/app/memory/MEMORY.md'),
+    ];
+    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(9000);
+  });
+
+  it('still counts an oversized memory file when its project is not stale', () => {
+    const issues = [
+      issue('oversized_memory', '-Users-me-app/MEMORY.md', 6371, '/p/app/memory/MEMORY.md'),
+    ];
+    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(6371);
+  });
+
+  it('never exceeds the current project\'s total memory', () => {
+    // The property both double-counts violated.
+    const projectMemoryTotal = 9000;
+    const issues = [
+      issue('stale_project', '-Users-me-app', projectMemoryTotal, '/p/app'),
+      issue('oversized_memory', '-Users-me-app/a.md', 6371, '/p/app/memory/a.md'),
+      issue('oversized_memory', '-Users-me-app/b.md', 2000, '/p/app/memory/b.md'),
+    ];
+    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app'))
+      .toBeLessThanOrEqual(projectMemoryTotal);
+  });
+
   it('stays within the startup total it is a fraction of', () => {
     // The property that failed in production: recoverable must never exceed
     // what the listings actually cost.
@@ -97,5 +151,22 @@ describe('sumRecoverableStartupTokens', () => {
   it('contributes nothing for a skill absent from the listing map', () => {
     const issues = [issue('unused_skill', 'ghost', 999, '/skills/ghost')];
     expect(sumRecoverableStartupTokens(issues, [], '-none')).toBe(0);
+  });
+
+  it('never exceeds the startup cost of everything it could remove', () => {
+    // The invariant behind all three collapses. Every overlap type is present
+    // here at once: one skill flagged twice, one plugin cached twice, and a
+    // memory file inside its own stale project.
+    const skills = [skill('dup', 40000, 70)];
+    const issues = [
+      issue('duplicate', 'dup', 40000, '/skills/dup'),
+      issue('unused_skill', 'dup', 40000, '/skills/dup'),
+      issue('unused_plugin', 'multi', 300, '/cache/m/multi/1.0.0'),
+      issue('unused_plugin', 'multi', 300, '/cache/m/multi/2.0.0'),
+      issue('stale_project', '-Users-me-app', 5000, '/p/app'),
+      issue('oversized_memory', '-Users-me-app/MEMORY.md', 4000, '/p/app/m/MEMORY.md'),
+    ];
+    const ceiling = 70 + 300 + 5000;
+    expect(sumRecoverableStartupTokens(issues, skills, '-Users-me-app')).toBe(ceiling);
   });
 });

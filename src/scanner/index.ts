@@ -214,6 +214,10 @@ const SKILL_MOVE_TYPES = new Set<Issue['type']>([
  * Memory issues count only when they belong to the current project — the same
  * per-project rule `totalTokensBefore` follows. Deletions that free disk but no
  * context (`broken_symlink`, `temp_cache`) contribute nothing here by design.
+ *
+ * Three separate overlaps have to be collapsed, since every one of them inflates:
+ * the same skill path, the same plugin across cached versions, and a memory file
+ * that its own stale project already accounts for.
  */
 export function sumRecoverableStartupTokens(
   issues: Issue[],
@@ -222,7 +226,26 @@ export function sumRecoverableStartupTokens(
 ): number {
   const listingByPath = new Map(skills.map((s) => [s.path, s.listingTokens]));
   const countedPaths = new Set<string>();
+  const countedPlugins = new Set<string>();
   let total = 0;
+
+  // `stale_project` names the slug alone; `oversized_memory` names
+  // `<slug>/<file>`. Match both without letting a sibling slug through — plain
+  // startsWith would count `-Users-me-app2` as part of `-Users-me-app`.
+  const isCurrentProject = (name: string): boolean =>
+    name === currentProjectSlug || name.startsWith(currentProjectSlug + '/');
+
+  // Stale projects first: `stale_project.tokens` is the sum of every memory file
+  // in that project, so counting it settles the per-file findings inside it too.
+  // Charging both billed an oversized file twice and could claim more than the
+  // project's entire memory.
+  let currentProjectIsStale = false;
+  for (const issue of issues) {
+    if (issue.type !== 'stale_project' || !isCurrentProject(issue.name)) continue;
+    if (currentProjectIsStale) continue;
+    currentProjectIsStale = true;
+    total += issue.tokens;
+  }
 
   for (const issue of issues) {
     if (SKILL_MOVE_TYPES.has(issue.type)) {
@@ -231,17 +254,18 @@ export function sumRecoverableStartupTokens(
       // A skill missing from the listing map costs nothing at startup.
       total += listingByPath.get(issue.path) ?? 0;
     } else if (issue.type === 'unused_plugin') {
-      // Already a listing-scale figure from the plugin breakdown.
+      // Already a listing-scale figure from the plugin breakdown — but keyed by
+      // plugin name, while the surface scan walks version directories. A plugin
+      // with two cached versions raises two findings carrying the same aggregate.
+      if (countedPlugins.has(issue.name)) continue;
+      countedPlugins.add(issue.name);
       total += issue.tokens;
-    } else if (issue.type === 'stale_project' || issue.type === 'oversized_memory') {
+    } else if (issue.type === 'oversized_memory') {
       // Another project's memory never loads here, so trimming it saves this
       // session nothing.
-      //
-      // `stale_project` names the slug alone; `oversized_memory` names
-      // `<slug>/<file>`. Match both without letting a sibling slug through —
-      // plain startsWith would count `-Users-me-app2` as part of `-Users-me-app`.
-      const s = currentProjectSlug;
-      if (issue.name === s || issue.name.startsWith(s + '/')) total += issue.tokens;
+      if (!isCurrentProject(issue.name)) continue;
+      if (currentProjectIsStale) continue; // already inside the stale-project total
+      total += issue.tokens;
     }
   }
 

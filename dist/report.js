@@ -206,11 +206,15 @@ export function formatScanSummary(result) {
             `${result.currentProjectMemoryTokens.toLocaleString()} tok  ` +
             `\x1b[90m(${result.allProjectsMemoryTokens.toLocaleString()} tok across all projects, ` +
             `not a per-session cost)\x1b[0m`);
-        // A measured zero and a failed attribution print identically otherwise, and
-        // zero reads as "clean". Say which one this is.
+        // Zero reads as "clean", so name the reason for it. Deliberately does not
+        // claim the memory is unattributed: a directory Claude has simply never
+        // opened has no memory, and that 0 is correct. What is worth surfacing is
+        // that no project state backs this path, so if the user meant a different
+        // project, this total is answering the wrong question.
         if (!result.currentProjectKnown) {
-            lines.push(`    \x1b[33m!\x1b[0m No project on disk matches \x1b[90m${result.currentProjectSlug}\x1b[0m — ` +
-                `the 0 above means unattributed, not empty.`);
+            lines.push(`    \x1b[33m!\x1b[0m No Claude project state for \x1b[90m${result.currentProjectSlug}\x1b[0m — ` +
+                `nothing to attribute here.\n` +
+                `      \x1b[90mIf you meant a different project, pass --project-dir <path>.\x1b[0m`);
         }
     }
     // --- MCP SERVERS ---

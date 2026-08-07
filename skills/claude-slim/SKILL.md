@@ -103,9 +103,12 @@ Show a summary table:
 | **Session startup overhead** | | **~X tok** (`totalTokensBefore`) |
 
 **Check `currentProjectKnown` before presenting memory numbers.** When it is
-`false`, no project on disk matched the slug, so `currentProjectMemoryTokens: 0`
-means *attribution failed*, not *no memory*. Say so, and offer
-`--project-dir <path>`; do not report the 0 as a clean result.
+`false`, Claude Code holds no state for that slug. The `0` is correct, but it
+may be answering the wrong question — the slug can point at a plugin cache or a
+git worktree rather than the project the user meant. Say that no project state
+backs this path and offer `--project-dir <path>`, instead of presenting the 0 as
+a clean result. Do not assert the memory was lost: a directory Claude has never
+opened really does have none.
 
 ### 2-2. Plugin Detail Table
 
