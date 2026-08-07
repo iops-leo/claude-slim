@@ -29,7 +29,13 @@ export interface PluginSkillsResult {
  * version names, so a plugin that ships no skills is simply walked as before
  * and contributes nothing either way.
  */
-async function resolveContentRoots(pluginBaseDir: string): Promise<string[]> {
+interface ContentRoot {
+  dir: string;
+  /** Plugin directory name, or undefined for a cache entry with no plugin level. */
+  plugin?: string;
+}
+
+async function resolveContentRoots(pluginBaseDir: string): Promise<ContentRoot[]> {
   const entries = await safeReaddir(pluginBaseDir);
 
   // Flat layout: the cache entry holds content directly, with no plugin or
@@ -37,9 +43,9 @@ async function resolveContentRoots(pluginBaseDir: string): Promise<string[]> {
   // loop below reads `skills` as a plugin directory and each skill inside it as
   // a candidate version, then picks exactly one — which is not a miscount but a
   // silent disappearance: the whole entry reported zero skills.
-  if (entries.includes('skills')) return [pluginBaseDir];
+  if (entries.includes('skills')) return [{ dir: pluginBaseDir }];
 
-  const roots: string[] = [];
+  const roots: ContentRoot[] = [];
 
   for (const entry of entries) {
     const pluginDir = join(pluginBaseDir, entry);
@@ -48,7 +54,7 @@ async function resolveContentRoots(pluginBaseDir: string): Promise<string[]> {
     const children = await safeReaddir(pluginDir);
     if (children.includes('skills')) {
       // Content root, not a version container.
-      roots.push(pluginDir);
+      roots.push({ dir: pluginDir, plugin: entry });
       continue;
     }
 
@@ -63,12 +69,12 @@ async function resolveContentRoots(pluginBaseDir: string): Promise<string[]> {
     const active = pickActiveVersion(versions);
     // No subdirectories at all: hand back the plugin dir so the walk behaves
     // exactly as it did before rather than silently dropping the plugin.
-    roots.push(active ? active.dir : pluginDir);
+    roots.push({ dir: active ? active.dir : pluginDir, plugin: entry });
   }
 
   // A marketplace with no plugin subdirectories still needs walking — some
   // caches put content directly under the top level.
-  return roots.length > 0 ? roots : [pluginBaseDir];
+  return roots.length > 0 ? roots : [{ dir: pluginBaseDir }];
 }
 
 export async function scanPluginSkills(): Promise<PluginSkillsResult> {
@@ -92,7 +98,7 @@ export async function scanPluginSkills(): Promise<PluginSkillsResult> {
 
     const pluginSkillNames: string[] = [];
 
-    const walkDir = async (dir: string): Promise<void> => {
+    const walkDir = async (dir: string, plugin?: string): Promise<void> => {
       // Kept generic: a plugin's content root is normally
       // `<plugin>/<version>/`, but the walk also has to reach skills nested
       // deeper. Version selection happens before we get here — see
@@ -119,17 +125,18 @@ export async function scanPluginSkills(): Promise<PluginSkillsResult> {
                 listingTokens: listingTokensFromContent(skillDir, content),
                 source: 'plugin',
                 pluginName,
+                plugin,
               });
             }
           }
         } else {
-          await walkDir(entryPath);
+          await walkDir(entryPath, plugin);
         }
       }
     };
 
     for (const root of await resolveContentRoots(pluginDir)) {
-      await walkDir(root);
+      await walkDir(root.dir, root.plugin);
     }
 
     if (pluginSkillNames.length > 0) {

@@ -251,6 +251,12 @@ export function formatScanSummary(result) {
     // --- SUMMARY ---
     lines.push('');
     lines.push(`\x1b[1m  ESTIMATED OVERHEAD\x1b[0m: ~${result.totalTokensBefore.toLocaleString()} tokens at session start`);
+    if (result.disabledPluginSkillTokens > 0) {
+        // Stated rather than silently omitted: the figure moved out of the total in
+        // 2.13.0, and a total that drops with no explanation reads like a bug.
+        lines.push(`  \x1b[90mexcludes ~${result.disabledPluginSkillTokens.toLocaleString()} tokens of disabled-plugin skills — ` +
+            `not loaded, so not a startup cost\x1b[0m`);
+    }
     if (result.issues.length > 0) {
         // Stated next to the total it is a fraction of, because the numbers on the
         // issue rows below are body sizes, not startup cost, and adding them up

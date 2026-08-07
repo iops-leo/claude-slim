@@ -4,17 +4,6 @@ import { getPluginsDir } from '../paths.js';
 import { safeReadFile, safeReaddir, isDirectory, getDirSize, safeStat } from './fs-walk.js';
 import { pickActiveVersion } from './plugin-versions.js';
 import { listingTokensFromContent } from './skill-listing.js';
-/**
- * The directories under a marketplace whose skills a session would load — one
- * per plugin, never two versions of the same one.
- *
- * The cache is laid out `<marketplace>/<plugin>/<version>/`. A plugin whose
- * content sits directly under `<plugin>/` is returned as-is; otherwise its
- * children are versions and only the active one counts. That distinction is
- * drawn by looking for a `skills` directory rather than by pattern-matching
- * version names, so a plugin that ships no skills is simply walked as before
- * and contributes nothing either way.
- */
 async function resolveContentRoots(pluginBaseDir) {
     const entries = await safeReaddir(pluginBaseDir);
     // Flat layout: the cache entry holds content directly, with no plugin or
@@ -23,7 +12,7 @@ async function resolveContentRoots(pluginBaseDir) {
     // a candidate version, then picks exactly one — which is not a miscount but a
     // silent disappearance: the whole entry reported zero skills.
     if (entries.includes('skills'))
-        return [pluginBaseDir];
+        return [{ dir: pluginBaseDir }];
     const roots = [];
     for (const entry of entries) {
         const pluginDir = join(pluginBaseDir, entry);
@@ -32,7 +21,7 @@ async function resolveContentRoots(pluginBaseDir) {
         const children = await safeReaddir(pluginDir);
         if (children.includes('skills')) {
             // Content root, not a version container.
-            roots.push(pluginDir);
+            roots.push({ dir: pluginDir, plugin: entry });
             continue;
         }
         const versions = [];
@@ -46,11 +35,11 @@ async function resolveContentRoots(pluginBaseDir) {
         const active = pickActiveVersion(versions);
         // No subdirectories at all: hand back the plugin dir so the walk behaves
         // exactly as it did before rather than silently dropping the plugin.
-        roots.push(active ? active.dir : pluginDir);
+        roots.push({ dir: active ? active.dir : pluginDir, plugin: entry });
     }
     // A marketplace with no plugin subdirectories still needs walking — some
     // caches put content directly under the top level.
-    return roots.length > 0 ? roots : [pluginBaseDir];
+    return roots.length > 0 ? roots : [{ dir: pluginBaseDir }];
 }
 export async function scanPluginSkills() {
     const skills = [];
@@ -69,7 +58,7 @@ export async function scanPluginSkills() {
             return;
         }
         const pluginSkillNames = [];
-        const walkDir = async (dir) => {
+        const walkDir = async (dir, plugin) => {
             // Kept generic: a plugin's content root is normally
             // `<plugin>/<version>/`, but the walk also has to reach skills nested
             // deeper. Version selection happens before we get here — see
@@ -97,17 +86,18 @@ export async function scanPluginSkills() {
                                 listingTokens: listingTokensFromContent(skillDir, content),
                                 source: 'plugin',
                                 pluginName,
+                                plugin,
                             });
                         }
                     }
                 }
                 else {
-                    await walkDir(entryPath);
+                    await walkDir(entryPath, plugin);
                 }
             }
         };
         for (const root of await resolveContentRoots(pluginDir)) {
-            await walkDir(root);
+            await walkDir(root.dir, root.plugin);
         }
         if (pluginSkillNames.length > 0) {
             plugins.push({

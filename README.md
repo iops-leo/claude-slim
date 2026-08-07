@@ -249,13 +249,15 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.12.3 — What's new
+## v2.13.0 — What's new
 
-- **Fixed: the startup total counted a plugin's skills once per cached version.** `claude plugin update` leaves the old version behind as a symlink to the new one (`4.9.1 -> 4.15.4`), and the scan followed both as if they were separate installs — inflating the one number this tool exists to report. Both scanners now resolve the version a session actually loads. Measured here: plugin skill entries 148 → 107, startup total 13,435 → **12,504**.
-- **Fixed: every per-plugin cost was doubled when two versions were cached.** The breakdown showed one version's skill count beside two versions' tokens. `oh-my-claudecode` read as ~6,074 tokens against 41 skills; it is ~3,037.
-- **Corrected: v2.12.2 reported this issue as "1,944 tokens, 14.5%". It is 931 tokens, 6.9%.** That estimate mistook two distinct plugins shipping identical skill names (`document-skills` and `example-skills` share all 16) for duplicates.
+- **Changed: the startup estimate no longer counts disabled plugins.** Their skills are not in the session catalog, so they are not a startup cost — but they were being added to a number labelled "tokens at session start". Verified against a live session rather than assumed: skills from every disabled plugin were absent from the prompt, while every enabled one's were present. Measured here: **12,504 → 9,836**, a 21% correction.
+- **Added `disabledPluginSkillTokens`**, shown under the overhead line and in `--json` — what re-enabling everything would cost. A headline number that drops by a fifth with no explanation reads like a bug.
+- **Fixed: plugin skills are attributed to their plugin, not their marketplace.** One marketplace can host several plugins with different enabled states, so the two had to be told apart.
 
-Tests: 445 → 452 (+7).
+Only plugins *explicitly reported disabled* are excluded. `claude plugin list` has a third state — `✘ failed to load` — and a plugin in it still loads its skills, so anything unrecognised keeps counting.
+
+Tests: 452 → 461 (+9).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 
