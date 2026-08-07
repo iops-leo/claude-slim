@@ -249,17 +249,13 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.12.2 — What's new
+## v2.12.3 — What's new
 
-- **Fixed: a typo in `--project-dir` reported a confident zero.** The flag added in 2.12.1 to cure the silent zero could produce one itself — the slug is a pure string transform, so a misspelled path resolved to a valid-looking slug, matched nothing, and exited 0. Now an error. A directory that exists but has no memory is still a true zero.
-- **Fixed: `report` ignored project scoping.** It was the one command that neither took `--project-dir` nor warned from an install directory, so its before/after pair could be measured against a different project than the clean it described.
-- **Fixed: cleanup reported failures for work that succeeded.** One skill can collect several findings at once, and selecting `all` tried to move the same directory repeatedly — the first move worked, the rest surfaced raw `ENOENT`. 15 spurious errors on the machine where this was found.
-- **Fixed: `1-20` selected one item.** Ranges are now parsed, and input that cannot be understood is named rather than dropped.
-- **Fixed: the report box drew its rules two columns wider than its body.**
-- **Added `recoverableStartupTokens`** — what acting on every issue really saves at startup. The per-issue `tokens` figure is the full `SKILL.md` body, paid only when a skill runs; summing it produced **215,535 tokens of "savings" against a 13,434-token startup total**. The skill now reports the honest number.
-- **Added `currentProjectKnown`** so a measured zero and a failed attribution stop looking identical in `--json`.
+- **Fixed: the startup total counted a plugin's skills once per cached version.** `claude plugin update` leaves the old version behind as a symlink to the new one (`4.9.1 -> 4.15.4`), and the scan followed both as if they were separate installs — inflating the one number this tool exists to report. Both scanners now resolve the version a session actually loads. Measured here: plugin skill entries 148 → 107, startup total 13,435 → **12,504**.
+- **Fixed: every per-plugin cost was doubled when two versions were cached.** The breakdown showed one version's skill count beside two versions' tokens. `oh-my-claudecode` read as ~6,074 tokens against 41 skills; it is ~3,037.
+- **Corrected: v2.12.2 reported this issue as "1,944 tokens, 14.5%". It is 931 tokens, 6.9%.** That estimate mistook two distinct plugins shipping identical skill names (`document-skills` and `example-skills` share all 16) for duplicates.
 
-Tests: 401 → 438 (+37).
+Tests: 445 → 452 (+7).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

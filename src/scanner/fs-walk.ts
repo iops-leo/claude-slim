@@ -1,4 +1,5 @@
 import { readFile, readdir, lstat, realpath, stat } from 'node:fs/promises';
+import type { Stats } from 'node:fs';
 import { join } from 'node:path';
 
 export async function safeReadFile(p: string): Promise<string | null> {
@@ -11,6 +12,11 @@ export async function safeReaddir(p: string): Promise<string[]> {
 
 export async function isDirectory(p: string): Promise<boolean> {
   try { return (await stat(p)).isDirectory(); } catch { return false; }
+}
+
+/** Stats `p`, or null when it cannot be read. Follows symlinks, like isDirectory. */
+export async function safeStat(p: string): Promise<Stats | null> {
+  try { return await stat(p); } catch { return null; }
 }
 
 export async function isBrokenSymlink(p: string): Promise<boolean> {

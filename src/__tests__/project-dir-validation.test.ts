@@ -1,10 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
 import { join } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { projectDirError } from '../paths.js';
 import { scan } from '../scanner/index.js';
 import { initTokenizer } from '../tokenizer.js';
 import { createTmpClaude, writeStaleProject, type TmpClaude } from './helpers/tmp-claude.js';
+
+// `scan()` shells out to `claude plugin list` twice per call. Each spawn costs
+// 300-500ms, so the several scans below eat most of the 5s budget and the file
+// times out on a loaded machine. Same stub, and same reasoning, as
+// scan-stdout-invariant.test.ts: this tmp ~/.claude has no plugins installed,
+// so an empty plugin list is the honest fixture. Everything else stays real.
+vi.mock('../scanner/fs-walk.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../scanner/fs-walk.js')>()),
+  runCommand: async () => '',
+}));
+
 
 /**
  * Regression guard for the silent zero returning through its own fix.

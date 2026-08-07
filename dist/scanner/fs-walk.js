@@ -24,6 +24,15 @@ export async function isDirectory(p) {
         return false;
     }
 }
+/** Stats `p`, or null when it cannot be read. Follows symlinks, like isDirectory. */
+export async function safeStat(p) {
+    try {
+        return await stat(p);
+    }
+    catch {
+        return null;
+    }
+}
 export async function isBrokenSymlink(p) {
     try {
         const lstats = await lstat(p);

@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { statSync } from 'node:fs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { getPluginsDir } from '../paths.js';
+import { pickActiveVersion } from './plugin-versions.js';
 import { listingTokensFromContent } from './skill-listing.js';
 import { SKILL_PROMPT_OVERHEAD_TOKENS } from './constants.js';
 function safeReaddir(p) {
@@ -108,13 +109,21 @@ export function scanPluginSurfaces() {
             const pluginBaseDir = join(marketplaceDir, pluginName);
             if (!isDir(pluginBaseDir))
                 continue;
-            // Each plugin may have version subdirectories
-            for (const version of safeReaddir(pluginBaseDir)) {
-                const installDir = join(pluginBaseDir, version);
-                if (!isDir(installDir))
-                    continue;
-                const dirStat = safeStat(installDir);
-                const installedAt = dirStat ? Number(dirStat.mtimeMs) : 0;
+            // A plugin may have several version subdirectories, but a session loads
+            // exactly one. Emitting a surface per version made every per-plugin cost
+            // a multiple of the truth, because computePluginCosts sums across
+            // surfaces while computePluginBreakdown picks a single one — the two
+            // disagreed, and the summed figure is what reached the user.
+            const versions = safeReaddir(pluginBaseDir)
+                .map((version) => ({ version, installDir: join(pluginBaseDir, version) }))
+                .filter((v) => isDir(v.installDir))
+                .map((v) => {
+                const dirStat = safeStat(v.installDir);
+                return { ...v, installedAt: dirStat ? Number(dirStat.mtimeMs) : 0 };
+            });
+            const active = pickActiveVersion(versions);
+            if (active) {
+                const { version, installDir, installedAt } = active;
                 const { names: skills, listingTokens: skillListingTokens } = scanSkills(installDir);
                 const mcpServerKeys = parseMcpServerKeys(installDir);
                 const mcpToolPrefixes = mcpServerKeys.map((key) => `plugin_${pluginName}_${key}`);
