@@ -164,7 +164,7 @@ token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对
 
 仅排除**明确报告为已禁用**的插件。`claude plugin list` 存在第三种状态(`✘ failed to load`)，处于该状态的插件仍会加载技能，因此无法判定的一律继续计入。
 
-测试: 452 → **459 (+7)**。
+测试: 452 → **461 (+9)**。
 
 历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 

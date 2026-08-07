@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 - Only plugins **explicitly reported disabled** are excluded. `claude plugin list` has a third state the parser matches as neither enabled nor disabled: `✘ failed to load`. `railway` reports it after a hook clash — `Duplicate hooks file detected` — and its twelve skills load anyway, confirmed in the same live session. Treating anything unrecognised as disabled would have silently removed 815 real tokens, so anything not known-disabled still counts. The tests pin that direction explicitly.
-- Tests: 452 → 459 (+7).
+- The disabled set is keyed on `<plugin>@<marketplace>`, not the bare plugin name. The same name can be installed from two marketplaces in different states, and a name-only match dropped the enabled copy along with the disabled one. An identity reported enabled anywhere counts as enabled, since `claude plugin list` emits one row per scope and counting a live plugin is the safe error to make.
+- Tests: 452 → 461 (+9).
 
 ## [2.12.3] — 2026-08-07
 

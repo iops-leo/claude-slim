@@ -257,7 +257,7 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 Only plugins *explicitly reported disabled* are excluded. `claude plugin list` has a third state — `✘ failed to load` — and a plugin in it still loads its skills, so anything unrecognised keeps counting.
 
-Tests: 452 → 459 (+7).
+Tests: 452 → 461 (+9).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

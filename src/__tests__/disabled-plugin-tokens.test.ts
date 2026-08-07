@@ -129,6 +129,39 @@ describe('startup total excludes disabled plugins', () => {
     expect(result.disabledPluginSkillTokens).toBe(0);
   });
 
+  it('does not disable a plugin because a same-named one elsewhere is disabled', async () => {
+    // The same plugin name can come from two marketplaces with different
+    // states. Keying the disabled set on the bare name removed the enabled
+    // copy's skills from the total and billed them as disabled.
+    tmp = await createTmpClaude();
+    await writePluginSkill('mkt-on', 'shared', 'live-skill');
+    await writePluginSkill('mkt-off', 'shared', 'dead-skill');
+    stubPluginList([
+      { plugin: 'shared', marketplace: 'mkt-on', status: '\u2714 enabled' },
+      { plugin: 'shared', marketplace: 'mkt-off', status: '\u2718 disabled' },
+    ]);
+
+    const result = await scan();
+    const live = result.pluginSkills.find((s) => s.name === 'live-skill')!;
+    const dead = result.pluginSkills.find((s) => s.name === 'dead-skill')!;
+    expect(result.disabledPluginSkillTokens).toBe(dead.listingTokens);
+    expect(result.totalTokensBefore).toBeGreaterThanOrEqual(live.listingTokens);
+  });
+
+  it('keeps a plugin listed twice when either entry is enabled', async () => {
+    // `claude plugin list` emits one row per scope, so the same identity can
+    // appear twice. Enabled anywhere means the skills load.
+    tmp = await createTmpClaude();
+    await writePluginSkill('mkt', 'dual', 'skill');
+    stubPluginList([
+      { plugin: 'dual', marketplace: 'mkt', status: '\u2718 disabled' },
+      { plugin: 'dual', marketplace: 'mkt', status: '\u2714 enabled' },
+    ]);
+
+    const result = await scan();
+    expect(result.disabledPluginSkillTokens).toBe(0);
+  });
+
   it('never subtracts more than the plugin skills are worth', async () => {
     tmp = await createTmpClaude();
     await writePluginSkill('mkt', 'a', 's1');

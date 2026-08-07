@@ -101,8 +101,25 @@ export async function scan(opts = {}) {
     // disabled: railway reports it (a hook clash) and its twelve skills still
     // load. Treating anything unrecognised as disabled would have silently
     // deleted those from the total, so anything not known-disabled still counts.
-    const disabledPluginNames = new Set(installed.filter((p) => !p.enabled).map((p) => p.name));
-    const isLoadedAtStartup = (s) => s.plugin === undefined || !disabledPluginNames.has(s.plugin);
+    // Keyed on `<plugin>@<marketplace>`, not the bare name: the same plugin name
+    // can be installed from two marketplaces in different states, and a name-only
+    // set would drop the enabled copy along with the disabled one. `pluginName`
+    // is the cache directory, which is the marketplace.
+    //
+    // An identity enabled anywhere is treated as enabled. `claude plugin list`
+    // emits one row per scope, so the same identity legitimately appears twice —
+    // and counting a live plugin is the safe error to make, not dropping it.
+    const pluginIdentity = (plugin, marketplace) => `${plugin}@${marketplace}`;
+    const enabledIdentities = new Set(installed.filter((p) => p.enabled).map((p) => pluginIdentity(p.name, p.marketplace)));
+    const disabledIdentities = new Set(installed
+        .filter((p) => !p.enabled)
+        .map((p) => pluginIdentity(p.name, p.marketplace))
+        .filter((id) => !enabledIdentities.has(id)));
+    const isLoadedAtStartup = (s) => {
+        if (s.plugin === undefined || s.pluginName === undefined)
+            return true;
+        return !disabledIdentities.has(pluginIdentity(s.plugin, s.pluginName));
+    };
     const activePluginSkills = pluginSkills.filter(isLoadedAtStartup);
     const disabledPluginSkillTokens = sumListing(pluginSkills.filter((s) => !isLoadedAtStartup(s)));
     const skillListingTokens = sumListing(localSkills) + sumListing(activePluginSkills);
