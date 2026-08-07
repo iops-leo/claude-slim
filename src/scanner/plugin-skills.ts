@@ -30,9 +30,18 @@ export interface PluginSkillsResult {
  * and contributes nothing either way.
  */
 async function resolveContentRoots(pluginBaseDir: string): Promise<string[]> {
+  const entries = await safeReaddir(pluginBaseDir);
+
+  // Flat layout: the cache entry holds content directly, with no plugin or
+  // version level (`<cache-entry>/skills/<skill>/`). Without this check the
+  // loop below reads `skills` as a plugin directory and each skill inside it as
+  // a candidate version, then picks exactly one — which is not a miscount but a
+  // silent disappearance: the whole entry reported zero skills.
+  if (entries.includes('skills')) return [pluginBaseDir];
+
   const roots: string[] = [];
 
-  for (const entry of await safeReaddir(pluginBaseDir)) {
+  for (const entry of entries) {
     const pluginDir = join(pluginBaseDir, entry);
     if (!(await isDirectory(pluginDir))) continue;
 

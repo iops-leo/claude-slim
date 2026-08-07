@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The v2.12.2 note reporting this as "1,944 tokens — 14.5%" was wrong; it is 931 tokens, 6.9%.** That estimate keyed duplicates on marketplace + skill name, which conflated genuine version copies with two distinct plugins that legitimately ship identical skill names — `document-skills` and `example-skills` share all 16 of theirs. Only the 41 entries belonging to one plugin's symlinked second version were real duplicates. The v2.12.2 entry is left as written, since it records what was believed at the time.
 
 ### Internal
-- Tests: 445 → 451 (+6), fixturing the real layout — a version directory plus the update symlink beside it, two genuine version directories, and same-named skills across different plugins as the case that must *not* collapse.
+- Tests: 445 → 452 (+7), fixturing the real layout — a version directory plus the update symlink beside it, two genuine version directories, same-named skills across different plugins as the case that must *not* collapse, and a flat `<cache-entry>/skills/` cache, since introducing a version level must not make the layout without one disappear.
 - `project-dir.test.ts` and `project-dir-validation.test.ts` were missing the `runCommand` stub that commit `833986d` introduced for every test calling `scan()`. Each scan spawns `claude plugin list` twice at 300–500ms apiece, and the added test load pushed the file past the 5s timeout intermittently. Both now stub it, as the rest of the scan tests already did; ten consecutive full runs are clean.
 
 ### Known, still open

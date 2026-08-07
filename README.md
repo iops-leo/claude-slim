@@ -255,7 +255,7 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 - **Fixed: every per-plugin cost was doubled when two versions were cached.** The breakdown showed one version's skill count beside two versions' tokens. `oh-my-claudecode` read as ~6,074 tokens against 41 skills; it is ~3,037.
 - **Corrected: v2.12.2 reported this issue as "1,944 tokens, 14.5%". It is 931 tokens, 6.9%.** That estimate mistook two distinct plugins shipping identical skill names (`document-skills` and `example-skills` share all 16) for duplicates.
 
-Tests: 445 → 451 (+6).
+Tests: 445 → 452 (+7).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

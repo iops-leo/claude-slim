@@ -112,3 +112,20 @@ describe('scanPluginSurfaces with several cached versions', () => {
     expect(surfaces.map((s) => s.pluginName).sort()).toEqual(['plugin-a', 'plugin-b']);
   });
 });
+
+describe('cache entries that hold content directly', () => {
+  it('still finds skills stored at <cache-entry>/skills/<skill>/', async () => {
+    tmp = await createTmpClaude();
+    // The flat layout the generic walk used to support: no plugin or version
+    // level at all. Version selection must not mistake the skill directories
+    // themselves for candidate versions and pick exactly one.
+    const entry = join(tmp.pluginsDir, 'flat-cache');
+    await mkdir(join(entry, 'skills', 'alpha'), { recursive: true });
+    await writeFile(join(entry, 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: a\n---\nbody');
+    await mkdir(join(entry, 'skills', 'beta'), { recursive: true });
+    await writeFile(join(entry, 'skills', 'beta', 'SKILL.md'), '---\nname: beta\ndescription: b\n---\nbody');
+
+    const { skills } = await scanPluginSkills();
+    expect(skills.map((s) => s.name).sort()).toEqual(['alpha', 'beta']);
+  });
+});

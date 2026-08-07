@@ -162,7 +162,7 @@ token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对
 - **修复：缓存两个版本时每个插件的成本都翻倍。** 明细中一个版本的技能数旁显示的是两个版本的 token。`oh-my-claudecode` 显示 41 个技能约 ~6,074 tokens，实际为 ~3,037。
 - **更正：v2.12.2 将此问题报告为「1,944 tokens，14.5%」，实际为 931 tokens，6.9%。** 当时的估算把共用相同技能名的两个不同插件(`document-skills` 与 `example-skills` 全部 16 个都相同)误算为重复。
 
-测试: 445 → **451 (+6)**。
+测试: 445 → **452 (+7)**。
 
 历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 
