@@ -88,21 +88,30 @@ describe('sumRecoverableStartupTokens', () => {
     expect(sumRecoverableStartupTokens(issues, [], '-none')).toBe(0);
   });
 
-  it('counts unused plugins, whose tokens are already listing-scale', () => {
-    const issues = [issue('unused_plugin', 'claude-hud', 20, '')];
-    expect(sumRecoverableStartupTokens(issues, [], '-none')).toBe(20);
+  it('counts only a plugin\'s skill listings, not its whole estimated cost', () => {
+    // issue.tokens is CLAUDE.md section + skills + MCP + commands. The CLAUDE.md
+    // part is in the baseline but survives disabling; the MCP/command parts are
+    // freed but were never in the baseline. Only skills are both.
+    const issues = [issue('unused_plugin', 'telegram', 182, '/cache/mkt/telegram/1.0.0')];
+    const skillTokens = new Map([['telegram', 44]]);
+    expect(sumRecoverableStartupTokens(issues, [], '-none', skillTokens)).toBe(44);
+  });
+
+  it('contributes nothing for a plugin with no skill listings', () => {
+    // claude-hud: commands and hooks only. Disabling it frees no catalog lines.
+    const issues = [issue('unused_plugin', 'claude-hud', 20, '/cache/mkt/claude-hud/1.0.0')];
+    expect(sumRecoverableStartupTokens(issues, [], '-none', new Map())).toBe(0);
   });
 
   it('counts a plugin once even when several versions are cached', () => {
     // scanPluginSurfaces walks version directories, so a plugin with two cached
-    // versions yields two unused_plugin issues — and pluginCosts is keyed by
-    // plugin name, so each carries the same aggregate. Adding both billed the
-    // plugin's whole cost twice.
+    // versions yields two unused_plugin issues. Adding both billed it twice.
     const issues = [
       issue('unused_plugin', 'superpowers', 431, '/cache/mkt/superpowers/1.0.0'),
       issue('unused_plugin', 'superpowers', 431, '/cache/mkt/superpowers/1.1.0'),
     ];
-    expect(sumRecoverableStartupTokens(issues, [], '-none')).toBe(431);
+    const skillTokens = new Map([['superpowers', 120]]);
+    expect(sumRecoverableStartupTokens(issues, [], '-none', skillTokens)).toBe(120);
   });
 
   it('does not bill a memory file twice via its stale project', () => {
@@ -166,7 +175,9 @@ describe('sumRecoverableStartupTokens', () => {
       issue('stale_project', '-Users-me-app', 5000, '/p/app'),
       issue('oversized_memory', '-Users-me-app/MEMORY.md', 4000, '/p/app/m/MEMORY.md'),
     ];
-    const ceiling = 70 + 300 + 5000;
-    expect(sumRecoverableStartupTokens(issues, skills, '-Users-me-app')).toBe(ceiling);
+    const pluginSkillTokens = new Map([['multi', 90]]);
+    const ceiling = 70 + 90 + 5000;
+    expect(sumRecoverableStartupTokens(issues, skills, '-Users-me-app', pluginSkillTokens))
+      .toBe(ceiling);
   });
 });

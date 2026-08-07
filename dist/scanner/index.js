@@ -109,7 +109,14 @@ export async function scan(opts = {}) {
         claudeMdTokens +
         currentProjectMemoryTokens;
     const currentProjectKnown = await pathExists(join(getProjectsDir(), currentProjectSlug));
-    const recoverableStartupTokens = sumRecoverableStartupTokens(issues, [...localSkills, ...pluginSkills], currentProjectSlug);
+    // Only the skill-listing slice of a plugin's cost is recoverable startup
+    // context — see sumRecoverableStartupTokens. Aggregated by plugin name the
+    // same way `pluginCosts` is, so the two stay comparable.
+    const pluginSkillListingTokens = new Map();
+    for (const c of pluginCostBreakdowns) {
+        pluginSkillListingTokens.set(c.pluginName, (pluginSkillListingTokens.get(c.pluginName) ?? 0) + c.skillTokens);
+    }
+    const recoverableStartupTokens = sumRecoverableStartupTokens(issues, [...localSkills, ...pluginSkills], currentProjectSlug, pluginSkillListingTokens);
     return {
         localSkills,
         pluginSkills,
@@ -167,7 +174,9 @@ const SKILL_MOVE_TYPES = new Set([
  * the same skill path, the same plugin across cached versions, and a memory file
  * that its own stale project already accounts for.
  */
-export function sumRecoverableStartupTokens(issues, skills, currentProjectSlug) {
+export function sumRecoverableStartupTokens(issues, skills, currentProjectSlug, 
+/** Plugin name → its skill-listing tokens. See the `unused_plugin` branch. */
+pluginSkillListingTokens = new Map()) {
     const listingByPath = new Map(skills.map((s) => [s.path, s.listingTokens]));
     const countedPaths = new Set();
     const countedPlugins = new Set();
@@ -198,13 +207,23 @@ export function sumRecoverableStartupTokens(issues, skills, currentProjectSlug) 
             total += listingByPath.get(issue.path) ?? 0;
         }
         else if (issue.type === 'unused_plugin') {
-            // Already a listing-scale figure from the plugin breakdown — but keyed by
-            // plugin name, while the surface scan walks version directories. A plugin
-            // with two cached versions raises two findings carrying the same aggregate.
+            // Deliberately NOT `issue.tokens`. That is the plugin's full estimated
+            // cost from computePluginCosts — CLAUDE.md section + skills + MCP tools +
+            // commands — and two of those parts do not belong in a recovery figure
+            // presented against `totalTokensBefore`:
+            //   - the matched CLAUDE.md section is in the baseline but survives the
+            //     cleanup, since disabling a plugin does not edit the user's
+            //     CLAUDE.md (and this tool never modifies it at all);
+            //   - the MCP-tool and command estimates are genuinely freed, but are not
+            //     in the baseline, so counting them measures against a total that
+            //     never included them.
+            // The skill listings are the one component that is both. Deduped by name
+            // because the surface scan walks version directories, so a plugin with
+            // two cached versions raises two findings.
             if (countedPlugins.has(issue.name))
                 continue;
             countedPlugins.add(issue.name);
-            total += issue.tokens;
+            total += pluginSkillListingTokens.get(issue.name) ?? 0;
         }
         else if (issue.type === 'oversized_memory') {
             // Another project's memory never loads here, so trimming it saves this

@@ -32,4 +32,6 @@ export declare function scan(opts?: ScanOptions): Promise<ScanResult>;
  * the same skill path, the same plugin across cached versions, and a memory file
  * that its own stale project already accounts for.
  */
-export declare function sumRecoverableStartupTokens(issues: Issue[], skills: SkillInfo[], currentProjectSlug: string): number;
+export declare function sumRecoverableStartupTokens(issues: Issue[], skills: SkillInfo[], currentProjectSlug: string, 
+/** Plugin name → its skill-listing tokens. See the `unused_plugin` branch. */
+pluginSkillListingTokens?: Map<string, number>): number;
