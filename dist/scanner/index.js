@@ -90,7 +90,22 @@ export async function scan(opts = {}) {
     // measured from each file's frontmatter description rather than assumed
     // (see scanner/skill-listing.ts) — the real spread is 30–500+ tokens apiece.
     const sumListing = (entries) => entries.reduce((sum, e) => sum + e.listingTokens, 0);
-    const skillListingTokens = sumListing(localSkills) + sumListing(pluginSkills);
+    // A disabled plugin's skills are not in the session catalog, so they cost
+    // nothing at startup. Verified against a live session: skills from every
+    // disabled plugin here (document-skills, superpowers, telegram, …) were
+    // absent from the prompt, while enabled ones were present. Counting them put
+    // 3,397 tokens — 27% of the total — into a number labelled "at session start".
+    //
+    // Only names reported *explicitly disabled* are dropped. `claude plugin list`
+    // also emits `failed to load`, which the parser matches as neither enabled nor
+    // disabled: railway reports it (a hook clash) and its twelve skills still
+    // load. Treating anything unrecognised as disabled would have silently
+    // deleted those from the total, so anything not known-disabled still counts.
+    const disabledPluginNames = new Set(installed.filter((p) => !p.enabled).map((p) => p.name));
+    const isLoadedAtStartup = (s) => s.plugin === undefined || !disabledPluginNames.has(s.plugin);
+    const activePluginSkills = pluginSkills.filter(isLoadedAtStartup);
+    const disabledPluginSkillTokens = sumListing(pluginSkills.filter((s) => !isLoadedAtStartup(s)));
+    const skillListingTokens = sumListing(localSkills) + sumListing(activePluginSkills);
     const agentListingTokens = sumListing(userSurfaces.agents);
     const commandListingTokens = sumListing(userSurfaces.commands);
     // Memory is per-project: a session loads ~/.claude/projects/<slug>/memory/
@@ -138,6 +153,7 @@ export async function scan(opts = {}) {
         currentProjectMemoryTokens,
         allProjectsMemoryTokens,
         recoverableStartupTokens,
+        disabledPluginSkillTokens,
     };
 }
 async function pathExists(p) {

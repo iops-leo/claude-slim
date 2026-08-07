@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.0] — 2026-08-07
+
+### Changed
+- **The startup estimate no longer counts disabled plugins.** A disabled plugin's skills are not in the session catalog, so they are not a startup cost — but they were being added to a number labelled "tokens at session start". This was verified against a live session rather than assumed: skills from every disabled plugin on the test machine (`document-skills`, `example-skills`, `superpowers`, `telegram`, `codex`, `typecast-api-expert`) were absent from the prompt, while skills from every enabled plugin were present. On that machine the total falls **12,504 → 9,836**, a 21% correction. Minor rather than patch because it changes what the primary metric means, not just its accuracy.
+- **`disabledPluginSkillTokens`** is reported alongside it, in the JSON and under the overhead line. The figure is what re-enabling everything would cost; a headline number that dropped by a fifth with no explanation would read like a bug.
+
+### Fixed
+- **Plugin skills are now attributed to their plugin, not their marketplace.** `SkillInfo.pluginName` is the cache directory — `omc`, not `oh-my-claudecode` — which is deliberate, since `plugins[]` and the `disabled_plugin` detector match cache directories by it. But enabled/disabled state is reported per plugin, and one marketplace can host several with different states (`claude-plugins-official` carries three). The new `SkillInfo.plugin` field records the real name so the two can be told apart; the existing field and everything matching on it are untouched.
+
+### Internal
+- Only plugins **explicitly reported disabled** are excluded. `claude plugin list` has a third state the parser matches as neither enabled nor disabled: `✘ failed to load`. `railway` reports it after a hook clash — `Duplicate hooks file detected` — and its twelve skills load anyway, confirmed in the same live session. Treating anything unrecognised as disabled would have silently removed 815 real tokens, so anything not known-disabled still counts. The tests pin that direction explicitly.
+- Tests: 452 → 459 (+7).
+
 ## [2.12.3] — 2026-08-07
 
 ### Fixed

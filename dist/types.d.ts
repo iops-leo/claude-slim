@@ -14,7 +14,20 @@ export interface SkillInfo {
      */
     listingTokens: number;
     source: 'local' | 'plugin';
+    /**
+     * Cache directory this skill was found under — the *marketplace*, not the
+     * plugin. Kept as-is because `plugins[]` and the `disabled_plugin` detector
+     * match cache directories by this name (see parseDisabledPlugins).
+     */
     pluginName?: string;
+    /**
+     * The actual plugin, e.g. `oh-my-claudecode` where `pluginName` is `omc`.
+     *
+     * Needed because enabled/disabled state is reported per plugin, not per
+     * marketplace, and one marketplace can host both. Absent when the cache entry
+     * has no plugin level to read it from.
+     */
+    plugin?: string;
 }
 export interface BrokenSymlink {
     name: string;
@@ -109,6 +122,14 @@ export interface ScanResult {
      * against a 13,434-token startup total. This field is the honest number.
      */
     recoverableStartupTokens: number;
+    /**
+     * Skill-listing tokens belonging to plugins reported as disabled.
+     *
+     * Excluded from `totalTokensBefore` because a disabled plugin's skills are
+     * not in the session catalog. Reported separately so the number does not just
+     * vanish: it is what re-enabling everything would cost.
+     */
+    disabledPluginSkillTokens: number;
 }
 export interface ManifestEntry {
     date: string;
