@@ -111,8 +111,11 @@ export function formatReportBox(data: ReportData): string {
     return s + ' '.repeat(Math.max(0, W - 2 - visible.length));
   };
 
-  const top = '\u256d' + '\u2500'.repeat(W) + '\u256e';
-  const bot = '\u2570' + '\u2500'.repeat(W) + '\u256f';
+  // W is the total line width, so the run between the corners is W - 2 \u2014 the
+  // same interior width `pad()` and `blank` use. Repeating W here made every
+  // border overhang its own body by two columns.
+  const top = '\u256d' + '\u2500'.repeat(W - 2) + '\u256e';
+  const bot = '\u2570' + '\u2500'.repeat(W - 2) + '\u256f';
   const blank = '\u2502' + ' '.repeat(W - 2) + '\u2502';
 
   lines.push(top);
@@ -261,6 +264,14 @@ export function formatScanSummary(result: ScanResult): string {
         `\x1b[90m(${result.allProjectsMemoryTokens.toLocaleString()} tok across all projects, ` +
         `not a per-session cost)\x1b[0m`,
     );
+    // A measured zero and a failed attribution print identically otherwise, and
+    // zero reads as "clean". Say which one this is.
+    if (!result.currentProjectKnown) {
+      lines.push(
+        `    \x1b[33m!\x1b[0m No project on disk matches \x1b[90m${result.currentProjectSlug}\x1b[0m — ` +
+          `the 0 above means unattributed, not empty.`,
+      );
+    }
   }
 
   // --- MCP SERVERS ---
@@ -305,6 +316,16 @@ export function formatScanSummary(result: ScanResult): string {
   // --- SUMMARY ---
   lines.push('');
   lines.push(`\x1b[1m  ESTIMATED OVERHEAD\x1b[0m: ~${result.totalTokensBefore.toLocaleString()} tokens at session start`);
+  if (result.issues.length > 0) {
+    // Stated next to the total it is a fraction of, because the numbers on the
+    // issue rows below are body sizes, not startup cost, and adding them up
+    // yields a "saving" many times larger than the whole startup budget.
+    lines.push(
+      `  \x1b[1mRECOVERABLE\x1b[0m: ~${result.recoverableStartupTokens.toLocaleString()} tokens ` +
+        `\x1b[90mif every issue below is acted on (startup cost only — the per-issue\n` +
+        `  figures below are full file sizes, paid when a skill runs, not at startup)\x1b[0m`,
+    );
+  }
 
   if (isUsingFallback()) {
     lines.push(`  \x1b[33m\u26a0 Using bytes/4 approximation (js-tiktoken unavailable)\x1b[0m`);

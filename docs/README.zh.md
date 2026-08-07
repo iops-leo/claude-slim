@@ -95,10 +95,11 @@ claude plugin install claude-slim
 
 ```bash
 /claude-slim              # 完整流水线
-/claude-slim scan         # 仅报告，不做更改
-/claude-slim doctor       # 检查扫描前提和会话日志信号质量
-/claude-slim check-update # 检查是否有更新版本
-/claude-slim restore      # 全部恢复
+/claude-slim scan                     # 仅报告，不做更改
+/claude-slim scan --project-dir PATH  # 统计 PATH 的项目记忆（默认: cwd）
+/claude-slim doctor                   # 检查扫描前提和会话日志信号质量
+/claude-slim check-update             # 检查是否有更新版本
+/claude-slim restore                  # 全部恢复
 ```
 
 ---
@@ -155,12 +156,17 @@ token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对
 
 ---
 
-## v2.12.1 更新 (2026-08-02)
+## v2.12.2 更新 (2026-08-07)
 
-- **修复：`/claude-slim` 技能将项目记忆报告为 0。** 该技能通过 `cd "${CLAUDE_PLUGIN_ROOT}"` 调用 CLI，使 `cwd` 变为插件缓存目录；项目 slug 因此解析到该路径，与任何项目都不匹配，**所有项目记忆 token 都悄然从启动总量中消失** — 在发现该问题的机器上为 108,570 tokens。从 `cwd` 推导 slug 是 v2.8.0 的既定设计，出错的是调用方式而非扫描器，因此已从 `SKILL.md` 中移除 `cd`。这发生在本工具的主要入口，且不易察觉：0 看起来就像干净的结果。
-- **新增 `--project-dir <path>`**，供无法从项目目录运行的调用方使用；当 CLI 检测到自己正从安装目录运行而未提供该参数时会发出警告。由于无法推测用户指的是哪个项目，它选择明说，而不是自信地报告 0。
+- **修复：`--project-dir` 拼写错误会自信地报告 0。** 2.12.1 为消除静默的 0 而加入的参数，自身又制造了同样的问题。slug 只是路径字符串的纯粹变换，因此拼错的路径同样会得到一个格式完好的 slug，与任何项目都不匹配，并以退出码 0 结束。现在这会报错。真实存在但没有记忆的目录仍是真正的 0，依旧静默通过。
+- **修复：只有 `report` 忽略了项目范围。** 它是唯一既不接受 `--project-dir`、也不会在安装目录下发出警告的命令，因此其前后对比可能基于与所清理项目不同的项目计算。
+- **修复：成功的清理被报告为失败。** 一个技能会同时命中多条问题，选择 `all` 时会反复移动同一个目录：第一次成功，其余则显示原始的 `ENOENT`。在发现该问题的机器上产生了 15 条虚假错误。
+- **修复：`1-20` 只选中了一项。** 现在会解析范围，无法理解的输入也会明确指出被忽略的内容，而不是悄悄丢弃。
+- **修复：报告框的边线比正文宽出两列。**
+- **新增 `recoverableStartupTokens`** — 处理全部问题后在启动时真正能收回的量。每条问题的 `tokens` 是仅在技能运行时才产生的 `SKILL.md` 完整体积，直接相加会得出 **在启动总量为 13,434 tokens 的环境中节省 215,535 tokens** 的结论。技能现在报告诚实的数字。
+- **新增 `currentProjectKnown`** — 使 `--json` 能够区分实测的 0 与归属失败的 0。
 
-测试: 392 → **401 (+9)**。
+测试: 401 → **438 (+37)**。
 
 历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 

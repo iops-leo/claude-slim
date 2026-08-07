@@ -81,10 +81,32 @@ export interface ScanResult {
     userCommands: UserSurfaceEntry[];
     /** Project slug (cwd with `/` → `-`) whose memory a session here would load. */
     currentProjectSlug: string;
+    /**
+     * Whether `~/.claude/projects/<currentProjectSlug>/` actually exists.
+     *
+     * False means the slug matched nothing on disk, so
+     * `currentProjectMemoryTokens` is 0 because attribution failed — not because
+     * the project is clean. Consumers reading the JSON have no other way to tell
+     * those apart, and reporting an unattributed 0 as fact is the exact failure
+     * v2.12.1 was cut for.
+     */
+    currentProjectKnown: boolean;
     /** Memory tokens actually loaded at startup — current project only. */
     currentProjectMemoryTokens: number;
     /** Memory tokens across every project on disk. Not a per-session cost. */
     allProjectsMemoryTokens: number;
+    /**
+     * Startup tokens that acting on every issue would actually recover.
+     *
+     * Deliberately NOT `sum(issues.tokens)`. Two things make that sum wrong:
+     *   1. Issues are per-finding, not per-path — one skill can be flagged
+     *      `duplicate` + `oversized_skill` + `unused_skill` and get counted 3×.
+     *   2. `Issue.tokens` is the full SKILL.md body, which is only paid when the
+     *      skill is invoked. Startup pays `listingTokens` — often ~80× smaller.
+     * Summing raw issue tokens on a real machine produced 215,535 "savings"
+     * against a 13,434-token startup total. This field is the honest number.
+     */
+    recoverableStartupTokens: number;
 }
 export interface ManifestEntry {
     date: string;

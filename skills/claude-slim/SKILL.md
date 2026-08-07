@@ -72,6 +72,24 @@ After getting the scan JSON, YOU must interpret and present results to the user.
 
 > **Templates below are shown in English for readability. Always translate headers, labels, and prompts into the user's detected language when rendering.**
 
+### 2-0. Two numbers that are not interchangeable
+
+The JSON reports token counts in two different units, and mixing them produces
+savings figures larger than the entire thing being saved:
+
+- **`listingTokens`** (and `totalTokensBefore`, `recoverableStartupTokens`) —
+  what a session pays at startup for the catalog line.
+- **`tokens`** on a skill or an issue — the whole SKILL.md body, paid only when
+  that skill is actually invoked.
+
+`Issue.tokens` is the second kind. **Never sum it and call the result savings.**
+On a real machine that sum was 215,535 against a 13,434-token startup total —
+16× the whole budget. Use `recoverableStartupTokens`, which the CLI already
+computes with duplicates collapsed and the right unit.
+
+Quote body tokens only when explaining what one skill costs *per invocation*,
+and label them that way.
+
 ### 2-1. Environment Snapshot Table
 
 Show a summary table:
@@ -82,7 +100,12 @@ Show a summary table:
 | Plugins | N (M skills) | ~X tok |
 | CLAUDE.md | XKB | X tok |
 | Memory files | N (XKB) | ~X tok |
-| **Session startup overhead** | | **~X tok** |
+| **Session startup overhead** | | **~X tok** (`totalTokensBefore`) |
+
+**Check `currentProjectKnown` before presenting memory numbers.** When it is
+`false`, no project on disk matched the slug, so `currentProjectMemoryTokens: 0`
+means *attribution failed*, not *no memory*. Say so, and offer
+`--project-dir <path>`; do not report the 0 as a clean result.
 
 ### 2-2. Plugin Detail Table
 
@@ -123,7 +146,10 @@ End with a numbered action list, ordered by impact:
 2. What to consider
 3. What to leave alone and why
 
-Show estimated total token savings if all recommended actions are taken.
+For total savings, quote **`recoverableStartupTokens`** and state it against
+`totalTokensBefore` ("~2,700 of ~13,400 startup tokens"). Do not add up the
+per-issue numbers — see 2-0. A skill flagged three times is one cleanup, and
+its body size is not a startup cost.
 
 If subcommand is `scan`, stop here. Ask a localized equivalent of "Proceed with cleanup?" only for the full pipeline.
 

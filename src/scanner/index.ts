@@ -4,9 +4,10 @@
 // Route diagnostics through console.error. Enforced by
 // src/__tests__/scan-stdout-invariant.test.ts.
 import { join } from 'node:path';
+import { access } from 'node:fs/promises';
 import { countTokensCached } from '../tokenizer.js';
-import { getClaudeDir, getCurrentProjectSlug } from '../paths.js';
-import type { ScanResult } from '../types.js';
+import { getClaudeDir, getCurrentProjectSlug, getProjectsDir } from '../paths.js';
+import type { Issue, ScanResult, SkillInfo } from '../types.js';
 import { safeReadFile } from './fs-walk.js';
 import { scanLocalSkills } from './local-skills.js';
 import { scanPluginSkills } from './plugin-skills.js';
@@ -151,6 +152,14 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     claudeMdTokens +
     currentProjectMemoryTokens;
 
+  const currentProjectKnown = await pathExists(join(getProjectsDir(), currentProjectSlug));
+
+  const recoverableStartupTokens = sumRecoverableStartupTokens(
+    issues,
+    [...localSkills, ...pluginSkills],
+    currentProjectSlug,
+  );
+
   return {
     localSkills,
     pluginSkills,
@@ -168,7 +177,73 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     userAgents: userSurfaces.agents,
     userCommands: userSurfaces.commands,
     currentProjectSlug,
+    currentProjectKnown,
     currentProjectMemoryTokens,
     allProjectsMemoryTokens,
+    recoverableStartupTokens,
   };
+}
+
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Issue types whose cleanup moves a skill directory out of the listing. */
+const SKILL_MOVE_TYPES = new Set<Issue['type']>([
+  'template', 'duplicate', 'skill_dup', 'oversized_skill', 'unused_skill',
+  'backup_artifact',
+]);
+
+/**
+ * What acting on every issue would actually save at session start.
+ *
+ * Two corrections over a naive `sum(issues.tokens)`, both of which inflate:
+ *
+ * - **Per-path, not per-issue.** The detectors are independent, so one skill
+ *   routinely earns several findings at once (`duplicate` + `oversized_skill` +
+ *   `unused_skill`). Removing it once collects the saving once.
+ * - **Listing tokens, not body tokens.** `Issue.tokens` is the whole SKILL.md,
+ *   which is loaded only when the skill runs. Startup pays for the catalog
+ *   line alone. Conflating the two overstated savings ~80× in practice.
+ *
+ * Memory issues count only when they belong to the current project — the same
+ * per-project rule `totalTokensBefore` follows. Deletions that free disk but no
+ * context (`broken_symlink`, `temp_cache`) contribute nothing here by design.
+ */
+export function sumRecoverableStartupTokens(
+  issues: Issue[],
+  skills: SkillInfo[],
+  currentProjectSlug: string,
+): number {
+  const listingByPath = new Map(skills.map((s) => [s.path, s.listingTokens]));
+  const countedPaths = new Set<string>();
+  let total = 0;
+
+  for (const issue of issues) {
+    if (SKILL_MOVE_TYPES.has(issue.type)) {
+      if (countedPaths.has(issue.path)) continue;
+      countedPaths.add(issue.path);
+      // A skill missing from the listing map costs nothing at startup.
+      total += listingByPath.get(issue.path) ?? 0;
+    } else if (issue.type === 'unused_plugin') {
+      // Already a listing-scale figure from the plugin breakdown.
+      total += issue.tokens;
+    } else if (issue.type === 'stale_project' || issue.type === 'oversized_memory') {
+      // Another project's memory never loads here, so trimming it saves this
+      // session nothing.
+      //
+      // `stale_project` names the slug alone; `oversized_memory` names
+      // `<slug>/<file>`. Match both without letting a sibling slug through —
+      // plain startsWith would count `-Users-me-app2` as part of `-Users-me-app`.
+      const s = currentProjectSlug;
+      if (issue.name === s || issue.name.startsWith(s + '/')) total += issue.tokens;
+    }
+  }
+
+  return total;
 }

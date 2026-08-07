@@ -1,4 +1,5 @@
 import { homedir } from 'node:os';
+import { statSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 export function getClaudeDir() {
     return join(homedir(), '.claude');
@@ -41,6 +42,30 @@ export function looksLikeToolInstallDir(cwd = process.cwd()) {
     return (p.includes('/.claude/plugins/') ||
         p.includes('/_npx/') ||
         /\/node_modules\/claude-slim(\/|$)/.test(p));
+}
+/**
+ * Why an explicit `--project-dir` is unusable, or null when it is fine.
+ *
+ * The slug is a pure string transform of the path, so a typo resolves to a
+ * perfectly well-formed slug that matches no project on disk and reports zero
+ * project memory. That is the identical silent zero v2.12.1 was cut to fix,
+ * reintroduced through the flag added to fix it. A non-existent explicit path
+ * is unambiguously a mistake — worth an error, not a guess.
+ *
+ * A directory that exists but holds no memory is NOT an error: that is a real,
+ * correctly-measured zero.
+ */
+export function projectDirError(p) {
+    let st;
+    try {
+        st = statSync(p);
+    }
+    catch {
+        return `--project-dir is not an existing directory: ${p}`;
+    }
+    if (!st.isDirectory())
+        return `--project-dir is not a directory: ${p}`;
+    return null;
 }
 export function getManifestPath() {
     return join(getDisabledDir(), 'manifest.json');
