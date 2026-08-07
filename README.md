@@ -148,6 +148,7 @@ Then just type `/claude-slim` in any session.
 /claude-slim scan                     # Report only, no changes
 /claude-slim scan --json              # Machine-readable JSON output
 /claude-slim scan --lookback-days 30  # Treat skills idle for 30+ days as unused
+/claude-slim scan --project-dir PATH  # Count PATH's project memory (default: cwd)
 /claude-slim doctor                   # Check scanner prerequisites and data fidelity
 /claude-slim check-update             # Is a newer version published?
 /claude-slim restore                  # Bring back anything you disabled
@@ -248,12 +249,17 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.12.1 — What's new
+## v2.12.2 — What's new
 
-- **Fixed: the `/claude-slim` skill reported project memory as zero.** It invoked the CLI with `cd "${CLAUDE_PLUGIN_ROOT}"`, making `cwd` the plugin cache directory; the project slug resolved there, matched nothing, and every project-memory token silently left the startup total — **108,570** on the machine where this surfaced. `SKILL.md` no longer `cd`s. This hit the tool's primary entry point, and quietly: a zero reads as a clean result.
-- **`--project-dir <path>`** for callers that cannot run from the project directory, plus a warning when the CLI notices it is running from its own install without one.
+- **Fixed: a typo in `--project-dir` reported a confident zero.** The flag added in 2.12.1 to cure the silent zero could produce one itself — the slug is a pure string transform, so a misspelled path resolved to a valid-looking slug, matched nothing, and exited 0. Now an error. A directory that exists but has no memory is still a true zero.
+- **Fixed: `report` ignored project scoping.** It was the one command that neither took `--project-dir` nor warned from an install directory, so its before/after pair could be measured against a different project than the clean it described.
+- **Fixed: cleanup reported failures for work that succeeded.** One skill can collect several findings at once, and selecting `all` tried to move the same directory repeatedly — the first move worked, the rest surfaced raw `ENOENT`. 15 spurious errors on the machine where this was found.
+- **Fixed: `1-20` selected one item.** Ranges are now parsed, and input that cannot be understood is named rather than dropped.
+- **Fixed: the report box drew its rules two columns wider than its body.**
+- **Added `recoverableStartupTokens`** — what acting on every issue really saves at startup. The per-issue `tokens` figure is the full `SKILL.md` body, paid only when a skill runs; summing it produced **215,535 tokens of "savings" against a 13,434-token startup total**. The skill now reports the honest number.
+- **Added `currentProjectKnown`** so a measured zero and a failed attribution stop looking identical in `--json`.
 
-Tests: 392 → 401 (+9).
+Tests: 401 → 438 (+37).
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

@@ -15,13 +15,13 @@ import {
   calculateReport,
 } from './report.js';
 import { collectDoctorReport, formatDoctorReport } from './doctor.js';
-import { looksLikeToolInstallDir } from './paths.js';
+import { looksLikeToolInstallDir, projectDirError } from './paths.js';
 import { checkForUpdate, formatUpdateNotice } from './update-check.js';
 import { confirmDecision, planUpdate, renderStep, runUpdate } from './update-run.js';
 import { scanCodex } from './codex/index.js';
 import { formatCodexSummary } from './codex/report.js';
 import { classifyCodexIssues } from './codex/detectors.js';
-import { resolveSelection, resolveRestoreSelection } from './selection.js';
+import { resolveSelection, resolveRestoreSelection, parseSelection } from './selection.js';
 import type { Issue, ScanResult, ManifestEntry, DisabledPluginEntry, AnyManifestEntry } from './types.js';
 
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
@@ -283,7 +283,8 @@ program
     }
 
     console.log('');
-    const selection = await askUser('  Restore (all / numbers / none): ');
+    const selection = await askUser('  Restore (all / numbers / ranges / none): ');
+    warnIgnoredSelection(selection, restorable.length);
     const indices = resolveRestoreSelection(selection, restorable.length);
 
     if (indices.length === 0) {
@@ -316,9 +317,17 @@ program
   .description('Show savings report from last clean')
   .option('--sessions-per-day <n>', 'Sessions per day for savings estimate', '2')
   .option('--lookback-days <n>', 'Days of session history for skill-usage analysis', '60')
+  .option('--project-dir <path>', 'Directory whose project memory counts toward the total (default: cwd)')
   .action(async (opts) => {
     await initTokenizer();
-    const result = await scan({ lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60) });
+    // Must resolve the same way `scan` and `clean` do. Skipping this left
+    // `report` as the one command that would neither honour --project-dir nor
+    // warn from an install directory, so its before/after pair could be
+    // computed against a different project than the clean it is reporting on.
+    const result = await scan({
+      lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60),
+      projectDir: resolveProjectDir(opts.projectDir),
+    });
     const allEntries = await readManifest();
     // Filter to legacy-style entries only (those with tokenCount/name/from fields)
     const entries = allEntries.filter((e): e is ManifestEntry => !('plugin' in e && 'marketplace' in e));
@@ -401,15 +410,49 @@ program.action(async () => {
 
 
 /**
+ * Name the fragments of a selection that were thrown away.
+ *
+ * Silence here is dangerous in one direction only: the user believes they
+ * selected more than they did, sees a short confirmation, and assumes the rest
+ * is coming. Keywords (`all`, `none`, empty) are handled by the resolvers and
+ * are not fragments, so they are not reported as invalid.
+ */
+function warnIgnoredSelection(input: string, count: number): void {
+  const trimmed = input.trim().toLowerCase();
+  if (trimmed === '' || ['all', 'a', 'none', 'n', 'enter'].includes(trimmed)) return;
+  const { invalid } = parseSelection(trimmed, count);
+  if (invalid.length === 0) return;
+  console.log(
+    `  \x1b[33m!\x1b[0m Ignored ${invalid.length} unrecognised entr${invalid.length === 1 ? 'y' : 'ies'}: ` +
+    `${invalid.join(', ')}  \x1b[90m(valid: 1-${count}, e.g. "3", "5-12")\x1b[0m`,
+  );
+}
+
+/**
  * Resolve which directory's project memory counts toward the startup estimate.
  *
  * Warns when the CLI is running from its own install directory and no explicit
  * directory was given: the slug would resolve to the plugin cache, match no
  * project, and silently zero out every project-memory token. Warning beats
  * guessing — we cannot know which project the user meant.
+ *
+ * A `--project-dir` that does not exist is a hard error rather than a warning.
+ * The slug is derived from the path string, so a typo happily resolves to a
+ * slug that matches nothing and reports 0 — reintroducing, through the very
+ * flag added to prevent it, the silent zero of v2.12.1. An explicit flag with a
+ * bad value is unambiguously a mistake, so fail instead of guessing.
  */
 function resolveProjectDir(explicit?: string): string | undefined {
-  if (explicit) return explicit;
+  if (explicit) {
+    const err = projectDirError(explicit);
+    if (err) {
+      // Exit rather than fall back to cwd: continuing would print a full,
+      // confident report built on the wrong project.
+      console.error(`error: ${err}`);
+      process.exit(1);
+    }
+    return explicit;
+  }
   if (looksLikeToolInstallDir()) {
     console.error(
       '  \x1b[33m!\x1b[0m Running from claude-slim\'s own install directory, so project memory\n' +
@@ -459,11 +502,13 @@ async function runCleanPipeline(opts: {
     console.log('  Actions:');
     console.log('    Enter    → accept pre-selected (Tier 1 only)');
     console.log('    1,3,5    → select specific items');
+    console.log('    1-9      → select a range');
     console.log('    all      → select everything');
     console.log('    none     → cancel');
     console.log('');
 
     const selection = await askUser('  Your choice: ');
+    warnIgnoredSelection(selection, result.issues.length);
     selectedIssues = resolveSelection(selection, result.issues);
   } else if (opts.auto) {
     // Explicit non-interactive mode: select Tier 1 only.

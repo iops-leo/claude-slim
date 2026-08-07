@@ -6,6 +6,17 @@ import type { AgentId } from './paths.js';
 import { disablePlugin, enablePlugin, isClaudeCliAvailable, ClaudeCliMissingError } from './plugin-runtime.js';
 import type { Issue, ManifestEntry, DisabledPluginEntry } from './types.js';
 
+/**
+ * Issue types whose cleanup consumes a filesystem path — the ones where two
+ * findings on the same path cannot both be executed. Types absent here are
+ * either report-only (`oversized_memory`, `disabled_plugin`) or addressed by
+ * name through the `claude` CLI rather than by path (`unused_plugin`).
+ */
+const MOVES_A_PATH = new Set<Issue['type']>([
+  'template', 'duplicate', 'skill_dup', 'oversized_skill', 'unused_skill',
+  'backup_artifact', 'broken_symlink', 'temp_cache', 'stale_project',
+]);
+
 // Restrict a restore target to a specific subtree of ~/.claude/. Complements
 // assertInsideClaudeDir: a tampered manifest could still name a legal
 // ~/.claude/ path that belongs to a different type of asset (e.g. redirect a
@@ -74,7 +85,25 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
     claudeCliMissing = true;
   }
 
+  // The detectors run independently, so one skill routinely earns several
+  // findings at once — `skillify` shows up as duplicate + oversized_skill +
+  // unused_skill. Selecting "all" then tried to rename the same directory three
+  // times: the first succeeded and the rest surfaced raw ENOENT rows, telling
+  // the user a cleanup had failed when it had in fact worked. Collapse them
+  // here, keeping the first (issues arrive tier-ordered, so that is the
+  // most-confident finding for the path).
+  const deduped: Issue[] = [];
+  const claimedPaths = new Set<string>();
   for (const issue of issues) {
+    if (MOVES_A_PATH.has(issue.type)) {
+      const key = `${issue.agent ?? 'claude'}:${issue.path}`;
+      if (claimedPaths.has(key)) continue;
+      claimedPaths.add(key);
+    }
+    deduped.push(issue);
+  }
+
+  for (const issue of deduped) {
     // Scope every path decision to the issue's own agent, so a Codex issue can
     // never resolve into ~/.claude/ (or the reverse).
     const agent: AgentId = issue.agent ?? 'claude';

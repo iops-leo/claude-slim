@@ -99,10 +99,34 @@ export interface ScanResult {
   userCommands: UserSurfaceEntry[];
   /** Project slug (cwd with `/` → `-`) whose memory a session here would load. */
   currentProjectSlug: string;
+  /**
+   * Whether `~/.claude/projects/<currentProjectSlug>/` exists — i.e. whether
+   * Claude Code holds any state for this project.
+   *
+   * When false, `currentProjectMemoryTokens` is 0 because nothing is stored
+   * under this slug. That 0 is arithmetically correct either way; what the flag
+   * adds is *why*. A directory Claude has never opened genuinely has no memory,
+   * while a slug pointing somewhere the user did not mean — the plugin cache, a
+   * git worktree — produces the same 0 for a very different reason. Consumers
+   * of `--json` had no way to tell a scanned project from a mis-aimed one.
+   */
+  currentProjectKnown: boolean;
   /** Memory tokens actually loaded at startup — current project only. */
   currentProjectMemoryTokens: number;
   /** Memory tokens across every project on disk. Not a per-session cost. */
   allProjectsMemoryTokens: number;
+  /**
+   * Startup tokens that acting on every issue would actually recover.
+   *
+   * Deliberately NOT `sum(issues.tokens)`. Two things make that sum wrong:
+   *   1. Issues are per-finding, not per-path — one skill can be flagged
+   *      `duplicate` + `oversized_skill` + `unused_skill` and get counted 3×.
+   *   2. `Issue.tokens` is the full SKILL.md body, which is only paid when the
+   *      skill is invoked. Startup pays `listingTokens` — often ~80× smaller.
+   * Summing raw issue tokens on a real machine produced 215,535 "savings"
+   * against a 13,434-token startup total. This field is the honest number.
+   */
+  recoverableStartupTokens: number;
 }
 
 // Flat "skill/memory moved" record written by the cleaner.

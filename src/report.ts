@@ -111,8 +111,11 @@ export function formatReportBox(data: ReportData): string {
     return s + ' '.repeat(Math.max(0, W - 2 - visible.length));
   };
 
-  const top = '\u256d' + '\u2500'.repeat(W) + '\u256e';
-  const bot = '\u2570' + '\u2500'.repeat(W) + '\u256f';
+  // W is the total line width, so the run between the corners is W - 2 \u2014 the
+  // same interior width `pad()` and `blank` use. Repeating W here made every
+  // border overhang its own body by two columns.
+  const top = '\u256d' + '\u2500'.repeat(W - 2) + '\u256e';
+  const bot = '\u2570' + '\u2500'.repeat(W - 2) + '\u256f';
   const blank = '\u2502' + ' '.repeat(W - 2) + '\u2502';
 
   lines.push(top);
@@ -261,6 +264,18 @@ export function formatScanSummary(result: ScanResult): string {
         `\x1b[90m(${result.allProjectsMemoryTokens.toLocaleString()} tok across all projects, ` +
         `not a per-session cost)\x1b[0m`,
     );
+    // Zero reads as "clean", so name the reason for it. Deliberately does not
+    // claim the memory is unattributed: a directory Claude has simply never
+    // opened has no memory, and that 0 is correct. What is worth surfacing is
+    // that no project state backs this path, so if the user meant a different
+    // project, this total is answering the wrong question.
+    if (!result.currentProjectKnown) {
+      lines.push(
+        `    \x1b[33m!\x1b[0m No Claude project state for \x1b[90m${result.currentProjectSlug}\x1b[0m — ` +
+          `nothing to attribute here.\n` +
+          `      \x1b[90mIf you meant a different project, pass --project-dir <path>.\x1b[0m`,
+      );
+    }
   }
 
   // --- MCP SERVERS ---
@@ -305,6 +320,16 @@ export function formatScanSummary(result: ScanResult): string {
   // --- SUMMARY ---
   lines.push('');
   lines.push(`\x1b[1m  ESTIMATED OVERHEAD\x1b[0m: ~${result.totalTokensBefore.toLocaleString()} tokens at session start`);
+  if (result.issues.length > 0) {
+    // Stated next to the total it is a fraction of, because the numbers on the
+    // issue rows below are body sizes, not startup cost, and adding them up
+    // yields a "saving" many times larger than the whole startup budget.
+    lines.push(
+      `  \x1b[1mRECOVERABLE\x1b[0m: ~${result.recoverableStartupTokens.toLocaleString()} tokens ` +
+        `\x1b[90mif every issue below is acted on (startup cost only — the per-issue\n` +
+        `  figures below are full file sizes, paid when a skill runs, not at startup)\x1b[0m`,
+    );
+  }
 
   if (isUsingFallback()) {
     lines.push(`  \x1b[33m\u26a0 Using bytes/4 approximation (js-tiktoken unavailable)\x1b[0m`);

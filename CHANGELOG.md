@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.2] — 2026-08-07
+
+### Fixed
+- **A typo in `--project-dir` reported a confident zero.** The flag added in 2.12.1 to cure the silent zero could produce one itself: the slug is a pure string transform of the path, so `--project-dir /projct/app` resolved to a well-formed slug, matched nothing, reported 0 project-memory tokens, and exited 0. An explicit flag with a non-existent value is unambiguously a mistake, so it is now an error rather than a guess. A directory that exists but holds no memory is still a true zero and stays silent.
+- **`report` ignored project scoping entirely.** It was the one command that neither accepted `--project-dir` nor warned when run from an install directory, so its before/after pair could be computed against a different project than the clean it was reporting on. It now resolves the directory exactly as `scan` and `clean` do.
+- **Cleanup reported failures for work that succeeded.** The detectors run independently, so one skill collects several findings at once — `skillify` was flagged `duplicate` + `oversized_skill` + `unused_skill`. Choosing `all` then renamed the same directory three times: the first call worked and the rest raised raw `ENOENT` rows. On the machine where this was found, 40 distinct paths carried 55 findings, producing 15 spurious errors. Findings that consume the same path are now collapsed to one action.
+- **Range input silently selected one item.** On a list that routinely runs past 70 numbered rows, `1-20` is the obvious way to pick a span, but `parseInt('1-20')` is `1` — the user confirmed twenty cleanups and got one, with nothing said. Ranges are now parsed, and fragments that cannot be understood are named instead of dropped.
+- **The report box drew its rules two columns wider than its own body**, so every rendered report had overhanging corners.
+
+### Added
+- **`recoverableStartupTokens`** in the scan result: what acting on every issue would actually save at startup. `SKILL.md` asks the model to report total savings, and the only per-item figure available was `Issue.tokens` — which double-counts multiply-flagged skills and, more seriously, measures the whole `SKILL.md` body rather than the catalog line startup pays for. Summing it on a real machine gave **215,535 tokens of "savings" against a 13,434-token startup total**, a saving 16× larger than the entire cost. The new field collapses duplicates and uses listing tokens; `SKILL.md` now points at it and explains the two units.
+- **`currentProjectKnown`** in the scan result, plus a line in the text report when it is false. The 0 is arithmetically right either way; what the flag adds is *why*. A directory Claude has never opened genuinely has no memory, while a slug aimed at a plugin cache or a git worktree yields the same 0 for a very different reason — and consumers of `--json` had no signal at all, since the existing warning was stderr prose. The report says no project state backs the path rather than claiming the memory was lost.
+
+`recoverableStartupTokens` collapses three distinct overlaps, each of which inflates on its own: the same skill path flagged by several detectors, one plugin counted once per cached version directory (the surface scan walks versions while the cost map is keyed by plugin name), and a memory file already contained in its own stale project's total. For an unused plugin it counts only the skill-listing slice of `computePluginCosts`, not the full estimate: the matched CLAUDE.md section is in the baseline but survives the cleanup (claude-slim never edits CLAUDE.md), while the MCP-tool and command estimates are genuinely freed but were never in `totalTokensBefore` — counting either measures against a total that does not contain it.
+
+### Known, not fixed here
+- `totalTokensBefore` double-counts plugin skills when a plugin's cache holds more than one version directory, including when one is a symlink to another (`4.9.1 -> 4.15.4`). The skill listing scan follows both. On the machine this was measured, 57 of 148 plugin skill entries were duplicates worth **1,944 tokens — 14.5% of the headline startup total**. Left alone deliberately: it moves the primary metric and belongs in its own change rather than one about savings accounting.
+
+### Internal
+- Tests: 401 → 438 (+37), covering each fix at the unit its bug lived in: path-collision cleanup against a real temp `~/.claude`, range and rejection parsing, the recoverable-token aggregate (including that it can never exceed the listing total it is a fraction of, and that a sibling slug like `-Users-me-app2` is not counted as part of `-Users-me-app`), and box geometry.
+
 ## [2.12.1] — 2026-08-02
 
 ### Fixed

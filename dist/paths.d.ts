@@ -23,6 +23,19 @@ export declare function getCurrentProjectSlug(cwd?: string): string;
  * `--project-dir` instead of quietly reporting zero.
  */
 export declare function looksLikeToolInstallDir(cwd?: string): boolean;
+/**
+ * Why an explicit `--project-dir` is unusable, or null when it is fine.
+ *
+ * The slug is a pure string transform of the path, so a typo resolves to a
+ * perfectly well-formed slug that matches no project on disk and reports zero
+ * project memory. That is the identical silent zero v2.12.1 was cut to fix,
+ * reintroduced through the flag added to fix it. A non-existent explicit path
+ * is unambiguously a mistake — worth an error, not a guess.
+ *
+ * A directory that exists but holds no memory is NOT an error: that is a real,
+ * correctly-measured zero.
+ */
+export declare function projectDirError(p: string): string | null;
 export declare function getManifestPath(): string;
 export declare function getLegacyManifestPath(): string;
 /** The agents claude-slim is allowed to touch. Adding one widens what every
