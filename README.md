@@ -94,21 +94,21 @@ That's slower responses. Hitting your usage cap faster. Paying for context you'r
 **Report** — Shows exactly what changed:
 
 ```
-╭──────────────────────────────────────────╮
-│  claude-slim report                      │
-│                                          │
-│  Before: 14,510 tokens at startup        │
-│  After:   5,181 tokens at startup        │
-│  Saved:   9,329 tokens (64.3%)           │
-│                                          │
-│  Top offenders removed:                  │
-│  • office-hours              23,008 tok  │
-│  • harness                    7,902 tok  │
-│  • manpower                   4,764 tok  │
-│                                          │
-│  Est. monthly savings: ~$1.68            │
-│  (2 sessions/day × $0.003/1K tok)        │
-╰──────────────────────────────────────────╯
+╭────────────────────────────────────────╮
+│  claude-slim report                    │
+│                                        │
+│  Before: 14,510 tokens at startup      │
+│  After:   5,181 tokens at startup      │
+│  Saved:   9,329 tokens (64.3%)         │
+│                                        │
+│  Top offenders removed:                │
+│  • office-hours              23,008 tok│
+│  • harness                    7,902 tok│
+│  • manpower                   4,764 tok│
+│                                        │
+│  Est. monthly savings: ~$1.68          │
+│  (2 sessions/day × $0.003/1K tok)      │
+╰────────────────────────────────────────╯
 
   ┌──────────────────┬──────────┬──────────┬────────────┐
   │                  │  Before  │  After   │  Saved     │

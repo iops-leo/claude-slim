@@ -67,6 +67,7 @@ flowchart LR
 | 대용량 파일 | 10KB 이상 SKILL.md |
 | **미사용 스킬** | **최근 N일(기본 60일) 세션에서 한 번도 호출되지 않은 로컬 스킬** |
 | 에이전트·커맨드 | `~/.claude/agents/`, `~/.claude/commands/` — 측정·보고만 하고 변경하지 않음 |
+| **미사용 플러그인** | **최근 N일(기본 60일) 세션에서 스킬·MCP·커맨드가 한 번도 호출되지 않은 플러그인. Tier 3, 자동 선택 안 함.** |
 | 오래된 메모리 | 매 세션 로드되는 대용량 메모리 파일 |
 | 비활성 플러그인 | 설치됐지만 비활성화된 채 캐시 점유 |
 | 오래된 프로젝트 | 90일 이상 미사용 프로젝트 메모리 |
@@ -85,21 +86,21 @@ flowchart LR
 **리포트** — 정확히 뭐가 바뀌었는지 보여줌:
 
 ```
-╭──────────────────────────────────────────╮
-│  claude-slim report                      │
-│                                          │
-│  Before: 14,510 tokens at startup        │
-│  After:   5,181 tokens at startup        │
-│  Saved:   9,329 tokens (64.3%)           │
-│                                          │
-│  Top offenders removed:                  │
-│  • office-hours              23,008 tok  │
-│  • harness                    7,902 tok  │
-│  • manpower                   4,764 tok  │
-│                                          │
-│  Est. monthly savings: ~$1.68            │
-│  (2 sessions/day × $0.003/1K tok)        │
-╰──────────────────────────────────────────╯
+╭────────────────────────────────────────╮
+│  claude-slim report                    │
+│                                        │
+│  Before: 14,510 tokens at startup      │
+│  After:   5,181 tokens at startup      │
+│  Saved:   9,329 tokens (64.3%)         │
+│                                        │
+│  Top offenders removed:                │
+│  • office-hours              23,008 tok│
+│  • harness                    7,902 tok│
+│  • manpower                   4,764 tok│
+│                                        │
+│  Est. monthly savings: ~$1.68          │
+│  (2 sessions/day × $0.003/1K tok)      │
+╰────────────────────────────────────────╯
 ```
 
 | | Before | After | 절감 |
