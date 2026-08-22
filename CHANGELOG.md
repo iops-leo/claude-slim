@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.1] — 2026-08-22
+
+### Fixed
+- **`scan` told users the tool never touches `~/.codex/`, while `clean --auto` deletes from it permanently.** The Codex summary closed with `Reported only — claude-slim never modifies ~/.codex/.`, and flagged backup copies with `Not removed — ~/.codex/ is read-only here. Delete manually if stale.` Both were true in v2.10 and false from **v2.11.0** on, when `clean` gained the Codex tiers. On the machine where this surfaced, `clean --dry-run` selected `[Auto] [codex] temp_cache: .tmp (146MB of install leftovers) (permanent)` — Tier 1, which `--auto` applies without prompting, and which no `restore` can undo. The docs were corrected when v2.11.0 shipped; these two strings in the CLI were missed and survived four releases. The summary now states what actually happens: `scan` only reads, `clean` acts under the same tiers as `~/.claude/`, moves land in `~/.codex/skills.disabled/` and reverse with `restore`, and Tier 1 install leftovers are deleted permanently.
+- The same stale claim in the `scan` action's comment (`src/cli.ts`) was corrected alongside it.
+
+### Internal
+- **A test was holding the false claim in place.** `codex.test.ts` asserted `expect(out).toMatch(/never modifies/)` under the title *"says explicitly that ~/.codex is never modified"* — so the string could not drift back to the truth without a test failing, and all 461 tests stayed green across every release that contradicted it. The assertion is now inverted: the summary must **not** promise `~/.codex` is left alone, and must name the permanent Tier 1 deletion and `--auto` by name. A second test pins the backup-copy line to "cleanable and reversible" rather than a manual chore.
+- This is the same failure shape as the v2.8.0 estimate bug — the suite verified the code did what it was told, not that what it said was true. The difference is that this one was a safety guarantee, and it was wrong in the direction that costs the user something irreversible.
+- Tests: 461 → 462.
+- `vitest` 4.1.10 → 4.1.11.
+
 ## [2.13.0] — 2026-08-07
 
 ### Changed

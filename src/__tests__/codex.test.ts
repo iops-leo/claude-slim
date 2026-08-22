@@ -227,10 +227,29 @@ describe('formatCodexSummary', () => {
     expect(out).toMatch(/catalog/);
   });
 
-  it('says explicitly that ~/.codex is never modified', async () => {
+  // The previous version of this test asserted the summary said `~/.codex` is
+  // "never modified". That was true in v2.10 and false from v2.11 on, when
+  // clean gained the Codex tiers — but the assertion kept the stale line alive
+  // through four releases while every test stayed green. It now pins the claim
+  // in the direction that can actually hurt someone: `--auto` deletes
+  // `~/.codex/.tmp` permanently, so the summary must not promise otherwise.
+  it('does not claim ~/.codex is left alone, since clean acts there', async () => {
     await writeSkill('a', 'Something.');
     const out = formatCodexSummary((await scanCodex())!);
-    expect(out).toMatch(/never modifies/);
+    expect(out).not.toMatch(/never modifies/);
+    expect(out).not.toMatch(/read-only/);
+    expect(out).toMatch(/scan only reads/);
+    expect(out).toMatch(/deleted permanently/);
+    expect(out).toMatch(/--auto/);
+  });
+
+  it('says a backup copy is cleanable and reversible, not a manual chore', async () => {
+    await writeSkill('humanize-korean.bak.20260711-100101', 'Backup copy.');
+    const out = formatCodexSummary((await scanCodex())!);
+    expect(out).toMatch(/LIKELY BACKUP COPIES/);
+    expect(out).toMatch(/skills\.disabled/);
+    expect(out).toMatch(/restore/);
+    expect(out).not.toMatch(/Delete manually/);
   });
 
   it('truncates an over-long skill name so the token column stays aligned', async () => {

@@ -249,15 +249,14 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.13.0 — What's new
+## v2.13.1 — What's new
 
-- **Changed: the startup estimate no longer counts disabled plugins.** Their skills are not in the session catalog, so they are not a startup cost — but they were being added to a number labelled "tokens at session start". Verified against a live session rather than assumed: skills from every disabled plugin were absent from the prompt, while every enabled one's were present. Measured here: **12,504 → 9,836**, a 21% correction.
-- **Added `disabledPluginSkillTokens`**, shown under the overhead line and in `--json` — what re-enabling everything would cost. A headline number that drops by a fifth with no explanation reads like a bug.
-- **Fixed: plugin skills are attributed to their plugin, not their marketplace.** One marketplace can host several plugins with different enabled states, so the two had to be told apart.
+- **Fixed: `scan` promised the tool never touches `~/.codex/`, while `clean --auto` deletes from it permanently.** The Codex summary closed with `Reported only — claude-slim never modifies ~/.codex/.` That was true in v2.10 and false from **v2.11** on, when `clean` gained the Codex tiers. Measured here: `clean --dry-run` selects `[Auto] [codex] temp_cache: .tmp (146MB of install leftovers) (permanent)` — Tier 1, which `--auto` applies without prompting and no `restore` undoes.
+- The summary now says what actually happens: `scan` only reads, `clean` acts under the same tiers as `~/.claude/`, moves land in `~/.codex/skills.disabled/` and reverse with `restore`, and Tier 1 install leftovers are deleted permanently.
 
-Only plugins *explicitly reported disabled* are excluded. `claude plugin list` has a third state — `✘ failed to load` — and a plugin in it still loads its skills, so anything unrecognised keeps counting.
+A test was holding the false claim in place. It asserted the summary *must* say "never modifies", so the line could not be corrected without a test failing — and all 461 tests stayed green across four releases that contradicted it. The assertion is now inverted: the summary must not promise `~/.codex/` is left alone, and must name the permanent deletion and `--auto`.
 
-Tests: 452 → 461 (+9).
+Tests: 461 → 462.
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

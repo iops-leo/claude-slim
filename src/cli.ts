@@ -59,8 +59,9 @@ program
       lookbackDays: parseNonNegativeInt(opts.lookbackDays, 60),
       projectDir,
     });
-    // Codex is scanned when present. Reported only — it is never modified, and
-    // unused-skill detection is suppressed there for lack of a usage signal.
+    // Codex is scanned when present. `scan` only reads; `clean` has acted here
+    // since v2.11 under the same tiers. Unused-skill detection stays suppressed
+    // for lack of a usage signal.
     // commander maps `--no-codex` to `opts.codex === false`, not `opts.noCodex`.
     const codex = opts.codex === false ? null : await scanCodex();
     await flushCache();
