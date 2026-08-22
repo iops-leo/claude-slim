@@ -160,15 +160,14 @@ token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对
 
 ---
 
-## v2.13.0 更新 (2026-08-07)
+## v2.13.1 更新 (2026-08-22)
 
-- **变更：启动估算不再计入已禁用的插件。** 已禁用插件的技能不在会话目录中，因此不属于启动成本，但它们却被加进了一个名为「会话启动时 token」的数字里。这不是推测，而是在真实会话中验证过的——所有已禁用插件的技能都不在提示中，而所有已启用插件的技能都在。实测：**12,504 → 9,836**，修正 21%。
-- **新增 `disabledPluginSkillTokens`**，显示在开销行下方并包含在 `--json` 中——即全部重新启用后的成本。一个没有解释就减少五分之一的头条数字看起来像 bug。
-- **修复：插件技能按插件归属，而非按市场归属。** 同一个市场可能包含启用状态不同的多个插件，因此必须加以区分。
+- **修复：`scan` 声称本工具从不触碰 `~/.codex/`，而 `clean --auto` 却会在其中永久删除。** Codex 摘要以 `Reported only — claude-slim never modifies ~/.codex/.` 结尾。这在 v2.10 是对的，但自 `clean` 加入 Codex 分级的 **v2.11** 起就不再成立。实测：`clean --dry-run` 会选中 `[Auto] [codex] temp_cache: .tmp (146MB of install leftovers) (permanent)`——属于 Tier 1，`--auto` 不经确认即会执行，且 `restore` 无法撤销。
+- 摘要现在如实说明实际行为：`scan` 只读取，`clean` 会以与 `~/.claude/` 相同的分级在此处执行，移动的项目进入 `~/.codex/skills.disabled/` 并可用 `restore` 还原，但 Tier 1 的安装残留会被永久删除。
 
-仅排除**明确报告为已禁用**的插件。`claude plugin list` 存在第三种状态(`✘ failed to load`)，处于该状态的插件仍会加载技能，因此无法判定的一律继续计入。
+是一条测试把这个错误说法固定住了。它断言摘要**必须**包含 "never modifies"，因此纠正该行就会导致测试失败——而在与之矛盾的四个版本发布期间，461 个测试始终全绿。该断言现已反转：摘要不得承诺 `~/.codex/` 不受影响，并且必须写明永久删除与 `--auto`。
 
-测试: 452 → **461 (+9)**。
+测试: 461 → **462**。
 
 历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 

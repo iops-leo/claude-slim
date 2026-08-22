@@ -44,13 +44,15 @@ export function formatCodexSummary(result) {
             lines.push(`    ${b.name.length > 30 ? `${b.name.slice(0, 29)}…` : b.name.padEnd(30)} ` +
                 `${String(b.listingTokens).padStart(5)} tok  \x1b[90m${b.backupArtifact}\x1b[0m`);
         }
-        lines.push(`    \x1b[90mNot removed — ~/.codex/ is read-only here. Delete manually if stale.\x1b[0m`);
+        lines.push(`    \x1b[90mOffered by clean as Tier 2 — moved to ~/.codex/skills.disabled/, reversible with restore.\x1b[0m`);
     }
     lines.push('');
     lines.push(`  \x1b[33m!\x1b[0m Unused-skill detection unavailable for Codex.`);
     lines.push(`    \x1b[90m${result.unusedDetectionReason}\x1b[0m`);
     lines.push('');
-    lines.push(`  \x1b[90mReported only — claude-slim never modifies ~/.codex/.\x1b[0m`);
+    lines.push(`  \x1b[90mscan only reads. Since v2.11 clean also acts here, under the same tiers as ~/.claude/:\x1b[0m`);
+    lines.push(`  \x1b[90mmoves go to ~/.codex/skills.disabled/ and reverse with restore, but Tier 1 install\x1b[0m`);
+    lines.push(`  \x1b[90mleftovers (~/.codex/.tmp) are deleted permanently, and --auto applies Tier 1 unprompted.\x1b[0m`);
     lines.push('');
     return lines.join('\n');
 }
