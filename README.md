@@ -139,6 +139,14 @@ claude plugin install claude-slim
 
 Then just type `/claude-slim` in any session.
 
+Or install it through the [skills.sh](https://skills.sh) directory, which can also place
+the skill into Codex, Cursor, and OpenCode. What claude-slim *analyzes* is unchanged:
+`~/.claude/` and `~/.codex/`.
+
+```bash
+npx skills add iops-leo/claude-slim
+```
+
 ---
 
 ## Usage

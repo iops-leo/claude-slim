@@ -18,15 +18,37 @@ Analyze the user's Claude Code environment for token waste and perform non-destr
 
 ---
 
+## Running the CLI
+
+Every command block below opens with a `claude_slim()` resolver. It is repeated in full each
+time on purpose: each Bash invocation is a fresh shell, so a function defined in one
+block does not survive into the next. It resolves in three tiers — the plugin's own
+`dist/cli.js` when `CLAUDE_PLUGIN_ROOT` is set, then a `claude-slim` on `PATH`, then
+`npx`. That last tier is what makes the skill work when it was installed by
+`npx skills add` rather than `claude plugin install`, where no plugin root exists.
+
+Do not shorten the name. A two-letter `cs` collides with claude-squad's binary, and a
+shell function is invisible to `timeout`, `env`, and `xargs` — a wrapped call would
+silently run that other program instead. Call `claude_slim` directly, never through a
+wrapper.
+
+---
+
 ## Phase 0 — Version gate (run before every scan)
 
 An outdated claude-slim does not merely lack features — it reports **wrong numbers**. Versions before 2.8.0 summed memory across every project on disk and inflated the startup estimate roughly 8×. Presenting those figures as fact is worse than not running at all, so check first:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" check-update --json
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2' "$@"; fi; }
+claude_slim check-update --json
 ```
 
 The check is cached for 24h and fails open — if it errors, times out, or returns `"latest": null`, **proceed silently**. Never block the user because a version lookup failed.
+
+The response carries `installMethod`. When it is `"npx"` the gate is structurally
+inert — the CLI was just fetched at the tag it is being compared against, so `outdated`
+can never be true. Note that the version was resolved at run time and move on; do not
+present the gate as a safeguard it is not.
 
 If `"outdated": true`, stop and tell the user before scanning:
 
@@ -39,7 +61,7 @@ If `"outdated": true`, stop and tell the user before scanning:
 
 Then honour their answer. If they choose to continue, run the scan but **label the numbers as coming from an outdated version** in your report.
 
-**Plugin installs need a restart.** `claude plugin update` writes the new version to disk, but the running session keeps the loaded copy. Tell the user this explicitly — otherwise they update, re-run, and see the same stale numbers with no idea why.
+**Plugin installs need a restart** (only when `installMethod` is `"plugin"`). `claude plugin update` writes the new version to disk, but the running session keeps the loaded copy. Tell the user this explicitly — otherwise they update, re-run, and see the same stale numbers with no idea why.
 
 If `"outdated": false`, say nothing and continue to Phase 1.
 
@@ -50,19 +72,26 @@ If `"outdated": false`, say nothing and continue to Phase 1.
 Run the CLI to collect environment data:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" scan --json
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2' "$@"; fi; }
+claude_slim scan --json
 ```
 
-If `CLAUDE_PLUGIN_ROOT` is not set:
+If that command fails for **any** reason — `node` missing, or the `npx` tier unable to
+reach the npm registry because the machine is offline or behind a proxy — fall back to
+the legacy bash scanner. It needs neither node nor a network:
+
 ```bash
-PLUGIN_DIR=$(find ~/.claude/plugins -path "*/claude-slim/dist/cli.js" -type f 2>/dev/null | head -1 | xargs dirname | xargs dirname)
-node "$PLUGIN_DIR/dist/cli.js" scan --json
+for d in "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/claude-slim}" "$HOME/.claude/skills/claude-slim" "./.claude/skills/claude-slim"; do
+  [ -n "$d" ] || continue
+  if [ -f "$d/scripts/scan.sh" ]; then bash "$d/scripts/scan.sh" json; exit $?; fi
+done
+echo "claude-slim: no scan.sh found in any known skill directory" >&2
+exit 1
 ```
 
-If `node` is not available, fall back to the legacy bash scanner:
-```bash
-bash "${CLAUDE_PLUGIN_ROOT}/skills/claude-slim/scripts/scan.sh"
-```
+If this fails too, tell the user the scan could not run and **stop**. Never continue to
+Phase 2 without data: an empty scan is indistinguishable from a clean environment, and
+reporting zeros as fact is the one outcome worse than reporting nothing.
 
 ---
 
@@ -163,18 +192,21 @@ If subcommand is `scan`, stop here. Ask a localized equivalent of "Proceed with 
 Run the interactive clean command:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" clean
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2' "$@"; fi; }
+claude_slim clean
 ```
 
 Or with dry-run:
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" clean --dry-run
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2' "$@"; fi; }
+claude_slim clean --dry-run
 ```
 
 After cleanup, re-run scan to get updated numbers, then show the savings report:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" report
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2' "$@"; fi; }
+claude_slim report
 ```
 
 Present the report box AND the before/after breakdown table to the user.
@@ -186,7 +218,8 @@ Present the report box AND the before/after breakdown table to the user.
 When `/claude-slim restore` is invoked:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" restore
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2' "$@"; fi; }
+claude_slim restore
 ```
 
 ## Doctor
@@ -194,7 +227,8 @@ node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" restore
 When `/claude-slim doctor` is invoked:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/cli.js" doctor
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2' "$@"; fi; }
+claude_slim doctor
 ```
 
 Explain warnings in the user's language. Pay special attention to session-log warnings because they explain why unused-skill detection may be suppressed.
