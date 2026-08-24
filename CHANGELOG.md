@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.0] — 2026-08-25
+
 ### Fixed
 
 - The skill now runs when installed by `npx skills add` (skills.sh directory) instead of
