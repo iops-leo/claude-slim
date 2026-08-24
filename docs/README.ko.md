@@ -121,7 +121,8 @@ claude plugin install claude-slim
 
 아무 세션에서 `/claude-slim` 입력하면 끝.
 
-[skills.sh](https://skills.sh) 디렉터리로 설치해도 됩니다. Codex·Cursor·OpenCode에도 붙습니다:
+[skills.sh](https://skills.sh) 디렉터리로 설치해도 됩니다. 이 경로는 Codex·Cursor·OpenCode에도
+스킬을 넣어줍니다. 다만 claude-slim이 *분석하는* 대상은 그대로 `~/.claude/`와 `~/.codex/`입니다.
 
 ```bash
 npx skills add iops-leo/claude-slim

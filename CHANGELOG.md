@@ -20,6 +20,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Install instructions for the [skills.sh](https://skills.sh) directory in all four READMEs.
+- Regression test asserting the seven `claude_slim()` copies in `SKILL.md` stay identical
+  and that no command reverts to a bare `${CLAUDE_PLUGIN_ROOT}` path.
+
+### Changed
+
+- The bash-scanner fallback now exits non-zero with a message when no skill directory
+  matches, instead of exiting 0 with no output. A silent empty scan was indistinguishable
+  from a clean environment, so an offline skills.sh user would have been shown zeros as
+  fact. Its trigger also widened from "node is missing" to any failure of the primary
+  command, which is what an offline `npx` tier actually looks like.
+- The `npx` tier is pinned to `claude-slim@^2` rather than `@latest`, so a destructive
+  `clean` cannot pull an unreviewed major at run time.
+- Phase 0 states that the version gate is inert when `installMethod` is `npx`, and the
+  restart notice is scoped to plugin installs.
 
 ## [2.13.1] — 2026-08-22
 
