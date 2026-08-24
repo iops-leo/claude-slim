@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The skill now runs when installed by `npx skills add` (skills.sh directory) instead of
+  `claude plugin install`. Every command in `SKILL.md` was hard-wired to
+  `${CLAUDE_PLUGIN_ROOT}`, which Claude Code sets only for plugin installs — a skills.sh
+  install ships `SKILL.md` and `scripts/` without `dist/`, so each command expanded to
+  `node "/dist/cli.js"` and failed. Commands now resolve in three tiers: the plugin's
+  `dist/cli.js`, a `claude-slim` on `PATH`, then `npx`. The bash-scanner fallback probes
+  the skill directory instead of assuming the plugin layout.
+
+### Added
+
+- Install instructions for the [skills.sh](https://skills.sh) directory in all four READMEs.
+
 ## [2.13.1] — 2026-08-22
 
 ### Fixed

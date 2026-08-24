@@ -95,6 +95,12 @@ claude plugin marketplace add iops-leo/claude-slim
 claude plugin install claude-slim
 ```
 
+[skills.sh](https://skills.sh) ディレクトリからも導入できます。Codex・Cursor・OpenCode にも対応します:
+
+```bash
+npx skills add iops-leo/claude-slim
+```
+
 ## 使い方
 
 ```bash

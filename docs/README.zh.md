@@ -95,6 +95,12 @@ claude plugin marketplace add iops-leo/claude-slim
 claude plugin install claude-slim
 ```
 
+也可以通过 [skills.sh](https://skills.sh) 目录安装，同时支持 Codex、Cursor 和 OpenCode：
+
+```bash
+npx skills add iops-leo/claude-slim
+```
+
 ## 使用方法
 
 ```bash
