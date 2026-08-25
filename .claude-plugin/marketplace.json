@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Analyze and reduce Claude Code token overhead",
-    "version": "2.14.0"
+    "version": "2.14.1"
   },
   "autoUpdate": true,
   "plugins": [
