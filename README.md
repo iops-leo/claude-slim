@@ -7,6 +7,7 @@
 [![CI](https://github.com/iops-leo/claude-slim/actions/workflows/ci.yml/badge.svg)](https://github.com/iops-leo/claude-slim/actions/workflows/ci.yml)
 [![node](https://img.shields.io/node/v/claude-slim.svg)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/claude-slim.svg)](./LICENSE)
+[![skills.sh](https://skills.sh/b/iops-leo/claude-slim)](https://skills.sh/iops-leo/claude-slim)
 
 **Your Claude Code session burns thousands of tokens before you even say "hello."**
 
