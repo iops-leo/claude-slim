@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.2] — 2026-08-25
+
 ### Fixed
 
-- The skill's `npx` tier now names an exact release (`claude-slim@^2.14.1`) instead of the
+- The skill's `npx` tier now names an exact release (`claude-slim@^2.14.2`) instead of the
   major (`claude-slim@^2`). npx reuses any cached `_npx` install that satisfies the range
   and never re-checks the registry, so a machine that had fetched an earlier 2.x kept
   running it: measured after publishing 2.14.1, `npx claude-slim@^2` returned **2.13.1**
