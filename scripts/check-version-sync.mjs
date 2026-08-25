@@ -20,11 +20,31 @@ const checks = [
   ['.claude-plugin/marketplace.json', (j) => j.metadata?.version],
 ];
 
+// The skill's npx tier must name the exact release it ships with, not just the
+// major. npx reuses any cached _npx install satisfying the range and never
+// re-checks the registry, so `claude-slim@^2` pins a skills.sh user to whatever
+// 2.x they fetched first — a security release would never reach them. Moving the
+// pin every release changes the cache key and forces a fresh fetch.
+const SKILL_MD = 'skills/claude-slim/SKILL.md';
+const PIN_RE = /'claude-slim@\^([0-9]+\.[0-9]+\.[0-9]+)'/g;
+
 const mismatches = [];
 for (const [relPath, pick] of checks) {
   const actual = pick(read(relPath));
   if (actual !== expected) {
     mismatches.push(`  ${relPath}: ${actual ?? '(missing)'} !== ${expected}`);
+  }
+}
+
+const skillMd = readFileSync(join(repoRoot, SKILL_MD), 'utf-8');
+const pins = [...skillMd.matchAll(PIN_RE)].map((m) => m[1]);
+
+if (pins.length === 0) {
+  mismatches.push(`  ${SKILL_MD}: no 'claude-slim@^x.y.z' npx pin found`);
+} else {
+  const wrong = [...new Set(pins.filter((v) => v !== expected))];
+  if (wrong.length > 0) {
+    mismatches.push(`  ${SKILL_MD}: npx pin ${wrong.join(', ')} !== ${expected}`);
   }
 }
 
@@ -35,4 +55,4 @@ if (mismatches.length > 0) {
   process.exit(1);
 }
 
-console.log(`Version sync OK — all manifests at ${expected}`);
+console.log(`Version sync OK — all manifests and the SKILL.md npx pin at ${expected}`);

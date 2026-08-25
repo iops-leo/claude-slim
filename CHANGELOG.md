@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The skill's `npx` tier now names an exact release (`claude-slim@^2.14.1`) instead of the
+  major (`claude-slim@^2`). npx reuses any cached `_npx` install that satisfies the range
+  and never re-checks the registry, so a machine that had fetched an earlier 2.x kept
+  running it: measured after publishing 2.14.1, `npx claude-slim@^2` returned **2.13.1**
+  while `npx claude-slim@latest` returned 2.14.1. `--prefer-online` and
+  `npm_config_prefer_online` did not override it. That stranded every cached skills.sh
+  install on a build without the v2.14.1 prompt-injection fix. Moving the pin each release
+  changes the cache key and forces a fresh fetch, while still refusing an unreviewed next
+  major.
+
+### Changed
+
+- `npm run check:versions` now also verifies the seven npx pins in `SKILL.md` match
+  `package.json`, so the pin cannot be forgotten at release time.
+
 ## [2.14.1] — 2026-08-25
 
 ### Security
