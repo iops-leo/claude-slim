@@ -21,6 +21,7 @@ import { scanPluginSurfaces } from './plugin-surfaces.js';
 import { computePluginBreakdown } from './plugin-breakdown.js';
 import { computePluginCosts } from './plugin-cost.js';
 import { scanUserSurfaces } from './user-surfaces.js';
+import { sanitizeScanResult } from './untrusted.js';
 
 export interface ScanOptions {
   // Days of session history to consider when classifying skills as unused.
@@ -212,7 +213,10 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     pluginSkillListingTokens,
   );
 
-  return {
+  // Labels below are authored by whoever wrote each skill, plugin, or memory
+  // file, and they reach the agent's context through the report. Flatten them
+  // at this one exit rather than at each site that reads a name off disk.
+  return sanitizeScanResult({
     localSkills,
     pluginSkills,
     plugins,
@@ -234,7 +238,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     allProjectsMemoryTokens,
     recoverableStartupTokens,
     disabledPluginSkillTokens,
-  };
+  });
 }
 
 async function pathExists(p: string): Promise<boolean> {

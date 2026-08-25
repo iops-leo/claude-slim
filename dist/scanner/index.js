@@ -20,6 +20,7 @@ import { scanPluginSurfaces } from './plugin-surfaces.js';
 import { computePluginBreakdown } from './plugin-breakdown.js';
 import { computePluginCosts } from './plugin-cost.js';
 import { scanUserSurfaces } from './user-surfaces.js';
+import { sanitizeScanResult } from './untrusted.js';
 const DEFAULT_LOOKBACK_DAYS = 60;
 export async function scan(opts = {}) {
     const lookbackDays = opts.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
@@ -149,7 +150,10 @@ export async function scan(opts = {}) {
         pluginSkillListingTokens.set(c.pluginName, (pluginSkillListingTokens.get(c.pluginName) ?? 0) + c.skillTokens);
     }
     const recoverableStartupTokens = sumRecoverableStartupTokens(issues, [...localSkills, ...pluginSkills], currentProjectSlug, pluginSkillListingTokens);
-    return {
+    // Labels below are authored by whoever wrote each skill, plugin, or memory
+    // file, and they reach the agent's context through the report. Flatten them
+    // at this one exit rather than at each site that reads a name off disk.
+    return sanitizeScanResult({
         localSkills,
         pluginSkills,
         plugins,
@@ -171,7 +175,7 @@ export async function scan(opts = {}) {
         allProjectsMemoryTokens,
         recoverableStartupTokens,
         disabledPluginSkillTokens,
-    };
+    });
 }
 async function pathExists(p) {
     try {
