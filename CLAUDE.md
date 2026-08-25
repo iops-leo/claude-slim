@@ -27,10 +27,16 @@ npm as `claude-slim`.
 
 ## Version bumps touch three manifests
 
-`package.json`, `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`
-(`metadata.version`) must all move together. `claude plugin install` reads the
+`package.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`
+(`metadata.version`), and the seven `claude-slim@^x.y.z` npx pins in
+`skills/claude-slim/SKILL.md` must all move together. `claude plugin install` reads the
 plugin manifests, not `package.json` — drift here shipped a stale version to
 plugin users for three releases before anyone noticed.
+
+The SKILL.md pin is not decoration. npx reuses any cached `_npx` install that
+satisfies the range and never re-checks the registry, so a major-only `@^2` strands
+skills.sh users on whatever 2.x they fetched first — v2.14.1's security fix reached
+none of them until the pin moved. `--prefer-online` does not override this.
 
 Run `npm run check:versions` to verify. It is wired into CI and `prepublishOnly`.
 

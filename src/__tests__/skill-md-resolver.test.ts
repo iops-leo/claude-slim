@@ -35,8 +35,15 @@ describe('SKILL.md CLI resolver', () => {
     expect(resolverLines[0]).toContain('[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]');
   });
 
-  it('pins the npx tier to a major version', () => {
-    expect(resolverLines[0]).toContain("'claude-slim@^2'");
+  it('pins the npx tier to the exact release this SKILL.md ships with', () => {
+    // Not just the major: npx reuses any cached _npx install satisfying the
+    // range and never re-checks the registry, so `@^2` would strand a
+    // skills.sh user on whatever 2.x they fetched first. Moving the pin every
+    // release changes the cache key and forces a fresh fetch.
+    const pkg = JSON.parse(
+      readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
+    ) as { version: string };
+    expect(resolverLines[0]).toContain(`'claude-slim@^${pkg.version}'`);
     expect(resolverLines[0]).not.toContain('claude-slim@latest');
   });
 });
