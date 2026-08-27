@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- The v2.14.1 label sanitizer missed three surfaces; all are now covered. It enumerated
+  the fields it cleaned, so anything not on the list passed through raw:
+  `pluginSkills[].pluginName` and `.plugin` (marketplace and plugin directory names), the
+  entire `codex` subtree — whose skill names are printed to the terminal, not just
+  serialised — and `userAgents[].path` / `userCommands[].path`. Verified by planting a
+  hostile directory name and reading the CLI's own output.
+- Sanitizing now walks the result instead of listing its fields, so a field added later
+  is covered because it exists rather than because someone remembered it. `~/.codex` is
+  scanned by a separate function that the CLI merges in at print time, so it sanitizes at
+  its own exit; that split is now stated in both files.
+
+### Added
+
+- A property-based test that plants an injection payload at every origin of a label,
+  runs the real scanners, and walks the exact object `scan --json` serialises — asserting
+  no control, bidi, or zero-width character survives anywhere, and no label exceeds the
+  bound while paths stay whole. It names no field, so it cannot repeat the omission it
+  was written to catch. Confirmed to fail against the v2.14.2 sanitizer.
+
 ## [2.14.2] — 2026-08-25
 
 ### Fixed
