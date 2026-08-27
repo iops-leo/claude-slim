@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.3] — 2026-08-26
+
 ### Security
 
 - The v2.14.1 label sanitizer missed three surfaces; all are now covered. It enumerated

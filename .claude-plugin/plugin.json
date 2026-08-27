@@ -1,6 +1,6 @@
 {
   "name": "claude-slim",
-  "version": "2.14.2",
+  "version": "2.14.3",
   "description": "Analyze and reduce Claude Code token overhead",
   "author": {
     "name": "iops-leo"
