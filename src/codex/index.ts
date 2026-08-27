@@ -4,6 +4,7 @@ import { countTokensCached } from '../tokenizer.js';
 import { listingTokens, listingTokensFromContent, parseFrontmatterDescription } from '../scanner/skill-listing.js';
 import { safeReadFile, safeReaddir, isDirectory, isBrokenSymlink } from '../scanner/fs-walk.js';
 import { detectBackupArtifact } from '../scanner/backup-artifacts.js';
+import { sanitizeUntrustedTree } from '../scanner/untrusted.js';
 
 // Codex support.
 //
@@ -226,7 +227,11 @@ export async function scanCodex(contents?: Map<string, string>): Promise<CodexSc
   const listing = (xs: Array<{ listingTokens: number }>): number =>
     xs.reduce((sum, x) => sum + x.listingTokens, 0);
 
-  return {
+  // ~/.codex labels are authored by whoever wrote those skills and agents, and
+  // the CLI merges this tree into `scan --json` and prints skill names to the
+  // terminal. It never passes through the ~/.claude scanner, so it sanitizes on
+  // its own way out.
+  return sanitizeUntrustedTree({
     root: getCodexDir(),
     skills,
     agents,
@@ -235,7 +240,7 @@ export async function scanCodex(contents?: Map<string, string>): Promise<CodexSc
     totalTokens: listing(skills) + listing(agents) + instructionsTokens,
     unusedDetectionAvailable: false,
     unusedDetectionReason: UNUSED_DETECTION_REASON,
-  };
+  });
 }
 
 /** Re-exported so callers can reuse the frontmatter parser without a deep import. */

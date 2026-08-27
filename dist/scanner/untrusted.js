@@ -1,14 +1,21 @@
 /**
- * Names read off disk are written by whoever authored the skill, plugin, or
- * memory file — not by the user running the scan. They flow through the report
- * into the agent's context, which makes them an indirect prompt injection
- * surface: a skill directory or frontmatter `name:` can carry instructions
- * aimed at the model rather than a label aimed at a human.
+ * Names read off disk are written by whoever authored the skill, plugin, agent,
+ * or memory file — not by the person running the scan. They flow through the
+ * report into the agent's context, which makes them an indirect prompt
+ * injection surface: a directory name can carry instructions aimed at the model
+ * rather than a label aimed at a human.
  *
  * Snyk's audit of this skill (W011, medium 0.30) is about exactly this path.
  * The scan never emits file *bodies* — descriptions are measured for token cost
- * and then discarded — so what this module covers is the whole exposed surface,
- * not a sample of it.
+ * and then discarded — so labels are the whole exposed surface.
+ *
+ * v2.14.1 sanitized a hand-written list of fields and claimed that a single
+ * chokepoint could not be forgotten. That was wrong: the chokepoint was one
+ * function, but its contents were an enumeration, and the first version of it
+ * already missed `pluginSkills[].pluginName`, `pluginSkills[].plugin`, and the
+ * entire `codex` subtree — whose skill names are printed to the terminal too.
+ * So this walks the result instead of listing its fields. A field added later
+ * is covered because it exists, not because someone remembered it.
  */
 /** Longest label we render. Real names are far shorter; payloads are not. */
 export const MAX_NAME_LENGTH = 120;
@@ -20,82 +27,74 @@ const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
  */
 const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
 /**
+ * Keys whose values are truncated only at their peril.
+ *
+ * Paths locate files that cleanup then acts on, so a shortened path is a wrong
+ * path. `currentProjectSlug` is matched against directory names. The two
+ * `*Reason` strings are our own prose and already run past the label bound.
+ * All of them are still flattened — that is the part that blocks injection.
+ */
+const FLATTEN_ONLY_KEYS = new Set([
+    'path',
+    'root',
+    'target',
+    'currentProjectSlug',
+    'unusedDetectionReason',
+]);
+/** Strip anything that could forge a row or hide from a human reader. */
+function flatten(value) {
+    return value
+        .replace(CONTROL_CHARS, ' ')
+        .replace(INVISIBLE, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+/**
  * Collapse an untrusted label to a single bounded, printable line.
  *
  * Deliberately not an escape or an encoding: the value is a display label, and
  * a reversible transform would relocate a payload rather than remove it.
  */
 export function sanitizeUntrusted(value, max = MAX_NAME_LENGTH) {
-    const flattened = value
-        .replace(CONTROL_CHARS, ' ')
-        .replace(INVISIBLE, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+    const flattened = flatten(value);
     if (flattened.length <= max)
         return flattened;
     return `${flattened.slice(0, max)}…`;
 }
 /**
- * Paths are shown to the user and used to locate files for cleanup, so they are
- * flattened but never truncated — a shortened path would be a wrong path.
+ * Walk any scan value, sanitizing every string it contains.
+ *
+ * `key` is the property name the string arrived under; for arrays it is
+ * inherited from the property holding the array, so `mcpServerNames[]` and
+ * `plugins[].skills[]` are treated as the labels they are.
  */
-function sanitizePath(value) {
-    return value.replace(CONTROL_CHARS, ' ').replace(INVISIBLE, '').trim();
+function sanitizeDeep(value, key) {
+    if (typeof value === 'string') {
+        return FLATTEN_ONLY_KEYS.has(key) ? flatten(value) : sanitizeUntrusted(value);
+    }
+    if (Array.isArray(value)) {
+        return value.map((entry) => sanitizeDeep(entry, key));
+    }
+    if (value !== null && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, sanitizeDeep(v, k)]));
+    }
+    // Numbers, booleans, null, undefined — nothing to sanitize, nothing to copy.
+    return value;
 }
 /**
- * Return a copy of the scan with every outsider-authored label flattened.
+ * Return a copy of any scanned tree with every label flattened and bounded.
  *
- * Applied once at the scanner's exit rather than at each of the dozen sites
- * that read a name off disk: one chokepoint cannot be forgotten by whoever adds
- * the next detector.
+ * Numbers and booleans pass through untouched; the input is not mutated.
+ *
+ * Each scanner applies this at its own exit. There is more than one scanner:
+ * `scanCodex()` runs separately and the CLI merges it in at print time
+ * (`src/cli.ts`), so `~/.codex` labels never pass through the `~/.claude`
+ * scanner and have to be sanitized on their own way out.
  */
+export function sanitizeUntrustedTree(value) {
+    return sanitizeDeep(value, '');
+}
+/** The `~/.claude` scanner's exit. */
 export function sanitizeScanResult(result) {
-    const skill = (s) => ({
-        ...s,
-        name: sanitizeUntrusted(s.name),
-        path: sanitizePath(s.path),
-    });
-    return {
-        ...result,
-        localSkills: result.localSkills.map(skill),
-        pluginSkills: result.pluginSkills.map(skill),
-        plugins: result.plugins.map((p) => ({
-            ...p,
-            name: sanitizeUntrusted(p.name),
-            skills: p.skills.map((s) => sanitizeUntrusted(s)),
-        })),
-        brokenSymlinks: result.brokenSymlinks.map((b) => ({
-            ...b,
-            name: sanitizeUntrusted(b.name),
-            path: sanitizePath(b.path),
-            target: sanitizeUntrusted(b.target),
-        })),
-        memoryFiles: result.memoryFiles.map((m) => ({
-            ...m,
-            project: sanitizeUntrusted(m.project),
-            name: sanitizeUntrusted(m.name),
-            path: sanitizePath(m.path),
-        })),
-        claudeMdSections: result.claudeMdSections.map((s) => ({
-            ...s,
-            name: sanitizeUntrusted(s.name),
-        })),
-        mcpServerNames: result.mcpServerNames.map((n) => sanitizeUntrusted(n)),
-        issues: result.issues.map((i) => ({
-            ...i,
-            name: sanitizeUntrusted(i.name),
-            path: sanitizePath(i.path),
-            ...(i.detail === undefined ? {} : { detail: sanitizeUntrusted(i.detail) }),
-            ...(i.marketplace === undefined
-                ? {}
-                : { marketplace: sanitizeUntrusted(i.marketplace) }),
-        })),
-        pluginBreakdown: result.pluginBreakdown.map((p) => ({
-            ...p,
-            name: sanitizeUntrusted(p.name),
-            marketplace: sanitizeUntrusted(p.marketplace),
-        })),
-        userAgents: result.userAgents.map((a) => ({ ...a, name: sanitizeUntrusted(a.name) })),
-        userCommands: result.userCommands.map((c) => ({ ...c, name: sanitizeUntrusted(c.name) })),
-    };
+    return sanitizeUntrustedTree(result);
 }
