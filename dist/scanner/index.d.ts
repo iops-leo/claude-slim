@@ -26,11 +26,11 @@ export declare function scan(opts?: ScanOptions): Promise<ScanResult>;
  *
  * Memory issues count only when they belong to the current project — the same
  * per-project rule `totalTokensBefore` follows. Deletions that free disk but no
- * context (`broken_symlink`, `temp_cache`) contribute nothing here by design.
+ * context (`broken_symlink`, `temp_cache`) contribute nothing here by design,
+ * and neither does `oversized_memory`, which `clean` never acts on.
  *
- * Three separate overlaps have to be collapsed, since every one of them inflates:
- * the same skill path, the same plugin across cached versions, and a memory file
- * that its own stale project already accounts for.
+ * Two separate overlaps have to be collapsed, since both inflate: the same
+ * skill path, and the same plugin across cached versions.
  */
 export declare function sumRecoverableStartupTokens(issues: Issue[], skills: SkillInfo[], currentProjectSlug: string, 
 /** Plugin name → its skill-listing tokens. See the `unused_plugin` branch. */

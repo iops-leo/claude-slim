@@ -10,3 +10,11 @@ export const COMMAND_OVERHEAD_TOKENS = 10;
 // Average tools per MCP server (used when per-server tool count is unknown).
 // Most plugin MCP servers expose 5–15 tools; 10 is a reasonable midpoint.
 export const MCP_SERVER_TOOLS_AVG = 10;
+// Auto-memory: only the index is loaded at session start, and only its first
+// 200 lines or 25KB, whichever comes first. Topic files are read on demand.
+// Source: https://code.claude.com/docs/en/memory.md
+export const MEMORY_INDEX_FILE = 'MEMORY.md';
+export const MEMORY_INDEX_MAX_LINES = 200;
+export const MEMORY_INDEX_MAX_BYTES = 25 * 1024;
+// `@path` imports in CLAUDE.md recurse at most this many hops.
+export const CLAUDE_MD_IMPORT_MAX_DEPTH = 4;

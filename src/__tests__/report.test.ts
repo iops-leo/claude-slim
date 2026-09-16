@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateReport, formatReportBox } from '../report.js';
+import { calculateReport, formatReportBox, formatScanSummary } from '../report.js';
 import type { ScanResult, ManifestEntry, Issue } from '../types.js';
 
 function makeScanResult(overrides: Partial<ScanResult> = {}): ScanResult {
@@ -12,6 +12,11 @@ function makeScanResult(overrides: Partial<ScanResult> = {}): ScanResult {
     claudeMdBytes: 0,
     claudeMdTokens: 0,
     claudeMdSections: [],
+    claudeMdImports: [],
+    claudeMdImportTokens: 0,
+    userRules: [],
+    rulesStartupTokens: 0,
+    rulesConditionalTokens: 0,
     mcpServers: 0,
     mcpServerNames: [],
     issues: [],
@@ -74,7 +79,7 @@ describe('calculateReport', () => {
         { name: 's3', path: '/c', sizeBytes: 1024, tokens: 150, source: 'local' },
       ],
       memoryFiles: [
-        { project: 'p', name: 'old.md', path: '/m', sizeBytes: 8192, tokens: 500 },
+        { project: 'p', name: 'old.md', path: '/m', sizeBytes: 8192, tokens: 500, isIndex: false, startupTokens: 0, truncated: false },
       ],
       totalTokensBefore: 10000,
     });
@@ -220,5 +225,60 @@ describe('formatReportBox unused plugin hint', () => {
     const widths = nonBlankLines.map(l => l.length);
     const allSame = widths.every(w => w === widths[0]);
     expect(allSame).toBe(true);
+  });
+});
+
+describe('formatScanSummary — rules, imports and the memory index', () => {
+  const base = (): ScanResult => ({
+    localSkills: [], pluginSkills: [], plugins: [], brokenSymlinks: [], memoryFiles: [],
+    claudeMdBytes: 100, claudeMdTokens: 25, claudeMdSections: [], claudeMdImports: [],
+    claudeMdImportTokens: 0, userRules: [], rulesStartupTokens: 0, rulesConditionalTokens: 0,
+    mcpServers: 0, mcpServerNames: [], issues: [], totalTokensBefore: 0, pluginBreakdown: [],
+    userAgents: [], userCommands: [], currentProjectSlug: '-Users-me-app', currentProjectKnown: true,
+    currentProjectMemoryTokens: 0, allProjectsMemoryTokens: 0, recoverableStartupTokens: 0,
+    disabledPluginSkillTokens: 0,
+  });
+
+  it('lists imports under CLAUDE.MD with their tokens in the header', () => {
+    const out = formatScanSummary({
+      ...base(),
+      claudeMdImports: [{ spec: 'RTK.md', path: '/h/.claude/RTK.md', from: '/h/.claude/CLAUDE.md', depth: 1, sizeBytes: 900, tokens: 227 }],
+      claudeMdImportTokens: 227,
+    });
+    expect(out).toContain('+ 227 tok imported');
+    expect(out).toContain('@RTK.md');
+    expect(out).toContain('(import)');
+  });
+
+  it('renders a RULES section that separates launch from path-scoped cost', () => {
+    const out = formatScanSummary({
+      ...base(),
+      userRules: [
+        { name: 'common/a.md', path: '/h/.claude/rules/common/a.md', sizeBytes: 1000, tokens: 300, conditional: false, paths: [] },
+        { name: 'ts/b.md', path: '/h/.claude/rules/ts/b.md', sizeBytes: 500, tokens: 120, conditional: true, paths: ['**/*.ts'] },
+      ],
+      rulesStartupTokens: 300,
+      rulesConditionalTokens: 120,
+    });
+    expect(out).toContain('RULES');
+    expect(out).toContain('2 files, 1 loaded at launch');
+    expect(out).toContain('path-scoped: **/*.ts');
+    expect(out).toContain('at launch: 300 tok');
+    expect(out).toContain('120 tok path-scoped');
+  });
+
+  it('marks the truncated index and says topic files are on demand', () => {
+    const out = formatScanSummary({
+      ...base(),
+      memoryFiles: [
+        { project: '-Users-me-app', name: 'MEMORY.md', path: '/m/MEMORY.md', sizeBytes: 30000, tokens: 7000, isIndex: true, startupTokens: 6400, truncated: true },
+        { project: '-Users-me-app', name: 'topic.md', path: '/m/topic.md', sizeBytes: 40000, tokens: 9000, isIndex: false, startupTokens: 0, truncated: false },
+      ],
+      currentProjectMemoryTokens: 6400,
+      allProjectsMemoryTokens: 16000,
+    });
+    expect(out).toContain('truncated: only 6,400 tok reach the session');
+    expect(out).toContain('loaded at startup in this project: 6,400 tok');
+    expect(out).toContain('topic files are read on demand');
   });
 });

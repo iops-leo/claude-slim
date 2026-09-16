@@ -5,3 +5,7 @@ export declare const SKILL_PROMPT_OVERHEAD_TOKENS = 30;
 export declare const DEFERRED_TOOL_OVERHEAD_TOKENS = 8;
 export declare const COMMAND_OVERHEAD_TOKENS = 10;
 export declare const MCP_SERVER_TOOLS_AVG = 10;
+export declare const MEMORY_INDEX_FILE = "MEMORY.md";
+export declare const MEMORY_INDEX_MAX_LINES = 200;
+export declare const MEMORY_INDEX_MAX_BYTES: number;
+export declare const CLAUDE_MD_IMPORT_MAX_DEPTH = 4;

@@ -1,6 +1,8 @@
 import type { UserSurfaceEntry } from './scanner/user-surfaces.js';
+import type { RuleEntry } from './scanner/rules.js';
+import type { ClaudeMdImport } from './scanner/claude-md-imports.js';
 import type { AgentId } from './paths.js';
-export type { UserSurfaceEntry, AgentId };
+export type { UserSurfaceEntry, RuleEntry, ClaudeMdImport, AgentId };
 export interface SkillInfo {
     name: string;
     path: string;
@@ -39,7 +41,17 @@ export interface MemoryFile {
     name: string;
     path: string;
     sizeBytes: number;
+    /** Whole-file tokens — what a topic file costs once Claude reads it. */
     tokens: number;
+    /** True for `MEMORY.md`, the only memory file loaded at session start. */
+    isIndex: boolean;
+    /**
+     * Tokens this file adds at startup: the index's first 200 lines / 25KB,
+     * and 0 for every topic file, which Claude reads on demand.
+     */
+    startupTokens: number;
+    /** True when the index exceeds the startup cap and its tail is never loaded. */
+    truncated: boolean;
 }
 export interface PluginInfo {
     name: string;
@@ -83,6 +95,16 @@ export interface ScanResult {
         sizeBytes: number;
         tokens: number;
     }>;
+    /** Files `~/.claude/CLAUDE.md` pulls in via `@path`, transitively. */
+    claudeMdImports: ClaudeMdImport[];
+    /** Sum of `claudeMdImports[].tokens` — paid at startup next to CLAUDE.md. */
+    claudeMdImportTokens: number;
+    /** `~/.claude/rules/**\/*.md`, loaded at launch unless path-scoped. */
+    userRules: RuleEntry[];
+    /** Tokens of rules without `paths:` — in the session from the first turn. */
+    rulesStartupTokens: number;
+    /** Tokens of path-scoped rules — loaded only when a matching file is read. */
+    rulesConditionalTokens: number;
     mcpServers: number;
     mcpServerNames: string[];
     issues: Issue[];

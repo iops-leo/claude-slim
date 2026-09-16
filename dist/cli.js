@@ -320,8 +320,10 @@ program
         'backup_artifact',
     ]);
     const removedSkillEntries = movedEntries.filter((e) => SKILL_TYPES.has(e.type));
+    // Only the current project's memory was ever in `totalTokensBefore`, so
+    // only a stale_project entry for this project restores anything to it.
     const removedMemoryTokens = movedEntries
-        .filter((e) => e.type === 'stale_project')
+        .filter((e) => e.type === 'stale_project' && e.name === result.currentProjectSlug)
         .reduce((sum, e) => sum + (e.tokenCount || 0), 0);
     const totalBefore = result.totalTokensBefore
         + removedSkillEntries.length * SKILL_PROMPT_OVERHEAD_TOKENS

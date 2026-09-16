@@ -42,6 +42,7 @@ const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/
  */
 const FLATTEN_ONLY_KEYS = new Set([
   'path',
+  'from',
   'root',
   'target',
   'currentProjectSlug',

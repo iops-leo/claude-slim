@@ -21,6 +21,8 @@ import { scanPluginSurfaces } from './plugin-surfaces.js';
 import { computePluginBreakdown } from './plugin-breakdown.js';
 import { computePluginCosts } from './plugin-cost.js';
 import { scanUserSurfaces } from './user-surfaces.js';
+import { scanUserRules } from './rules.js';
+import { resolveClaudeMdImports } from './claude-md-imports.js';
 import { sanitizeScanResult } from './untrusted.js';
 
 export interface ScanOptions {
@@ -51,6 +53,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     disabledPlugins,
     sessionUsage,
     userSurfaces,
+    userRules,
   ] = await Promise.all([
     scanLocalSkills(),
     scanPluginSkills(),
@@ -59,6 +62,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     getDisabledPlugins(),
     scanSessionUsage(lookbackDays),
     scanUserSurfaces(),
+    scanUserRules(),
   ]);
 
   const pluginSurfaces = scanPluginSurfaces();
@@ -77,13 +81,32 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     .filter((p) => p.enabled)
     .map((p) => ({ name: p.name, marketplace: p.marketplace }));
 
-  // CLAUDE.md
-  const claudeMdContent = await safeReadFile(join(getClaudeDir(), 'CLAUDE.md'));
+  // CLAUDE.md, plus whatever it pulls in with `@path` — those files are
+  // expanded into context at launch right beside it, so they are startup cost.
+  const claudeMdPath = join(getClaudeDir(), 'CLAUDE.md');
+  const claudeMdContent = await safeReadFile(claudeMdPath);
   const claudeMdBytes = claudeMdContent ? Buffer.byteLength(claudeMdContent) : 0;
   const claudeMdTokens = claudeMdContent
-    ? countTokensCached(claudeMdContent, join(getClaudeDir(), 'CLAUDE.md'))
+    ? countTokensCached(claudeMdContent, claudeMdPath)
     : 0;
   const claudeMdSections = claudeMdContent ? parseClaudeMdSections(claudeMdContent) : [];
+  const claudeMdImports = claudeMdContent
+    ? await resolveClaudeMdImports(claudeMdPath, claudeMdContent)
+    : [];
+  const claudeMdImportTokens = claudeMdImports.reduce((sum, i) => sum + i.tokens, 0);
+
+  // Rules without `paths:` load at launch like CLAUDE.md. Path-scoped ones
+  // load only when a matching file is read, so they are reported, not summed.
+  // A rule CLAUDE.md also `@`-imports is already in `claudeMdImportTokens`;
+  // whether Claude Code loads such a file twice is undocumented, and counting
+  // it once is the error that cannot overstate the total.
+  const importedPaths = new Set(claudeMdImports.map((i) => i.path));
+  const rulesStartupTokens = userRules
+    .filter((r) => !r.conditional && !importedPaths.has(r.path))
+    .reduce((sum, r) => sum + r.tokens, 0);
+  const rulesConditionalTokens = userRules
+    .filter((r) => r.conditional)
+    .reduce((sum, r) => sum + r.tokens, 0);
 
   // Per-plugin cost map for the unused_plugin detector's savings estimate.
   // Aggregates when multiple surface entries share a pluginName (mirrors the
@@ -180,10 +203,15 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
   // disk. Summing all of them (pre-2.8 behaviour) inflated the startup estimate
   // by a factor of however many projects the user had — 100k+ tokens on a busy
   // machine, for a number labelled "tokens at session start".
+  //
+  // And within that project, only MEMORY.md's startup slice is loaded; topic
+  // files are read on demand. Summing every file (pre-2.15 behaviour) put a
+  // project with 183 topic files at ~238,000 startup tokens when the session
+  // actually received ~10,000. `startupTokens` is 0 for anything but the index.
   const currentProjectSlug = getCurrentProjectSlug(opts.projectDir);
   const currentProjectMemoryTokens = memoryFiles
     .filter((m) => m.project === currentProjectSlug)
-    .reduce((sum, m) => sum + m.tokens, 0);
+    .reduce((sum, m) => sum + m.startupTokens, 0);
   const allProjectsMemoryTokens = memoryFiles.reduce((sum, m) => sum + m.tokens, 0);
 
   const totalTokensBefore =
@@ -191,6 +219,8 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     agentListingTokens +
     commandListingTokens +
     claudeMdTokens +
+    claudeMdImportTokens +
+    rulesStartupTokens +
     currentProjectMemoryTokens;
 
   const currentProjectKnown = await pathExists(join(getProjectsDir(), currentProjectSlug));
@@ -225,6 +255,11 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     claudeMdBytes,
     claudeMdTokens,
     claudeMdSections,
+    claudeMdImports,
+    claudeMdImportTokens,
+    userRules,
+    rulesStartupTokens,
+    rulesConditionalTokens,
     mcpServers: mcp.count,
     mcpServerNames: mcp.names,
     issues,
@@ -270,11 +305,11 @@ const SKILL_MOVE_TYPES = new Set<Issue['type']>([
  *
  * Memory issues count only when they belong to the current project — the same
  * per-project rule `totalTokensBefore` follows. Deletions that free disk but no
- * context (`broken_symlink`, `temp_cache`) contribute nothing here by design.
+ * context (`broken_symlink`, `temp_cache`) contribute nothing here by design,
+ * and neither does `oversized_memory`, which `clean` never acts on.
  *
- * Three separate overlaps have to be collapsed, since every one of them inflates:
- * the same skill path, the same plugin across cached versions, and a memory file
- * that its own stale project already accounts for.
+ * Two separate overlaps have to be collapsed, since both inflate: the same
+ * skill path, and the same plugin across cached versions.
  */
 export function sumRecoverableStartupTokens(
   issues: Issue[],
@@ -329,13 +364,12 @@ export function sumRecoverableStartupTokens(
       if (countedPlugins.has(issue.name)) continue;
       countedPlugins.add(issue.name);
       total += pluginSkillListingTokens.get(issue.name) ?? 0;
-    } else if (issue.type === 'oversized_memory') {
-      // Another project's memory never loads here, so trimming it saves this
-      // session nothing.
-      if (!isCurrentProject(issue.name)) continue;
-      if (currentProjectIsStale) continue; // already inside the stale-project total
-      total += issue.tokens;
     }
+    // `oversized_memory` contributes nothing: the cleaner treats it as
+    // report-only, and for a truncated index the advice — trim it under the
+    // cap — frees no startup context, since the tail past the cap was never
+    // loaded. Counting it promised tokens that acting on the issue cannot
+    // return.
   }
 
   return total;

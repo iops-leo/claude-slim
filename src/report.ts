@@ -228,13 +228,55 @@ export function formatScanSummary(result: ScanResult): string {
 
   // --- CLAUDE.MD ---
   lines.push('');
-  lines.push(`\x1b[1m  CLAUDE.MD\x1b[0m (${(result.claudeMdBytes / 1024).toFixed(1)}KB, ${result.claudeMdTokens.toLocaleString()} tok)`);
+  const importSuffix = result.claudeMdImportTokens > 0
+    ? ` + ${result.claudeMdImportTokens.toLocaleString()} tok imported`
+    : '';
+  lines.push(`\x1b[1m  CLAUDE.MD\x1b[0m (${(result.claudeMdBytes / 1024).toFixed(1)}KB, ${result.claudeMdTokens.toLocaleString()} tok${importSuffix})`);
   if (result.claudeMdSections && result.claudeMdSections.length > 0) {
     for (const section of result.claudeMdSections) {
       const kb = (section.sizeBytes / 1024).toFixed(1);
       const tok = section.tokens.toLocaleString();
       lines.push(`    ${section.name.padEnd(44)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok`);
     }
+  }
+  // `@path` imports are expanded into context at launch beside CLAUDE.md,
+  // recursively — the indent shows which file pulled each one in.
+  for (const imp of result.claudeMdImports ?? []) {
+    const kb = (imp.sizeBytes / 1024).toFixed(1);
+    const tok = imp.tokens.toLocaleString();
+    const label = `${'  '.repeat(imp.depth - 1)}@${imp.spec}`;
+    lines.push(`    ${label.padEnd(44)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok \x1b[90m(import)\x1b[0m`);
+  }
+
+  // --- RULES ---
+  // Unconditional rules load at launch like CLAUDE.md; path-scoped ones load
+  // only when Claude reads a matching file, so they are listed but not summed.
+  if (result.userRules && result.userRules.length > 0) {
+    lines.push('');
+    const launched = result.userRules.filter((r) => !r.conditional).length;
+    lines.push(
+      `\x1b[1m  RULES\x1b[0m (${result.userRules.length} files, ${launched} loaded at launch)`,
+    );
+    const sortedRules = [...result.userRules].sort((a, b) =>
+      Number(a.conditional) - Number(b.conditional) || b.tokens - a.tokens,
+    );
+    const importedPaths = new Set((result.claudeMdImports ?? []).map((i) => i.path));
+    for (const rule of sortedRules) {
+      const kb = (rule.sizeBytes / 1024).toFixed(1);
+      const tok = rule.tokens.toLocaleString();
+      const scope = rule.conditional
+        ? ` \x1b[90mpath-scoped: ${rule.paths.join(', ')}\x1b[0m`
+        : importedPaths.has(rule.path)
+          ? ` \x1b[90malso @imported by CLAUDE.md — counted there\x1b[0m`
+          : '';
+      lines.push(`    ${rule.name.padEnd(44)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok${scope}`);
+    }
+    lines.push(
+      `    at launch: ${result.rulesStartupTokens.toLocaleString()} tok  ` +
+        `\x1b[90m(${result.rulesConditionalTokens.toLocaleString()} tok path-scoped, ` +
+        `loaded only when a matching file is read)\x1b[0m`,
+    );
+    lines.push(`    \x1b[90mreported only — not touched by clean\x1b[0m`);
   }
 
   // --- MEMORY FILES ---
@@ -252,17 +294,22 @@ export function formatScanSummary(result: ScanResult): string {
       project = rest ? '~' + rest : '~';
     }
     const label = `${project}/${mem.name}`;
-    // Mark the only project whose memory this session would actually load.
-    const active = mem.project === result.currentProjectSlug ? ' \x1b[32m←\x1b[0m' : '';
-    lines.push(`    ${label.padEnd(52)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok${active}`);
+    // Mark the one file this session would actually load at startup: the
+    // current project's MEMORY.md. Topic files are read on demand.
+    const isLoaded = mem.isIndex && mem.project === result.currentProjectSlug;
+    const active = isLoaded ? ' \x1b[32m←\x1b[0m' : '';
+    const cut = isLoaded && mem.truncated
+      ? ` \x1b[33m(truncated: only ${mem.startupTokens.toLocaleString()} tok reach the session)\x1b[0m`
+      : '';
+    lines.push(`    ${label.padEnd(52)} ${kb.padStart(6)}KB  ${tok.padStart(7)} tok${active}${cut}`);
   }
   if (result.memoryFiles.length > 0) {
     lines.push('');
     lines.push(
-      `    \x1b[32m←\x1b[0m loaded in this project: ` +
+      `    \x1b[32m←\x1b[0m loaded at startup in this project: ` +
         `${result.currentProjectMemoryTokens.toLocaleString()} tok  ` +
-        `\x1b[90m(${result.allProjectsMemoryTokens.toLocaleString()} tok across all projects, ` +
-        `not a per-session cost)\x1b[0m`,
+        `\x1b[90m(MEMORY.md index only — topic files are read on demand; ` +
+        `${result.allProjectsMemoryTokens.toLocaleString()} tok on disk across all projects)\x1b[0m`,
     );
     // Zero reads as "clean", so name the reason for it. Deliberately does not
     // claim the memory is unattributed: a directory Claude has simply never
