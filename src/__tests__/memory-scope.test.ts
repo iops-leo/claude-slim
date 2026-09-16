@@ -45,7 +45,7 @@ describe('startup estimate counts only the current project memory', () => {
     const smallBody = 'Small note for the active project.';
 
     await writeStaleProject(tmp.projectsDir, '-Users-me-active', {
-      'note.md': smallBody,
+      'MEMORY.md': smallBody,
     });
     await writeStaleProject(tmp.projectsDir, '-Users-me-other-one', {
       'note.md': bigBody,
@@ -85,10 +85,11 @@ describe('startup estimate counts only the current project memory', () => {
     expect(result.allProjectsMemoryTokens).toBeGreaterThan(0);
   });
 
-  it('sums every memory file belonging to the active project', async () => {
+  it('counts only the MEMORY.md index of the active project', async () => {
     await writeStaleProject(tmp.projectsDir, '-Users-me-active', {
-      'a.md': 'first memory file',
-      'b.md': 'second memory file',
+      'MEMORY.md': '- [a](a.md) — first pointer\n- [b](b.md) — second pointer',
+      'a.md': 'first topic file, read on demand',
+      'b.md': 'second topic file, read on demand',
     });
 
     vi.spyOn(process, 'cwd').mockReturnValue('/Users/me/active');
@@ -96,7 +97,7 @@ describe('startup estimate counts only the current project memory', () => {
 
     const expected = result.memoryFiles
       .filter((m) => m.project === '-Users-me-active')
-      .reduce((s, m) => s + m.tokens, 0);
+      .reduce((s, m) => s + m.startupTokens, 0);
     expect(result.currentProjectMemoryTokens).toBe(expected);
     expect(result.currentProjectMemoryTokens).toBeGreaterThan(0);
   });

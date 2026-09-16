@@ -66,12 +66,13 @@ describe('sumRecoverableStartupTokens', () => {
     expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(7100);
   });
 
-  it('counts only the current project when nothing is stale', () => {
+  it('counts no oversized memory index when nothing is stale', () => {
+    // Report-only finding: `clean` never moves the index, so nothing comes back.
     const issues = [
       issue('oversized_memory', '-Users-me-app/MEMORY.md', 6371, '/m/1'),
       issue('oversized_memory', '-Users-me-other/MEMORY.md', 5000, '/m/2'),
     ];
-    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(6371);
+    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(0);
   });
 
   it('does not let a sibling slug pass as the current project', () => {
@@ -125,11 +126,13 @@ describe('sumRecoverableStartupTokens', () => {
     expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(9000);
   });
 
-  it('still counts an oversized memory file when its project is not stale', () => {
+  it('counts nothing for an oversized memory index — clean never acts on it', () => {
+    // And for a truncated index, trimming it under the cap frees no startup
+    // context: the tail past the cap was never loaded in the first place.
     const issues = [
       issue('oversized_memory', '-Users-me-app/MEMORY.md', 6371, '/p/app/memory/MEMORY.md'),
     ];
-    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(6371);
+    expect(sumRecoverableStartupTokens(issues, [], '-Users-me-app')).toBe(0);
   });
 
   it('never exceeds the current project\'s total memory', () => {

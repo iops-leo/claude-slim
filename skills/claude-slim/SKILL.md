@@ -44,10 +44,10 @@ wrapper.
 
 ## Phase 0 — Version gate (run before every scan)
 
-An outdated claude-slim does not merely lack features — it reports **wrong numbers**. Versions before 2.8.0 summed memory across every project on disk and inflated the startup estimate roughly 8×. Presenting those figures as fact is worse than not running at all, so check first:
+An outdated claude-slim does not merely lack features — it reports **wrong numbers**. Versions before 2.8.0 summed memory across every project on disk and inflated the startup estimate roughly 8×; versions before 2.15.0 summed every topic file in the current project, when only `MEMORY.md` loads at startup — a 20× inflation on a memory-heavy project. Presenting those figures as fact is worse than not running at all, so check first:
 
 ```bash
-claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.14.3' "$@"; fi; }
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.15.0' "$@"; fi; }
 claude_slim check-update --json
 ```
 
@@ -80,7 +80,7 @@ If `"outdated": false`, say nothing and continue to Phase 1.
 Run the CLI to collect environment data:
 
 ```bash
-claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.14.3' "$@"; fi; }
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.15.0' "$@"; fi; }
 claude_slim scan --json
 ```
 
@@ -135,8 +135,9 @@ Show a summary table:
 |------|-------|--------|
 | Local skills | N (XKB) | X tok |
 | Plugins | N (M skills) | ~X tok |
-| CLAUDE.md | XKB | X tok |
-| Memory files | N (XKB) | ~X tok |
+| CLAUDE.md | XKB | X tok (+ X tok `@path` imports) |
+| Rules | N files | X tok at launch (X tok path-scoped) |
+| Memory index | MEMORY.md XKB | X tok at startup (`currentProjectMemoryTokens`) |
 | **Session startup overhead** | | **~X tok** (`totalTokensBefore`) |
 
 **Check `currentProjectKnown` before presenting memory numbers.** When it is
@@ -200,20 +201,20 @@ If subcommand is `scan`, stop here. Ask a localized equivalent of "Proceed with 
 Run the interactive clean command:
 
 ```bash
-claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.14.3' "$@"; fi; }
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.15.0' "$@"; fi; }
 claude_slim clean
 ```
 
 Or with dry-run:
 ```bash
-claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.14.3' "$@"; fi; }
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.15.0' "$@"; fi; }
 claude_slim clean --dry-run
 ```
 
 After cleanup, re-run scan to get updated numbers, then show the savings report:
 
 ```bash
-claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.14.3' "$@"; fi; }
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.15.0' "$@"; fi; }
 claude_slim report
 ```
 
@@ -226,7 +227,7 @@ Present the report box AND the before/after breakdown table to the user.
 When `/claude-slim restore` is invoked:
 
 ```bash
-claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.14.3' "$@"; fi; }
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.15.0' "$@"; fi; }
 claude_slim restore
 ```
 
@@ -235,7 +236,7 @@ claude_slim restore
 When `/claude-slim doctor` is invoked:
 
 ```bash
-claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.14.3' "$@"; fi; }
+claude_slim(){ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "$CLAUDE_PLUGIN_ROOT/dist/cli.js" ]; then node "$CLAUDE_PLUGIN_ROOT/dist/cli.js" "$@"; elif command -v claude-slim >/dev/null 2>&1; then claude-slim "$@"; else npx -y 'claude-slim@^2.15.0' "$@"; fi; }
 claude_slim doctor
 ```
 

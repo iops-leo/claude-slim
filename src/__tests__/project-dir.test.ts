@@ -90,7 +90,7 @@ describe('scan — projectDir decides which memory counts', () => {
   });
 
   it('still defaults to cwd when no directory is given', async () => {
-    await writeStaleProject(tmp.projectsDir, '-Users-me-here', { 'a.md': 'content here' });
+    await writeStaleProject(tmp.projectsDir, '-Users-me-here', { 'MEMORY.md': 'content here' });
     vi.spyOn(process, 'cwd').mockReturnValue('/Users/me/here');
 
     const result = await scan();

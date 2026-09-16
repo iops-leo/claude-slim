@@ -165,21 +165,27 @@ const tempCacheDetector: Detector = {
   },
 };
 
+// Only MEMORY.md is loaded at startup, so only MEMORY.md can be "oversized"
+// in the sense this tool cares about. A 40KB topic file costs nothing until
+// Claude decides to read it; flagging it (pre-2.15 behaviour) produced a
+// wall of recommendations whose cleanup would have saved no startup context.
 const oversizedMemoryDetector: Detector = {
   name: 'oversized_memory',
   detect({ memoryFiles }) {
     const issues: Issue[] = [];
     for (const mem of memoryFiles) {
-      if (mem.sizeBytes > OVERSIZED_MEMORY_BYTES) {
-        issues.push({
-          type: 'oversized_memory',
-          tier: 2,
-          name: `${mem.project}/${mem.name}`,
-          detail: `${Math.round(mem.sizeBytes / 1024)}KB`,
-          tokens: mem.tokens,
-          path: mem.path,
-        });
-      }
+      if (!mem.isIndex || mem.sizeBytes <= OVERSIZED_MEMORY_BYTES) continue;
+      const size = `${Math.round(mem.sizeBytes / 1024)}KB`;
+      issues.push({
+        type: 'oversized_memory',
+        tier: 2,
+        name: `${mem.project}/${mem.name}`,
+        detail: mem.truncated
+          ? `${size}, truncated at startup — entries past 200 lines/25KB are never loaded`
+          : size,
+        tokens: mem.startupTokens,
+        path: mem.path,
+      });
     }
     return issues;
   },
@@ -189,9 +195,11 @@ const staleProjectDetector: Detector = {
   name: 'stale_project',
   detect({ staleProjects, memoryFiles }) {
     return staleProjects.map((stale) => {
+      // What a session in that project pays at startup — its index slice —
+      // not the whole directory, which is disk, not context.
       const memTokens = memoryFiles
         .filter((m) => m.project === stale.project)
-        .reduce((sum, m) => sum + m.tokens, 0);
+        .reduce((sum, m) => sum + m.startupTokens, 0);
       return {
         type: 'stale_project' as const,
         tier: 2 as const,

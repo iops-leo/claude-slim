@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] — 2026-09-16
+
+### Fixed
+
+- The startup estimate summed every `*.md` under the current project's `memory/`, but
+  Claude Code loads only `MEMORY.md` at session start — its first 200 lines or 25KB,
+  whichever comes first — and reads topic files on demand
+  (https://code.claude.com/docs/en/memory.md). On a project with 183 topic files the
+  tool reported ~238,000 tokens at session start against ~10,000 actually received.
+  `MemoryFile` now carries `isIndex`, `startupTokens` (0 for topic files, the capped
+  slice for the index) and `truncated`; `currentProjectMemoryTokens` and
+  `totalTokensBefore` sum `startupTokens`.
+- `oversized_memory` no longer fires on topic files. Trimming one saves no startup
+  context, so the per-file wall of Recommended findings was advice with no payoff. It
+  now fires only on a `MEMORY.md` over 5KB, with `tokens` set to what the session
+  actually receives.
+- `stale_project.tokens` is likewise the project's startup slice rather than its whole
+  directory, so it stays comparable with `RECOVERABLE`.
+
+### Added
+
+- Index truncation detection. A `MEMORY.md` past the 200-line / 25KB cap is cut
+  silently, so its newest pointers never reach a session. The memory listing marks it,
+  and the `oversized_memory` finding says so in its detail.
+- `~/.claude/rules/**/*.md`. Rules without `paths:` frontmatter load at launch with the
+  same priority as CLAUDE.md and now count toward `totalTokensBefore`
+  (`rulesStartupTokens`); path-scoped rules are listed with their globs and summed
+  separately (`rulesConditionalTokens`) because they load only when a matching file is
+  read. New `RULES` section in `scan`; `userRules[]` in `--json`. Reported only — `clean`
+  does not touch them.
+- CLAUDE.md `@path` imports. Files named with `@RTK.md`-style imports are expanded into
+  context at launch, recursively up to four hops, relative to the importing file (`~/`
+  and absolute paths honoured). They are listed under `CLAUDE.MD` with their depth and
+  counted (`claudeMdImports[]`, `claudeMdImportTokens`). Fenced and inline code are
+  skipped, and a target that does not exist is dropped rather than reported, so
+  `@claude` in prose is not mistaken for a file.
+
+### Changed
+
+- The memory listing's `←` marker now sits on the one file a session loads — the
+  current project's `MEMORY.md` — and the summary line says the on-disk total is not a
+  per-session cost.
+- `RECOVERABLE` no longer includes `oversized_memory`. `clean` treats it as report-only,
+  and for a truncated index the advice — trim it under the cap — frees no startup
+  context, so the figure promised tokens that acting on the issue could not return.
+- `report` reconstructs the pre-clean baseline from the current project's stale memory
+  only, matching what `totalTokensBefore` ever contained; every cleaned project's slice
+  was being added before.
+- A rule that CLAUDE.md also `@`-imports is counted once, under the import, and its
+  RULES row says so. A rules directory reached through a symlink loop is walked once.
+
 ## [2.14.3] — 2026-08-26
 
 ### Security

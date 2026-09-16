@@ -37,10 +37,11 @@ Where the bloat hides — measured on one real install:
 |--------|:---:|---|
 | Skill listings | ~10,100 tokens | 256 skills × their `name: description` line |
 | Agent catalog | ~2,250 tokens | `~/.claude/agents/`, 12 agents |
-| CLAUDE.md | ~2,000 tokens | plugin instructions |
+| CLAUDE.md | ~2,000 tokens | plugin instructions, plus any `@path` imports |
+| Rules | ~1,200 tokens | `~/.claude/rules/` without `paths:` — path-scoped rules load later |
 | Deferred tools list | ~1,500 tokens | MCP tool schemas |
 | Slash commands | ~80 tokens | `~/.claude/commands/` |
-| Memory files | **0 – 63,500 tokens** | current project only — varies wildly per project |
+| Memory index | **0 – 6,500 tokens** | current project's `MEMORY.md` only, first 200 lines / 25KB — topic files are read on demand |
 
 Skill listings are the part people underestimate: each installed skill contributes one `- name: description` line to the system prompt, and those run anywhere from **30 to 509 tokens each**. Sixty terse skills and sixty verbose ones are not the same bill.
 
@@ -76,8 +77,9 @@ That's slower responses. Hitting your usage cap faster. Paying for context you'r
 | Oversized files | SKILL.md over 10KB |
 | **Unused skills** | **Local skills never invoked in your last N days of sessions (default 60d)** |
 | Agents & commands | `~/.claude/agents/` and `~/.claude/commands/` — measured and reported, never modified |
+| Rules & imports | `~/.claude/rules/` and CLAUDE.md `@path` imports — measured and reported, never modified |
 | **Unused plugins** | **Plugins whose skill/mcp/cmd were never invoked in your last N days of sessions (default 60d). Tier 3, never auto-selected.** |
-| Stale memory | Large memory files loaded every session |
+| Oversized memory index | `MEMORY.md` over 5KB, or cut at the 200-line / 25KB startup cap so its tail never loads |
 | Disabled plugins | Installed but disabled plugins still in cache |
 | Stale projects | Project memory untouched for 90+ days |
 | Temp caches | Failed plugin install remnants (`temp_local_*`) |
@@ -230,8 +232,9 @@ claude-slim scans these locations. No plugin-specific logic — pure filesystem 
 ├── plugins/cache/           ← plugin skills, agents, commands, MCP servers
 ├── agents/                  ← user agents (measured, read-only)
 ├── commands/                ← user slash commands (measured, read-only)
-├── CLAUDE.md                ← system instructions (read-only)
-├── projects/*/memory/       ← auto-memory files (current project counts toward startup)
+├── CLAUDE.md                ← system instructions + @imports (read-only)
+├── rules/                   ← user rules (measured, read-only; path-scoped ones listed separately)
+├── projects/*/memory/       ← auto-memory (only the current project's MEMORY.md counts toward startup)
 └── settings.json            ← MCP server count (read-only)
 ```
 
@@ -252,20 +255,20 @@ From a real cleanup session:
 
 ### A note on the numbers
 
-claude-slim reports what a session in **this** directory pays. Memory is per-project — Claude Code loads `~/.claude/projects/<slug>/memory/` for the project you're in, not every project on disk — so running `scan` from two different repos will legitimately give you two different totals.
+claude-slim reports what a session in **this** directory pays. Memory is per-project — Claude Code loads `~/.claude/projects/<slug>/memory/` for the project you're in, not every project on disk — so running `scan` from two different repos will legitimately give you two different totals. Within that project only `MEMORY.md` is loaded at startup, and only its first 200 lines or 25KB; topic files cost nothing until Claude reads one.
 
 Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) against the actual file contents. The only estimates left are marked with `~`: MCP tool schemas (~8 tokens/tool) and skills whose frontmatter can't be parsed (~30 tokens). Everything else is measured.
 
 ---
 
-## v2.13.1 — What's new
+## v2.15.0 — What's new
 
-- **Fixed: `scan` promised the tool never touches `~/.codex/`, while `clean --auto` deletes from it permanently.** The Codex summary closed with `Reported only — claude-slim never modifies ~/.codex/.` That was true in v2.10 and false from **v2.11** on, when `clean` gained the Codex tiers. Measured here: `clean --dry-run` selects `[Auto] [codex] temp_cache: .tmp (146MB of install leftovers) (permanent)` — Tier 1, which `--auto` applies without prompting and no `restore` undoes.
-- The summary now says what actually happens: `scan` only reads, `clean` acts under the same tiers as `~/.claude/`, moves land in `~/.codex/skills.disabled/` and reverse with `restore`, and Tier 1 install leftovers are deleted permanently.
+- **Fixed: the startup estimate counted every memory file in the project, when Claude Code loads only `MEMORY.md`.** The docs are explicit: the first 200 lines or 25KB of `MEMORY.md` are loaded at session start, and topic files are read on demand. Summing the whole directory put one project with 183 topic files at **~238,000 tokens at session start** when the session actually received about 10,000. The per-file `oversized_memory` warnings on topic files are gone for the same reason — trimming them would have saved no context.
+- **Added: the index truncation warning.** A `MEMORY.md` past the 200-line / 25KB cap is silently cut, so its newest entries never reach a session. `scan` now marks it and reports how many tokens actually arrive.
+- **Added: `~/.claude/rules/`.** Rules without `paths:` frontmatter load at launch with the same priority as CLAUDE.md; path-scoped ones load only when a matching file is read. Both are listed, only the first is summed. Reported only, never moved.
+- **Added: CLAUDE.md `@path` imports.** Files pulled in with `@RTK.md`-style imports are expanded into context at launch, recursively up to four hops. They are now listed under CLAUDE.md and counted.
 
-A test was holding the false claim in place. It asserted the summary *must* say "never modifies", so the line could not be corrected without a test failing — and all 461 tests stayed green across four releases that contradicted it. The assertion is now inverted: the summary must not promise `~/.codex/` is left alone, and must name the permanent deletion and `--auto`.
-
-Tests: 461 → 462.
+Tests: 486 → 529.
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

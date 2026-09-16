@@ -9,10 +9,12 @@ import type { ScanResult, Issue } from '../types.js';
 
 const emptyScan = (totalTokensBefore: number, issues: Issue[] = []): ScanResult => ({
   localSkills: [], pluginSkills: [], plugins: [], brokenSymlinks: [], memoryFiles: [],
-  claudeMdBytes: 0, claudeMdTokens: 0, claudeMdSections: [], mcpServers: 0,
+  claudeMdBytes: 0, claudeMdTokens: 0, claudeMdSections: [], claudeMdImports: [],
+  claudeMdImportTokens: 0, userRules: [], rulesStartupTokens: 0, rulesConditionalTokens: 0, mcpServers: 0,
   mcpServerNames: [], issues, totalTokensBefore, pluginBreakdown: [],
   userAgents: [], userCommands: [], currentProjectSlug: '-tmp', currentProjectKnown: true,
   currentProjectMemoryTokens: 0, allProjectsMemoryTokens: 0, recoverableStartupTokens: 0,
+  disabledPluginSkillTokens: 0,
 });
 
 /**

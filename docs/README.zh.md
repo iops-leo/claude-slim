@@ -26,10 +26,11 @@
 |------|:---:|---|
 | 技能列表 | ~10,100 tokens | 256个技能 × 各自的`名称: 描述`一行 |
 | 代理目录 | ~2,250 tokens | `~/.claude/agents/`，12个 |
-| CLAUDE.md | ~2,000 tokens | 插件指令 |
+| CLAUDE.md | ~2,000 tokens | 插件指令，含 `@path` 导入 |
+| 规则 | ~1,200 tokens | 无 `paths:` 的 `~/.claude/rules/` — 按路径限定的规则稍后加载 |
 | Deferred tools列表 | ~1,500 tokens | MCP工具schema |
 | 斜杠命令 | ~80 tokens | `~/.claude/commands/` |
-| 记忆文件 | **0 ~ 63,500 tokens** | 仅当前项目 — 各项目差异极大 |
+| 记忆索引 | **0 ~ 6,500 tokens** | 仅当前项目的 `MEMORY.md`，前 200 行 / 25KB — 主题文件按需读取 |
 
 最容易被低估的是技能列表。每个已安装的技能都会向系统提示词添加一行`- 名称: 描述`，而这一行的成本从**30 tokens到509 tokens不等**。同样是60个技能，账单并不相同。
 
@@ -62,7 +63,8 @@ flowchart LR
 | **未使用技能** | **最近 N 天（默认 60 天）会话中从未被调用过的本地技能** |
 | 代理与命令 | `~/.claude/agents/` 和 `~/.claude/commands/` — 仅测量与报告，绝不修改 |
 | **未使用插件** | **最近 N 天（默认 60 天）会话中技能／MCP／命令从未被调用过的插件。Tier 3，不会自动选中。** |
-| 过期记忆 | 每次会话加载的大型记忆文件 |
+| 过大的记忆索引 | 超过 5KB，或在 200 行 / 25KB 启动上限处被截断、尾部永不加载的 `MEMORY.md` |
+| 规则 & 导入 | `~/.claude/rules/` 与 CLAUDE.md 的 `@path` 导入 — 仅测量与报告，从不修改 |
 | 已禁用插件 | 已安装但处于禁用状态、仍占用缓存 |
 | 过期项目 | 90 天以上未触碰的项目记忆 |
 | 临时缓存 | 插件安装失败的残留物（`temp_local_*`） |
@@ -139,8 +141,9 @@ claude-slim扫描以下位置。无插件特定逻辑 — 纯文件系统分析�
 ├── plugins/cache/           ← 插件的技能、代理、命令、MCP服务器
 ├── agents/                  ← 用户代理（仅测量，只读）
 ├── commands/                ← 用户斜杠命令（仅测量，只读）
-├── CLAUDE.md                ← 插件指令（只读）
-├── projects/*/memory/       ← 自动记忆文件（仅当前项目计入启动开销）
+├── CLAUDE.md                ← 系统指令 + @导入（只读）
+├── rules/                   ← 用户规则（测量，只读；按路径限定的单独列出）
+├── projects/*/memory/       ← 自动记忆（仅当前项目的 MEMORY.md 计入启动开销）
 └── settings.json            ← MCP服务器数量（只读）
 ```
 
@@ -161,20 +164,20 @@ claude-slim扫描以下位置。无插件特定逻辑 — 纯文件系统分析�
 
 ### 关于这些数字
 
-claude-slim 报告的是**在当前目录**开启会话所需的成本。记忆是按项目划分的 — Claude Code 只加载当前项目的 `~/.claude/projects/<slug>/memory/`，不会加载磁盘上的其他项目。因此在两个不同仓库中运行 `scan` 得到不同的总量，属于正常现象。
+claude-slim 报告的是**在当前目录**开启会话所需的成本。记忆是按项目划分的 — Claude Code 只加载当前项目的 `~/.claude/projects/<slug>/memory/`，不会加载磁盘上的其他项目。因此在两个不同仓库中运行 `scan` 得到不同的总量，属于正常现象。在该项目内部，启动时也只加载 `MEMORY.md` 的前 200 行或 25KB；主题文件在 Claude 读取之前不产生任何开销。
 
 token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对文件实际内容计算得出。仅剩两项仍为估算值，均以 `~` 标注：MCP 工具 schema（每个工具约 8 tokens），以及 frontmatter 无法解析的技能（约 30 tokens）。其余全部为实测值。
 
 ---
 
-## v2.13.1 更新 (2026-08-22)
+## v2.15.0 更新 (2026-09-16)
 
-- **修复：`scan` 声称本工具从不触碰 `~/.codex/`，而 `clean --auto` 却会在其中永久删除。** Codex 摘要以 `Reported only — claude-slim never modifies ~/.codex/.` 结尾。这在 v2.10 是对的，但自 `clean` 加入 Codex 分级的 **v2.11** 起就不再成立。实测：`clean --dry-run` 会选中 `[Auto] [codex] temp_cache: .tmp (146MB of install leftovers) (permanent)`——属于 Tier 1，`--auto` 不经确认即会执行，且 `restore` 无法撤销。
-- 摘要现在如实说明实际行为：`scan` 只读取，`clean` 会以与 `~/.claude/` 相同的分级在此处执行，移动的项目进入 `~/.codex/skills.disabled/` 并可用 `restore` 还原，但 Tier 1 的安装残留会被永久删除。
+- **修复：启动开销估算把项目里的所有记忆文件都算了进去，而 Claude Code 启动时只加载 `MEMORY.md`。** 官方文档写得很明确：会话开始时加载的是 `MEMORY.md` 的前 200 行或 25KB，主题文件按需读取。把整个目录相加，让一个有 183 个主题文件的项目被报告为**启动时 ~238,000 tokens**，而会话实际收到的约为 10,000。针对主题文件逐个发出的 `oversized_memory` 警告也因同样原因移除——裁剪它们并不会节省任何上下文。
+- **新增：索引截断警告。** 超过 200 行 / 25KB 上限的 `MEMORY.md` 会被静默截断，最新条目永远到不了会话。`scan` 现在会标记它并报告实际送达的 token 数。
+- **新增：`~/.claude/rules/`。** 没有 `paths:` 前置元数据的规则在启动时以与 CLAUDE.md 相同的优先级加载；按路径限定的规则只在读取匹配文件时加载。两者都会列出，只有前者计入总量。仅报告，从不移动。
+- **新增：CLAUDE.md 的 `@path` 导入。** 以 `@RTK.md` 形式引入的文件会在启动时展开进上下文，最多递归四层。现在会列在 CLAUDE.md 之下并计入总量。
 
-是一条测试把这个错误说法固定住了。它断言摘要**必须**包含 "never modifies"，因此纠正该行就会导致测试失败——而在与之矛盾的四个版本发布期间，461 个测试始终全绿。该断言现已反转：摘要不得承诺 `~/.codex/` 不受影响，并且必须写明永久删除与 `--auto`。
-
-测试: 461 → **462**。
+测试: 486 → **529**。
 
 历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 
