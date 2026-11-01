@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.1] — 2026-11-01
+
+### Fixed
+
+- The current project's memory reported 0 tokens on Windows, and on any POSIX path
+  containing `.`, `_` or a space. The project slug replaced only `/` with `-`, but Claude
+  Code replaces every character outside `[A-Za-z0-9]`: `C:\Users\Rob CPC\code\app` is
+  stored as `C--Users-Rob-CPC-code-app`, and `/private/var/folders/r9/_y9b…` as
+  `-private-var-folders-r9--y9b…`. The slug never matched, so `scan` printed
+  "No Claude project state for …" and `--project-dir` could not help because it uses the
+  same function. The `~/…` shortening in the MEMORY FILES list had the same mismatch for
+  home directories with those characters. Reported in #20.
+
 ## [2.15.0] — 2026-09-16
 
 ### Fixed
