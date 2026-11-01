@@ -2,9 +2,10 @@ import { homedir } from 'node:os';
 import type { ScanResult, Issue, ManifestEntry, PluginBreakdown } from './types.js';
 import { isUsingFallback } from './tokenizer.js';
 import { formatPluginsTable } from './scanner/plugin-breakdown.js';
+import { slugifyProjectPath } from './paths.js';
 
-// Claude Code encodes /Users/leo.new/foo as -Users-leo-new-foo
-const HOME_PREFIX = homedir().replace(/\//g, '-').replace(/\./g, '-');
+// Claude Code encodes /Users/leo.new/foo as -Users-leo-new-foo, C:\Users\Rob CPC as C--Users-Rob-CPC
+const HOME_PREFIX = slugifyProjectPath(homedir());
 
 const SESSIONS_PER_DAY_DEFAULT = 2;
 const PRICE_PER_1K_TOKENS = 0.003; // Claude Sonnet input price

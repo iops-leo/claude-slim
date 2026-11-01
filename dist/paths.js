@@ -18,14 +18,22 @@ export function getDisabledDir() {
 }
 /**
  * Claude Code stores per-project state under `~/.claude/projects/<slug>/`,
- * where the slug is the absolute project path with every `/` replaced by `-`
- * (e.g. `/Users/me/app` → `-Users-me-app`).
+ * where the slug is the absolute project path with every character outside
+ * [A-Za-z0-9] replaced by `-` (e.g. `/Users/me/app` → `-Users-me-app`,
+ * `C:\Program Files` → `C--Program-Files`).
  *
+ * Replacing only `/` never matched on Windows, and missed POSIX paths with
+ * `.`, `_` or spaces — the current project's memory then reported 0 (#20).
+ */
+export function slugifyProjectPath(absPath) {
+    return absPath.replace(/[^A-Za-z0-9]/g, '-');
+}
+/**
  * Only the current project's `memory/` is loaded into a session — which is why
  * the startup estimate must not sum memory across every project on disk.
  */
 export function getCurrentProjectSlug(cwd = process.cwd()) {
-    return resolve(cwd).replace(/\//g, '-');
+    return slugifyProjectPath(resolve(cwd));
 }
 /**
  * True when `cwd` sits inside claude-slim's own install rather than a project.
