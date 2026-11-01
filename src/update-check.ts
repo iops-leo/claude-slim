@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getClaudeDir } from './paths.js';
+import { getClaudeDir, isUnderClaudePlugins } from './paths.js';
 
 // Version-drift detection.
 //
@@ -75,7 +75,7 @@ export function compareVersions(a: string, b: string): number {
  */
 export function detectInstallMethod(modulePath: string): InstallMethod {
   const p = modulePath.replace(/\\/g, '/');
-  if (p.includes('/.claude/plugins/')) return 'plugin';
+  if (isUnderClaudePlugins(p)) return 'plugin';
   if (p.includes('/_npx/')) return 'npx';
   if (/\/(lib\/)?node_modules\/claude-slim\//.test(p)) return 'global';
   if (p.includes('/dist/') || p.includes('/src/')) return 'source';

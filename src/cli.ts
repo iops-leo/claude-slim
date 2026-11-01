@@ -16,7 +16,7 @@ import {
   calculateReport,
 } from './report.js';
 import { collectDoctorReport, formatDoctorReport } from './doctor.js';
-import { looksLikeToolInstallDir, projectDirError } from './paths.js';
+import { looksLikeToolInstallDir, projectDirError, getDisabledDir } from './paths.js';
 import { checkForUpdate, formatUpdateNotice } from './update-check.js';
 import { confirmDecision, planUpdate, renderStep, runUpdate } from './update-run.js';
 import { scanCodex } from './codex/index.js';
@@ -585,7 +585,7 @@ async function runCleanPipeline(opts: {
     console.log('');
   }
 
-  console.log(`  Recovery: ~/.claude/skills.disabled/`);
+  console.log(`  Recovery: ${getDisabledDir()}`);
   console.log(`  Restore:  npx claude-slim restore\n`);
 
   await flushCache();

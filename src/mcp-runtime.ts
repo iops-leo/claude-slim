@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { ClaudeCliMissingError, isClaudeMissing } from './plugin-runtime.js';
+import { getConfigDirOverride } from './paths.js';
 
 export type RemovableMcpScope = 'user' | 'local';
 
@@ -27,7 +28,12 @@ function validateScope(scope: string): asserts scope is RemovableMcpScope {
  */
 function runClaude(args: string[], cwd: string, label: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile('claude', args, { cwd, timeout: 30000 }, (err, _stdout, stderr) => {
+    // Hand the child the profile this process resolved, as an absolute path:
+    // it runs in a different cwd, where a relative CLAUDE_CONFIG_DIR would
+    // name a different profile than the one we backed up from.
+    const override = getConfigDirOverride();
+    const env = override ? { ...process.env, CLAUDE_CONFIG_DIR: override } : process.env;
+    execFile('claude', args, { cwd, env, timeout: 30000 }, (err, _stdout, stderr) => {
       if (err) {
         if (isClaudeMissing(err)) {
           reject(new ClaudeCliMissingError());

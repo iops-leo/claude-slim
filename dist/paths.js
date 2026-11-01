@@ -1,8 +1,42 @@
 import { homedir } from 'node:os';
 import { statSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve, sep, basename, dirname } from 'node:path';
+/**
+ * `CLAUDE_CONFIG_DIR`, resolved to an absolute path, or undefined when unset.
+ * Claude Code then keeps everything that normally lives under `~/.claude` —
+ * and `.claude.json` — in that directory
+ * (https://code.claude.com/docs/en/claude-directory.md).
+ *
+ * The value is taken as Claude Code takes it: no trimming and no `~`
+ * expansion (a shell expands `~` before either program sees it; a settings
+ * `env` block does not, and Claude Code then uses it literally). A relative
+ * value resolves against this process's cwd, and the `claude` children we
+ * spawn get that absolute path so they cannot resolve it elsewhere.
+ */
+export function getConfigDirOverride() {
+    const raw = process.env.CLAUDE_CONFIG_DIR;
+    return raw ? resolve(raw) : undefined;
+}
 export function getClaudeDir() {
-    return join(homedir(), '.claude');
+    return getConfigDirOverride() ?? join(homedir(), '.claude');
+}
+/**
+ * The "configuration home": the home directory, or the directory whose
+ * `.claude` is `CLAUDE_CONFIG_DIR`. An untracked `settings.local.json` there
+ * applies before the folder is trusted.
+ * https://code.claude.com/docs/en/permissions.md#when-your-local-settings-file-needs-trust
+ */
+/** True for a path inside a Claude Code plugins directory — the default one or this profile's. */
+export function isUnderClaudePlugins(path) {
+    const p = path.replace(/\\/g, '/');
+    const own = join(getClaudeDir(), 'plugins').replace(/\\/g, '/') + '/';
+    return p.includes('/.claude/plugins/') || p.startsWith(own);
+}
+export function isConfigHome(dir) {
+    if (dir === homedir())
+        return true;
+    const override = getConfigDirOverride();
+    return override !== undefined && basename(override) === '.claude' && dirname(override) === dir;
 }
 export function getSkillsDir() {
     return join(getClaudeDir(), 'skills');
@@ -47,7 +81,7 @@ export function getCurrentProjectSlug(cwd = process.cwd()) {
  */
 export function looksLikeToolInstallDir(cwd = process.cwd()) {
     const p = resolve(cwd).replace(/\\/g, '/');
-    return (p.includes('/.claude/plugins/') ||
+    return (isUnderClaudePlugins(p) ||
         p.includes('/_npx/') ||
         /\/node_modules\/claude-slim(\/|$)/.test(p));
 }

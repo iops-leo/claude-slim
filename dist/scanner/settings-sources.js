@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { stat } from 'node:fs/promises';
-import { getClaudeDir } from '../paths.js';
+import { getClaudeDir, getConfigDirOverride } from '../paths.js';
 import { safeReadFile, isDirectory } from './fs-walk.js';
 export function isObject(v) {
     return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -45,8 +45,9 @@ export function getManagedDir(platform = process.platform) {
         return 'C:\\Program Files\\ClaudeCode';
     return '/etc/claude-code';
 }
+/** `.claude.json` — beside `~/.claude`, or inside `CLAUDE_CONFIG_DIR` when set. */
 export function getClaudeJsonPath() {
-    return join(homedir(), '.claude.json');
+    return join(getConfigDirOverride() ?? homedir(), '.claude.json');
 }
 /**
  * The repository root Claude Code files per-project state under: the nearest
@@ -130,11 +131,13 @@ export async function readSettingsSources(projectDir, managedDir = getManagedDir
     const dir = resolve(projectDir);
     const repoRoot = await findRepoRoot(dir);
     const root = repoRoot ?? dir;
+    const localPaths = await localSettingsPaths(dir, repoRoot);
+    const localAtRepoRoot = localPaths[0] !== join(dir, '.claude', 'settings.local.json');
     const [claudeJson, userSettings, projectSettings, localSettingsList, managedSettings] = await Promise.all([
         readJson(getClaudeJsonPath()),
         readJson(join(getClaudeDir(), 'settings.json')),
         readJson(join(dir, '.claude', 'settings.json')),
-        localSettingsPaths(dir, repoRoot).then((paths) => Promise.all(paths.map(readJson))),
+        Promise.all(localPaths.map(readJson)),
         readJson(join(managedDir, 'managed-settings.json')),
     ]);
     const projects = isObject(claudeJson?.projects) ? claudeJson.projects : {};
@@ -148,6 +151,7 @@ export async function readSettingsSources(projectDir, managedDir = getManagedDir
         userSettings,
         projectSettings,
         localSettingsList,
+        localAtRepoRoot,
         managedSettings,
         projectKey,
         projectState,

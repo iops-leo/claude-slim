@@ -1,5 +1,5 @@
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { isConfigHome } from '../paths.js';
 import {
   type Json, isObject, readJson, stringList, firstBoolean,
   getManagedDir, getClaudeJsonPath, readSettingsSources,
@@ -129,7 +129,9 @@ export async function scanMcpServers(
   // so do approvals in settings.local.json, unless the folder is the home
   // directory. User and managed approvals always count. Denials
   // (disabledMcpjsonServers) count from every file regardless of trust.
-  const localTrusted = trusted || dir === homedir();
+  // The configuration-home exception does not survive the local file being
+  // relocated to a repository root: it then waits for trust like any other.
+  const localTrusted = trusted || (isConfigHome(dir) && !src.localAtRepoRoot);
   const approvalsByPrecedence = [
     managedSettings,
     ...(localTrusted ? localSettingsList : []),

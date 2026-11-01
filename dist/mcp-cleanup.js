@@ -25,18 +25,6 @@ export function isDisabledMcpEntry(e) {
 function cwdFor(scope, issuePath) {
     return scope === 'local' ? issuePath : homedir();
 }
-/**
- * With `CLAUDE_CONFIG_DIR` set, the `claude` we shell out to reads and writes
- * `$CLAUDE_CONFIG_DIR/.claude.json` while this tool reads `~/.claude.json`.
- * Backing up one file and removing from the other could swap definitions on
- * restore, so refuse instead of guessing.
- */
-function assertDefaultConfigDir() {
-    if (process.env.CLAUDE_CONFIG_DIR) {
-        throw new Error('CLAUDE_CONFIG_DIR is set; claude-slim reads ~/.claude.json and will not remove MCP servers ' +
-            'from a different profile. Use `claude mcp remove` directly.');
-    }
-}
 async function readServers(scope, projectKey) {
     let data;
     try {
@@ -68,7 +56,7 @@ async function readDefinition(name, scope, projectKey) {
     }
     const def = servers?.[name];
     if (matches.length === 0 || !isObject(def)) {
-        throw new Error(`MCP server "${name}" not found in ${scope} scope of ~/.claude.json`);
+        throw new Error(`MCP server "${name}" not found in ${scope} scope of ${getClaudeJsonPath()}`);
     }
     return def;
 }
@@ -85,7 +73,6 @@ async function stillDefined(name, scope, projectKey) {
  * is never left removed with neither its definition nor a backup on disk.
  */
 export async function disableUnusedMcp(issue) {
-    assertDefaultConfigDir();
     const scope = issue.mcpScope;
     if (scope !== 'user' && scope !== 'local') {
         throw new Error(`unused_mcp issue without a removable scope: ${issue.name}`);
@@ -159,7 +146,6 @@ async function resolveBackupPath(entry) {
 }
 /** Put a removed server back exactly as it was, then drop its record and backup. */
 export async function restoreMcpServer(entry) {
-    assertDefaultConfigDir();
     const backupPath = await resolveBackupPath(entry);
     let backup;
     try {
