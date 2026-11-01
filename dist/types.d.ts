@@ -61,7 +61,7 @@ export interface PluginInfo {
     status?: 'enabled' | 'disabled';
 }
 export type IssueTier = 1 | 2 | 3;
-export type IssueType = 'broken_symlink' | 'template' | 'skill_dup' | 'duplicate' | 'oversized_memory' | 'oversized_skill' | 'unused_skill' | 'unused_plugin' | 'disabled_plugin' | 'stale_project' | 'temp_cache' | 'backup_artifact';
+export type IssueType = 'broken_symlink' | 'template' | 'skill_dup' | 'duplicate' | 'oversized_memory' | 'oversized_skill' | 'unused_skill' | 'unused_plugin' | 'unused_mcp' | 'disabled_plugin' | 'stale_project' | 'temp_cache' | 'backup_artifact';
 export interface Issue {
     type: IssueType;
     /** Which agent root this issue lives under. Absent means Claude Code. */
@@ -72,6 +72,12 @@ export interface Issue {
     tokens: number;
     path: string;
     marketplace?: string;
+    /**
+     * `unused_mcp` only: the scope `claude mcp remove` targets. `path` is then
+     * the project root for `local` (where the CLI must run) and `~/.claude.json`
+     * for `user`.
+     */
+    mcpScope?: 'user' | 'local';
 }
 export interface PluginBreakdown {
     name: string;
@@ -179,7 +185,21 @@ export interface DisabledPluginEntry {
     marketplace: string;
     disabledAt: string;
 }
-export type AnyManifestEntry = ManifestEntry | DisabledPluginEntry;
+/**
+ * An MCP server removed by `unused_mcp`. The definition itself — which may
+ * carry tokens in `env` or `headers` — is kept only in the 0600 file at
+ * `backupPath`, never in the manifest.
+ */
+export interface DisabledMcpEntry {
+    type: 'unused_mcp';
+    name: string;
+    scope: 'user' | 'local';
+    /** Directory `claude mcp add-json` must run in to target the same scope. */
+    cwd: string;
+    backupPath: string;
+    disabledAt: string;
+}
+export type AnyManifestEntry = ManifestEntry | DisabledPluginEntry | DisabledMcpEntry;
 export interface Manifest {
     version: 2;
     entries: AnyManifestEntry[];

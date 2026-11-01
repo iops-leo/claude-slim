@@ -79,6 +79,7 @@ That's slower responses. Hitting your usage cap faster. Paying for context you'r
 | Agents & commands | `~/.claude/agents/` and `~/.claude/commands/` — measured and reported, never modified |
 | Rules & imports | `~/.claude/rules/` and CLAUDE.md `@path` imports — measured and reported, never modified |
 | **Unused plugins** | **Plugins whose skill/mcp/cmd were never invoked in your last N days of sessions (default 60d). Tier 3, never auto-selected.** |
+| **Unused MCP servers** | **User- and local-scope servers in `~/.claude.json` whose tools were never called in your last N days. Tier 3, never auto-selected. Removed with `claude mcp remove`; the definition is kept for `restore`.** |
 | Oversized memory index | `MEMORY.md` over 5KB, or cut at the 200-line / 25KB startup cap so its tail never loads |
 | Disabled plugins | Installed but disabled plugins still in cache |
 | Stale projects | Project memory untouched for 90+ days |
@@ -203,22 +204,24 @@ claude-slim never updates itself — that's your package manager's job, and writ
 | | |
 |---|---|
 | **Non-destructive for user data** | Skills and project memory move to `~/.claude/skills.disabled/` |
-| **Reversible where state exists** | `/claude-slim restore` brings moved skills and project memory back |
+| **Reversible where state exists** | `/claude-slim restore` brings moved skills, project memory and removed MCP servers back |
 | **User-controlled** | Interactive runs ask before changes. `--dry-run` previews; `--auto` selects Tier 1 only. |
 | **Hands off** | Never touches CLAUDE.md, settings.json, or plugin configs |
 | **Scoped** | All operations are refused if the target path escapes `~/.claude/` |
+| **MCP through Claude Code** | `~/.claude.json` is never edited by hand. Selected MCP servers are removed with `claude mcp remove`, their definitions backed up (mode 0600) to `~/.claude/skills.disabled/.mcp-backup/` |
 
 ### What claude-slim never touches
 
 - **`~/.claude/CLAUDE.md`** — your system instructions, read-only.
 - **`~/.claude/settings.json`** — MCP server config, hooks, and any other settings. Read-only.
 - **`~/.claude/agents/` and `~/.claude/commands/`** — measured and reported since v2.8, never moved or deleted. There is no restore path for them yet, and a destructive action without its undo isn't worth shipping.
+- **`~/.claude.json`** — never written directly. An `unused_mcp` item you select is removed through `claude mcp remove`, and `restore` puts it back with `claude mcp add-json`. Project servers in a repo's `.mcp.json` are reported, never removed.
 - **Plugin internals** (`~/.claude/plugins/config.json`, individual `plugin.json` files) — left alone; use `claude plugin` to manage plugins.
 - **Git / project sources** — claude-slim only looks inside `~/.claude/`, never at your code.
 - **`~/.codex/`** — scanned and, since v2.11, cleanable under the same tiers. Moves go to `~/.codex/skills.disabled/` and reverse with `restore`. The path guard is per-agent, so a Codex item can never resolve into `~/.claude/`. Unused-skill detection is still not offered there: Codex session logs record the skill catalog, not invocations, so there is no honest usage signal to act on.
 - **Anything outside `~/.claude/`** — a path-containment guard refuses destructive ops anywhere else, even if a tampered manifest asked it to.
 
-Only touched: entries under `~/.claude/skills/`, `~/.claude/plugins/cache/temp_local_*`, and `~/.claude/projects/*/memory/`. Skill and memory entries are moved to `skills.disabled/`; broken symlink files are unlinked and `temp_local_*` failed-install caches are removed outright.
+Only touched: entries under `~/.claude/skills/`, `~/.claude/plugins/cache/temp_local_*`, and `~/.claude/projects/*/memory/`, plus the MCP servers you select (via the `claude` CLI). Skill and memory entries are moved to `skills.disabled/`; broken symlink files are unlinked and `temp_local_*` failed-install caches are removed outright.
 
 ---
 
@@ -235,7 +238,9 @@ claude-slim scans these locations. No plugin-specific logic — pure filesystem 
 ├── CLAUDE.md                ← system instructions + @imports (read-only)
 ├── rules/                   ← user rules (measured, read-only; path-scoped ones listed separately)
 ├── projects/*/memory/       ← auto-memory (only the current project's MEMORY.md counts toward startup)
-└── settings.json            ← MCP server count (read-only)
+└── settings.json            ← settings (read-only; MCP servers defined here are flagged as not loaded)
+~/.claude.json               ← user and local MCP servers
+<project>/.mcp.json          ← project MCP servers (read-only)
 ```
 
 Works with any setup: OMC, gstack, marketplace plugins, custom skills, or vanilla Claude Code.
@@ -261,14 +266,14 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 
 ---
 
-## v2.15.0 — What's new
+## v2.16.0 — What's new
 
-- **Fixed: the startup estimate counted every memory file in the project, when Claude Code loads only `MEMORY.md`.** The docs are explicit: the first 200 lines or 25KB of `MEMORY.md` are loaded at session start, and topic files are read on demand. Summing the whole directory put one project with 183 topic files at **~238,000 tokens at session start** when the session actually received about 10,000. The per-file `oversized_memory` warnings on topic files are gone for the same reason — trimming them would have saved no context.
-- **Added: the index truncation warning.** A `MEMORY.md` past the 200-line / 25KB cap is silently cut, so its newest entries never reach a session. `scan` now marks it and reports how many tokens actually arrive.
-- **Added: `~/.claude/rules/`.** Rules without `paths:` frontmatter load at launch with the same priority as CLAUDE.md; path-scoped ones load only when a matching file is read. Both are listed, only the first is summed. Reported only, never moved.
-- **Added: CLAUDE.md `@path` imports.** Files pulled in with `@RTK.md`-style imports are expanded into context at launch, recursively up to four hops. They are now listed under CLAUDE.md and counted.
+- **Added: unused MCP servers.** User- and local-scope servers whose tools were never called in your last 60 days of sessions are now flagged (`unused_mcp`, Tier 3, never auto-selected). Selecting one removes it with `claude mcp remove`, after copying its definition — `env` and `headers` included — to a 0600 backup. `restore` adds it back exactly as it was.
+- **Fixed (2.15.2): MCP SERVERS listed the wrong servers.** It read `~/.claude/settings.json`, which Claude Code does not load servers from. It now reads `~/.claude.json` and `.mcp.json` the way Claude Code does, and marks each server as active, turned off, awaiting approval, or blocked by managed policy.
+- **Fixed (2.15.2): deleted skills in `~/.claude/skills/.trash/` were counted as installed** — 11 skills, 14 false findings and ~1,400 phantom startup tokens on one machine.
+- **Fixed (2.15.1): project memory reported 0 on Windows**, and on any path with `.`, `_` or a space (#20).
 
-Tests: 486 → 529.
+Tests: 529 → 580.
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

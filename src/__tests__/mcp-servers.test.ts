@@ -151,6 +151,7 @@ describe('scanMcpServers', () => {
     await writeFile(join(tmp.claudeDir, 'settings.json'), JSON.stringify({ enableAllProjectMcpServers: true }));
     await mkdir(join(project, '.claude'), { recursive: true });
     await writeFile(join(project, '.claude', 'settings.local.json'), JSON.stringify({ enableAllProjectMcpServers: false }));
+    await writeClaudeJson({ projects: { [project]: { hasTrustDialogAccepted: true } } });
     const r = await scanMcpServers(project, { managedDir });
     expect(r.servers[0].status).toBe('pending');
   });
@@ -164,6 +165,40 @@ describe('scanMcpServers', () => {
     await writeClaudeJson({ projects: { [project]: { hasTrustDialogAccepted: true } } });
     const trusted = await scanMcpServers(project, { managedDir });
     expect(trusted.servers[0].status).toBe('active');
+  });
+
+  it('keeps denials from an untrusted project but ignores its local-file approvals', async () => {
+    await writeFile(join(project, '.mcp.json'), JSON.stringify({ mcpServers: { a: {}, b: {} } }));
+    await mkdir(join(project, '.claude'), { recursive: true });
+    await writeFile(join(project, '.claude', 'settings.json'), JSON.stringify({ disabledMcpjsonServers: ['a'] }));
+    await writeFile(join(project, '.claude', 'settings.local.json'), JSON.stringify({ enabledMcpjsonServers: ['b'] }));
+    await writeFile(join(tmp.claudeDir, 'settings.json'), JSON.stringify({ enabledMcpjsonServers: ['a'] }));
+    const r = await scanMcpServers(project, { managedDir });
+    expect(r.servers.map((s) => [s.name, s.status])).toEqual([
+      ['a', 'disabled'],
+      ['b', 'pending'],
+    ]);
+  });
+
+  it('reads settings.local.json from the repository root when scanning a subdirectory', async () => {
+    await mkdir(join(project, '.git'), { recursive: true });
+    await mkdir(join(project, '.claude'), { recursive: true });
+    await mkdir(join(project, 'src'), { recursive: true });
+    await writeFile(join(project, '.mcp.json'), JSON.stringify({ mcpServers: { p: {} } }));
+    await writeFile(join(project, '.claude', 'settings.local.json'), JSON.stringify({ enabledMcpjsonServers: ['p'] }));
+    await writeClaudeJson({ projects: { [project]: { hasTrustDialogAccepted: true } } });
+    const atRoot = await scanMcpServers(project, { managedDir });
+    const atSub = await scanMcpServers(join(project, 'src'), { managedDir });
+    expect(atRoot.servers[0].status).toBe('active');
+    expect(atSub.servers[0].status).toBe('active');
+  });
+
+  it('in an untrusted folder, a true in any honored file approves even under a higher false', async () => {
+    await writeFile(join(project, '.mcp.json'), JSON.stringify({ mcpServers: { p: {} } }));
+    await writeFile(join(managedDir, 'managed-settings.json'), JSON.stringify({ enableAllProjectMcpServers: false }));
+    await writeFile(join(tmp.claudeDir, 'settings.json'), JSON.stringify({ enableAllProjectMcpServers: true }));
+    const r = await scanMcpServers(project, { managedDir });
+    expect(r.servers[0].status).toBe('active');
   });
 
   it('applies the /mcp toggle to project servers too', async () => {

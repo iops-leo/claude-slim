@@ -12,7 +12,7 @@ import { safeReadFile } from './fs-walk.js';
 import { scanLocalSkills } from './local-skills.js';
 import { scanPluginSkills } from './plugin-skills.js';
 import { scanMemoryFiles } from './memory.js';
-import { scanMcpServers } from './mcp.js';
+import { scanMcpServers, getClaudeJsonPath } from './mcp.js';
 import { parseClaudeMdSections } from './claude-md.js';
 import { getDisabledPlugins, getInstalledPlugins } from './disabled-plugins.js';
 import { scanSessionUsage } from './sessions.js';
@@ -134,6 +134,9 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     totalUserCallableInvocations: sessionUsage.totalUserCallableInvocations,
     sessionsInWindow: sessionUsage.sessionsInWindow,
     pluginCosts,
+    mcpServers: mcp.servers,
+    mcpProjectKey: mcp.projectKey,
+    claudeJsonPath: getClaudeJsonPath(),
   });
 
   // Compute plugin breakdown (used by PLUGINS table in scan output)

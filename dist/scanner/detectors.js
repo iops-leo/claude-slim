@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { getPluginsDir } from '../paths.js';
-import { OVERSIZED_SKILL_BYTES, OVERSIZED_MEMORY_BYTES, SKILL_PROMPT_OVERHEAD_TOKENS, } from './constants.js';
+import { OVERSIZED_SKILL_BYTES, OVERSIZED_MEMORY_BYTES, SKILL_PROMPT_OVERHEAD_TOKENS, MCP_SERVER_TOOLS_AVG, DEFERRED_TOOL_OVERHEAD_TOKENS, } from './constants.js';
 import { detectBackupArtifact } from './backup-artifacts.js';
 const brokenSymlinkDetector = {
     name: 'broken_symlink',
@@ -230,6 +230,57 @@ const unusedPluginDetector = {
         return issues;
     },
 };
+/**
+ * The prefix `extractMcpPrefixesFromTranscript` records for this server's
+ * tools. It splits `mcp__<prefix>__<tool>` at the first `__` after `mcp__`, so
+ * `my__srv` is recorded as `my`, `srv_` (tool `mcp__srv___t`) as `srv`, and a
+ * name starting with `__` as the empty string. Matching on the same split errs
+ * toward "used", never toward removing a live server.
+ */
+export function recordedMcpPrefix(toolPrefix) {
+    const full = `${toolPrefix}__tool`;
+    return full.slice(0, full.indexOf('__'));
+}
+/**
+ * User- and local-scope MCP servers whose tools were never called in the
+ * lookback window. Project servers live in a repo's committed `.mcp.json` and
+ * are the team's to remove; managed and plugin servers are not the user's to
+ * remove here (plugins are covered by `unused_plugin`).
+ *
+ * The token figure is an estimate: with tool search on (the default) only tool
+ * names load at startup, and the tool count is unknown without connecting.
+ */
+const unusedMcpDetector = {
+    name: 'unused_mcp',
+    detect({ mcpServers, recentMcpPrefixes, sessionsInWindow, totalUserCallableInvocations, lookbackDays, mcpProjectKey, claudeJsonPath, }) {
+        // Same global suppressions as unused_plugin.
+        if (sessionsInWindow < 3)
+            return [];
+        if (totalUserCallableInvocations === 0)
+            return [];
+        const issues = [];
+        for (const server of mcpServers) {
+            if (server.scope !== 'user' && server.scope !== 'local')
+                continue;
+            if (server.status === 'blocked' || server.status === 'pending')
+                continue;
+            if (recentMcpPrefixes.has(server.toolPrefix))
+                continue;
+            if (recentMcpPrefixes.has(recordedMcpPrefix(server.toolPrefix)))
+                continue;
+            issues.push({
+                type: 'unused_mcp',
+                tier: 3,
+                name: server.name,
+                mcpScope: server.scope,
+                detail: `no tool called in ${lookbackDays}d (${server.scope} scope)`,
+                tokens: MCP_SERVER_TOOLS_AVG * DEFERRED_TOOL_OVERHEAD_TOKENS,
+                path: server.scope === 'local' ? mcpProjectKey : claudeJsonPath,
+            });
+        }
+        return issues;
+    },
+};
 const disabledPluginDetector = {
     name: 'disabled_plugin',
     detect({ plugins, disabledPlugins }) {
@@ -286,6 +337,7 @@ export const detectors = [
     staleProjectDetector,
     unusedSkillDetector,
     unusedPluginDetector,
+    unusedMcpDetector,
     disabledPluginDetector,
     backupArtifactDetector,
 ];

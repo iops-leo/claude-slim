@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.0] — 2026-11-01
+
+### Added
+
+- **`unused_mcp` — user- and local-scope MCP servers whose tools were never called in
+  the lookback window (default 60 days).** Matched by the `mcp__<server>__` prefix in
+  session transcripts, with the same suppressions as `unused_plugin` (fewer than 3
+  sessions, or no tool calls at all, reports nothing). Tier 3, never auto-selected.
+  Project servers (a repo's committed `.mcp.json`), managed servers and plugin servers are
+  not flagged; plugins stay with `unused_plugin`.
+- Selecting one removes it with `claude mcp remove -s <scope>` — Claude Code's own
+  writer, not a hand edit of `~/.claude.json`, which running sessions rewrite. The
+  definition is first copied to `~/.claude/skills.disabled/.mcp-backup/` with mode 0600,
+  since `env` and `headers` can hold tokens; the manifest records only the name, scope and
+  backup path. A failed removal deletes the backup, and a failed manifest write re-adds
+  the server. `restore` re-adds it with `claude mcp add-json` and clears both. The
+  definition is passed to `add-json` as an argument (it has no stdin form), so it is
+  briefly visible in the process list during a restore.
+- The savings figure is an estimate (~80 tokens per server): with tool search on, only
+  tool names load at startup, and a server's tool count is unknown without connecting.
+
+### Fixed
+
+- MCP approval state, following review of 2.15.2: `disabledMcpjsonServers` now rejects a
+  `.mcp.json` server from every settings file, including an untrusted project's;
+  approvals in `.claude/settings.local.json` count only once the folder is trusted
+  (or it is the home directory); and inside a git repository the local file is read
+  from the repository root (the main checkout for a worktree), as Claude Code does.
+- Restoring a skill no longer risks clearing an MCP record with the same name from the
+  manifest.
+- Usage detection now reads subagent transcripts (`<session>/subagents/agent-*.jsonl`).
+  A skill, plugin or MCP server that only subagents called was reported as unused by
+  `unused_skill`, `unused_plugin` and `unused_mcp`. They count as usage, not as sessions.
+- In a folder that has not been trusted, `enableAllProjectMcpServers: true` in any honored
+  file now approves `.mcp.json` servers, as documented; a higher-precedence `false` only
+  wins once the folder is trusted. The repository-root `settings.local.json` is skipped
+  when the root, its `.git` or `.claude` is owned by another user.
+- Each manifest write uses its own temp file, so two concurrent runs can no longer rename
+  each other's half-written manifest into place. (Concurrent runs can still lose one
+  run's new entries; run one cleanup at a time.)
+
+### Security
+
+- `unused_mcp` removal and restore refuse to run when `CLAUDE_CONFIG_DIR` is set, since
+  the `claude` CLI would then act on a different `.claude.json` than the one backed up.
+- A server name that two raw names sanitize to (e.g. `server` and `server` + U+200B) is
+  refused instead of removing whichever one matched first.
+- Restore resolves the backup path through symlinks and requires a regular file inside
+  `.mcp-backup/`; errors from `claude mcp add-json` never include its argv, which holds the
+  server definition.
+- A failed removal or rollback deletes the backup only when the server is verifiably still
+  in `~/.claude.json`; otherwise the error names the backup's path.
+
 ## [2.15.2] — 2026-11-01
 
 ### Fixed

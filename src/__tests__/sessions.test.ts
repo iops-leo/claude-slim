@@ -232,3 +232,24 @@ describe('scanSessionUsage', () => {
     expect(result.invokedSkills.has('stale-cache')).toBe(false);
   });
 });
+
+describe('scanSessionUsage — subagent transcripts', () => {
+  let tmp: TmpClaude;
+  beforeEach(async () => { tmp = await createTmpClaude(); });
+  afterEach(async () => { await tmp.cleanup(); });
+
+  const mcpCall = (name: string): string =>
+    JSON.stringify({ message: { content: [{ type: 'tool_use', name }] } }) + '\n';
+
+  it('counts tools a subagent called as used, without counting it as a session', async () => {
+    const proj = join(tmp.projectsDir, '-repo');
+    await mkdir(join(proj, 'sess-1', 'subagents'), { recursive: true });
+    await writeFile(join(proj, 'sess-1.jsonl'), mcpCall('mcp__main__q'));
+    await writeFile(join(proj, 'sess-1', 'subagents', 'agent-abc.jsonl'), mcpCall('mcp__dbtool__query'));
+
+    const r = await scanSessionUsage(60);
+    expect(r.mcpPrefixesInvoked.has('dbtool')).toBe(true);
+    expect(r.mcpPrefixesInvoked.has('main')).toBe(true);
+    expect(r.sessionsInWindow).toBe(1);
+  });
+});

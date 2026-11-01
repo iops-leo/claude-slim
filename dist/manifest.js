@@ -103,7 +103,9 @@ export async function readManifestV2() {
 export async function writeManifestV2(manifest) {
     await ensureDisabledDir();
     const target = getManifestPath();
-    const tmp = target + '.tmp';
+    // Per-write temp name: two runs sharing `manifest.json.tmp` could rename
+    // each other's half-written file into place.
+    const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
     await writeFile(tmp, JSON.stringify(manifest, null, 2));
     await rename(tmp, target);
 }
@@ -114,7 +116,9 @@ export async function addEntry(entry) {
 }
 export async function removeEntry(name) {
     const m = await readManifestV2();
-    const idx = m.entries.findIndex((e) => !isDisabledPluginEntry(e) && e.name === name);
+    // Name-addressed removal is for skill/memory entries only; plugin and MCP
+    // records have their own keys and a same-named skill must not clear them.
+    const idx = m.entries.findIndex((e) => !isDisabledPluginEntry(e) && e.type !== 'unused_mcp' && e.name === name);
     if (idx === -1)
         return null;
     const [removed] = m.entries.splice(idx, 1);

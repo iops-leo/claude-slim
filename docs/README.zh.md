@@ -63,6 +63,7 @@ flowchart LR
 | **未使用技能** | **最近 N 天（默认 60 天）会话中从未被调用过的本地技能** |
 | 代理与命令 | `~/.claude/agents/` 和 `~/.claude/commands/` — 仅测量与报告，绝不修改 |
 | **未使用插件** | **最近 N 天（默认 60 天）会话中技能／MCP／命令从未被调用过的插件。Tier 3，不会自动选中。** |
+| **未使用 MCP 服务器** | **`~/.claude.json` 中 user／local 作用域、最近 N 天内工具从未被调用过的服务器。Tier 3，不会自动选中。通过 `claude mcp remove` 删除，定义保留以便 `restore`。** |
 | 过大的记忆索引 | 超过 5KB，或在 200 行 / 25KB 启动上限处被截断、尾部永不加载的 `MEMORY.md` |
 | 规则 & 导入 | `~/.claude/rules/` 与 CLAUDE.md 的 `@path` 导入 — 仅测量与报告，从不修改 |
 | 已禁用插件 | 已安装但处于禁用状态、仍占用缓存 |
@@ -122,10 +123,11 @@ npx skills add iops-leo/claude-slim
 | | |
 |---|---|
 | **不破坏用户数据** | 技能和项目记忆移至 `~/.claude/skills.disabled/` |
-| **可恢复** | 已移动的技能和项目记忆可通过 `/claude-slim restore` 恢复 |
+| **可恢复** | 已移动的技能、项目记忆和已删除的 MCP 服务器可通过 `/claude-slim restore` 恢复 |
 | **用户可控** | 交互式运行会在更改前确认。`--dry-run` 可预览，`--auto` 只选择 Tier 1 |
 | **不触碰危险区** | 绝不修改CLAUDE.md、settings.json、插件配置、`~/.claude/agents/`、`~/.claude/commands/` |
 | **路径封闭** | 目标路径一旦超出 `~/.claude/`，所有破坏性操作一律拒绝 |
+| **MCP 只经由 Claude Code** | 从不直接编辑 `~/.claude.json`。选中的 MCP 服务器用 `claude mcp remove` 删除，定义以 0600 权限备份到 `~/.claude/skills.disabled/.mcp-backup/` |
 | **Codex 同规则** | `~/.codex/` 同样按三级清理。移动至 `~/.codex/skills.disabled/`，可通过 `restore` 还原 |
 | **代理间隔离** | 路径守卫按代理隔离，Codex 条目无法解析到 `~/.claude/`，反之亦然 |
 
@@ -144,7 +146,9 @@ claude-slim扫描以下位置。无插件特定逻辑 — 纯文件系统分析�
 ├── CLAUDE.md                ← 系统指令 + @导入（只读）
 ├── rules/                   ← 用户规则（测量，只读；按路径限定的单独列出）
 ├── projects/*/memory/       ← 自动记忆（仅当前项目的 MEMORY.md 计入启动开销）
-└── settings.json            ← MCP服务器数量（只读）
+└── settings.json            ← 设置（只读；在此定义的 MCP 服务器会标为未加载）
+~/.claude.json               ← user／local 作用域 MCP 服务器
+<project>/.mcp.json          ← project 作用域 MCP 服务器（只读）
 ```
 
 适用于任何插件组合：OMC、gstack、自定义技能、市场插件，或什么都没有。
@@ -170,14 +174,14 @@ token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对
 
 ---
 
-## v2.15.0 更新 (2026-09-16)
+## v2.16.0 更新 (2026-11-01)
 
-- **修复：启动开销估算把项目里的所有记忆文件都算了进去，而 Claude Code 启动时只加载 `MEMORY.md`。** 官方文档写得很明确：会话开始时加载的是 `MEMORY.md` 的前 200 行或 25KB，主题文件按需读取。把整个目录相加，让一个有 183 个主题文件的项目被报告为**启动时 ~238,000 tokens**，而会话实际收到的约为 10,000。针对主题文件逐个发出的 `oversized_memory` 警告也因同样原因移除——裁剪它们并不会节省任何上下文。
-- **新增：索引截断警告。** 超过 200 行 / 25KB 上限的 `MEMORY.md` 会被静默截断，最新条目永远到不了会话。`scan` 现在会标记它并报告实际送达的 token 数。
-- **新增：`~/.claude/rules/`。** 没有 `paths:` 前置元数据的规则在启动时以与 CLAUDE.md 相同的优先级加载；按路径限定的规则只在读取匹配文件时加载。两者都会列出，只有前者计入总量。仅报告，从不移动。
-- **新增：CLAUDE.md 的 `@path` 导入。** 以 `@RTK.md` 形式引入的文件会在启动时展开进上下文，最多递归四层。现在会列在 CLAUDE.md 之下并计入总量。
+- **新增：未使用的 MCP 服务器。** 找出 user／local 作用域中、最近 60 天会话里工具从未被调用过的服务器（`unused_mcp`，Tier 3，不会自动选中）。选中后，先把包含 `env`、`headers` 在内的定义复制到权限为 0600 的备份文件，再用 `claude mcp remove` 删除。`restore` 会按原样重新添加。
+- **修复 (2.15.2)：MCP SERVERS 列表有误。** 之前读取的是 Claude Code 并不从中加载服务器的 `~/.claude/settings.json`。现在按 Claude Code 的方式读取 `~/.claude.json` 和 `.mcp.json`，并标出每个服务器是启用、已关闭、等待批准还是被托管策略阻止。
+- **修复 (2.15.2)：`~/.claude/skills/.trash/` 中已删除的技能被当作已安装统计。** 在一台机器上造成 11 个技能、14 条误报和约 1,400 个并不存在的启动 token。
+- **修复 (2.15.1)：在 Windows 上，以及路径含 `.`、`_` 或空格时，项目记忆显示为 0** (#20)。
 
-测试: 486 → **529**。
+测试: 529 → **580**。
 
 历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 

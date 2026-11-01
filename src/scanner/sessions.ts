@@ -197,8 +197,8 @@ function parseTranscript(content: string): FileParseResult {
   return { skills, mcpPrefixes, commands, invocationCount };
 }
 
-// Walk every `~/.claude/projects/<slug>/*.jsonl` whose mtime falls inside the
-// lookback window. Per-file results are cached by mtime, so warm scans only
+// Walk every `~/.claude/projects/<slug>/*.jsonl` (and each session's
+// `subagents/*.jsonl`) whose mtime falls inside the lookback window. Per-file results are cached by mtime, so warm scans only
 // re-read files that have changed.
 export async function scanSessionUsage(lookbackDays: number): Promise<SessionScanResult> {
   const projectsDir = join(getClaudeDir(), 'projects');
@@ -234,16 +234,31 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
     let entries: string[] = [];
     try { entries = await readdir(projectPath); } catch { continue; }
 
+    // Subagent transcripts live beside the session as
+    // `<session>/subagents/agent-*.jsonl`. They count as usage — a server or
+    // skill only a subagent calls is still in use — but not as sessions.
+    const files: Array<{ filePath: string; isSession: boolean }> = [];
     for (const entry of entries) {
-      if (!entry.endsWith('.jsonl')) continue;
-      const filePath = join(projectPath, entry);
+      if (entry.endsWith('.jsonl')) {
+        files.push({ filePath: join(projectPath, entry), isSession: true });
+        continue;
+      }
+      let subs: string[] = [];
+      try { subs = await readdir(join(projectPath, entry, 'subagents')); } catch { continue; }
+      for (const sub of subs) {
+        if (sub.endsWith('.jsonl')) {
+          files.push({ filePath: join(projectPath, entry, 'subagents', sub), isSession: false });
+        }
+      }
+    }
 
+    for (const { filePath, isSession } of files) {
       let mtimeMs: number;
       try { mtimeMs = (await stat(filePath)).mtimeMs; } catch { continue; }
 
-      sessionsScanned++;
+      if (isSession) sessionsScanned++;
       if (mtimeMs < cutoffMs) continue;
-      sessionsInWindow++;
+      if (isSession) sessionsInWindow++;
 
       // Cache hit: reuse the parsed result only if mtime matches AND the entry
       // has the v2.6 extension fields (mcpPrefixes / commands). Entries from
