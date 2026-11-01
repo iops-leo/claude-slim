@@ -28,6 +28,14 @@ export function dedupeBySymlink(candidates) {
 // If a directory contains a SKILL.md we stop descending — nested SKILL.md
 // files under an already-declared skill would just create phantom duplicates.
 const MAX_SKILL_DEPTH = 3;
+/**
+ * Dot-directories are never skills. `.trash/<id>/<skill>/` holds deleted
+ * skills Claude Code no longer loads; walking into it billed them at startup
+ * and flagged them unused. The Codex scanner already skips these.
+ */
+function isHiddenEntry(name) {
+    return name.startsWith('.');
+}
 export async function scanLocalSkills() {
     const skillsDir = getSkillsDir();
     const candidates = [];
@@ -71,6 +79,8 @@ export async function scanLocalSkills() {
             return;
         const subEntries = await safeReaddir(dirPath);
         await Promise.all(subEntries.map(async (sub) => {
+            if (isHiddenEntry(sub))
+                return;
             const subDir = join(dirPath, sub);
             // isDirectory() uses stat(), which follows symlinks — intentional so
             // users can symlink shared skills into ~/.claude/skills/. A cycle
@@ -83,6 +93,8 @@ export async function scanLocalSkills() {
     }
     const topEntries = await safeReaddir(skillsDir);
     await Promise.all(topEntries.map(async (entry) => {
+        if (isHiddenEntry(entry))
+            return;
         const dirPath = join(skillsDir, entry);
         if (!(await isDirectory(dirPath)))
             return;

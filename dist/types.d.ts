@@ -2,7 +2,8 @@ import type { UserSurfaceEntry } from './scanner/user-surfaces.js';
 import type { RuleEntry } from './scanner/rules.js';
 import type { ClaudeMdImport } from './scanner/claude-md-imports.js';
 import type { AgentId } from './paths.js';
-export type { UserSurfaceEntry, RuleEntry, ClaudeMdImport, AgentId };
+import type { McpServerEntry } from './scanner/mcp.js';
+export type { UserSurfaceEntry, RuleEntry, ClaudeMdImport, AgentId, McpServerEntry };
 export interface SkillInfo {
     name: string;
     path: string;
@@ -105,8 +106,16 @@ export interface ScanResult {
     rulesStartupTokens: number;
     /** Tokens of path-scoped rules — loaded only when a matching file is read. */
     rulesConditionalTokens: number;
+    /** Active MCP servers for this project (user, local, approved project, managed). */
     mcpServers: number;
+    /** Names of the active servers in `mcpServers`. */
     mcpServerNames: string[];
+    /** Every server found across scopes, including disabled and pending ones. */
+    mcpServerEntries: McpServerEntry[];
+    /** `mcpServers` names in ~/.claude/settings.json — not a location Claude Code loads. */
+    mcpServersNotLoaded: string[];
+    /** An allow/deny list uses URL or command entries, which the scan does not evaluate. */
+    mcpPolicyNotEvaluated: boolean;
     issues: Issue[];
     totalTokensBefore: number;
     pluginBreakdown: PluginBreakdown[];
