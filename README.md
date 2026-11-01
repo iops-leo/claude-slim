@@ -273,7 +273,7 @@ Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktok
 - **Fixed (2.15.2): deleted skills in `~/.claude/skills/.trash/` were counted as installed** — 11 skills, 14 false findings and ~1,400 phantom startup tokens on one machine.
 - **Fixed (2.15.1): project memory reported 0 on Windows**, and on any path with `.`, `_` or a space (#20).
 
-Tests: 529 → 578.
+Tests: 529 → 580.
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

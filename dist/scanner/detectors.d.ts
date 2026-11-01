@@ -35,5 +35,13 @@ export interface Detector {
     name: string;
     detect(ctx: DetectorContext): Issue[];
 }
+/**
+ * The prefix `extractMcpPrefixesFromTranscript` records for this server's
+ * tools. It splits `mcp__<prefix>__<tool>` at the first `__` after `mcp__`, so
+ * `my__srv` is recorded as `my`, `srv_` (tool `mcp__srv___t`) as `srv`, and a
+ * name starting with `__` as the empty string. Matching on the same split errs
+ * toward "used", never toward removing a live server.
+ */
+export declare function recordedMcpPrefix(toolPrefix: string): string;
 export declare const detectors: Detector[];
 export declare function classifyIssues(ctx: DetectorContext, registry?: Detector[]): Issue[];

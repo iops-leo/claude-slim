@@ -231,6 +231,17 @@ const unusedPluginDetector = {
     },
 };
 /**
+ * The prefix `extractMcpPrefixesFromTranscript` records for this server's
+ * tools. It splits `mcp__<prefix>__<tool>` at the first `__` after `mcp__`, so
+ * `my__srv` is recorded as `my`, `srv_` (tool `mcp__srv___t`) as `srv`, and a
+ * name starting with `__` as the empty string. Matching on the same split errs
+ * toward "used", never toward removing a live server.
+ */
+export function recordedMcpPrefix(toolPrefix) {
+    const full = `${toolPrefix}__tool`;
+    return full.slice(0, full.indexOf('__'));
+}
+/**
  * User- and local-scope MCP servers whose tools were never called in the
  * lookback window. Project servers live in a repo's committed `.mcp.json` and
  * are the team's to remove; managed and plugin servers are not the user's to
@@ -255,10 +266,7 @@ const unusedMcpDetector = {
                 continue;
             if (recentMcpPrefixes.has(server.toolPrefix))
                 continue;
-            // Transcripts are split at the first `__`, so `mcp__my__srv__tool` is
-            // recorded as `my`. Err toward "used" rather than remove a live server.
-            const sep = server.toolPrefix.indexOf('__');
-            if (sep > 0 && recentMcpPrefixes.has(server.toolPrefix.slice(0, sep)))
+            if (recentMcpPrefixes.has(recordedMcpPrefix(server.toolPrefix)))
                 continue;
             issues.push({
                 type: 'unused_mcp',

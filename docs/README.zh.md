@@ -181,7 +181,7 @@ token 数量由 [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) 对
 - **修复 (2.15.2)：`~/.claude/skills/.trash/` 中已删除的技能被当作已安装统计。** 在一台机器上造成 11 个技能、14 条误报和约 1,400 个并不存在的启动 token。
 - **修复 (2.15.1)：在 Windows 上，以及路径含 `.`、`_` 或空格时，项目记忆显示为 0** (#20)。
 
-测试: 529 → **578**。
+测试: 529 → **580**。
 
 历史发布说明请参阅 [CHANGELOG.md](../CHANGELOG.md)。
 

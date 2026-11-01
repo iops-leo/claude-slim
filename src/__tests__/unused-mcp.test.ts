@@ -13,6 +13,7 @@ vi.mock('../mcp-runtime.js', async (orig) => {
 
 const runtime = await import('../mcp-runtime.js');
 const { detectors } = await import('../scanner/detectors.js');
+const { extractMcpPrefixesFromTranscript } = await import('../scanner/sessions.js');
 const { disableUnusedMcp, restoreMcpServer } = await import('../mcp-cleanup.js');
 const { readManifestV2 } = await import('../manifest.js');
 
@@ -57,11 +58,15 @@ describe('unused_mcp detector', () => {
     expect(issues).toEqual([]);
   });
 
-  it('treats a server whose name contains "__" as used when its split prefix was seen', () => {
-    const issues = unusedMcp.detect(ctx({
-      mcpServers: [entry('my__srv', 'user')],
-      recentMcpPrefixes: new Set(['my']),
-    }));
+  it.each([
+    ['my__srv', 'mcp__my__srv__query'],
+    ['srv_', 'mcp__srv___query'],
+    ['__lead', 'mcp____lead__query'],
+  ])('treats %s as used when %s was called', (name, toolName) => {
+    const recorded = extractMcpPrefixesFromTranscript(
+      JSON.stringify({ message: { content: [{ type: 'tool_use', name: toolName }] } }),
+    );
+    const issues = unusedMcp.detect(ctx({ mcpServers: [entry(name, 'user')], recentMcpPrefixes: recorded }));
     expect(issues).toEqual([]);
   });
 
