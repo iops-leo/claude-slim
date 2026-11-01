@@ -260,15 +260,7 @@ export function formatScanSummary(result) {
     }
     // --- MCP SERVERS ---
     lines.push('');
-    if (result.mcpServerNames && result.mcpServerNames.length > 0) {
-        lines.push(`\x1b[1m  MCP SERVERS\x1b[0m (${result.mcpServers})`);
-        for (const name of result.mcpServerNames) {
-            lines.push(`    ${name}`);
-        }
-    }
-    else {
-        lines.push(`\x1b[1m  MCP SERVERS\x1b[0m: ${result.mcpServers}`);
-    }
+    lines.push(...formatMcpSection(result));
     // --- USER AGENTS & COMMANDS ---
     // Read-only in v2.8: these are measured and reported, but never moved or
     // deleted. There is no restore path for ~/.claude/agents yet, and shipping a
@@ -346,3 +338,37 @@ export function formatScanSummary(result) {
 }
 // Re-export for external callers (e.g. tests)
 export { formatPluginsTable };
+const MCP_STATUS_NOTE = {
+    disabled: ' \x1b[90m(off: /mcp toggle or disabledMcpjsonServers)\x1b[0m',
+    pending: ' \x1b[33m(.mcp.json, awaiting approval — not loaded)\x1b[0m',
+    blocked: ' \x1b[90m(blocked by managed policy)\x1b[0m',
+};
+/**
+ * MCP servers by scope, with the ones a session here does not load marked.
+ * Plugin servers appear under PLUGIN BREAKDOWN; claude.ai connectors are
+ * fetched at runtime and have no local definition to list.
+ */
+export function formatMcpSection(result) {
+    const entries = result.mcpServerEntries ?? [];
+    const notLoaded = result.mcpServersNotLoaded ?? [];
+    const lines = [];
+    if (entries.length === 0) {
+        lines.push(`\x1b[1m  MCP SERVERS\x1b[0m: ${result.mcpServers}`);
+    }
+    else {
+        lines.push(`\x1b[1m  MCP SERVERS\x1b[0m (${result.mcpServers} active, ${entries.length} defined)`);
+        for (const s of entries) {
+            lines.push(`    ${s.name.padEnd(36)} ${s.scope.padEnd(8)}${MCP_STATUS_NOTE[s.status] ?? ''}`);
+        }
+    }
+    if (notLoaded.length > 0) {
+        lines.push(`    \x1b[33m! in ~/.claude/settings.json, which Claude Code does not load MCP servers from:\x1b[0m ` +
+            notLoaded.join(', '));
+        lines.push(`    \x1b[90m  move them with \`claude mcp add-json <name> '<json>' -s user\`\x1b[0m`);
+    }
+    if (result.mcpPolicyNotEvaluated) {
+        lines.push(`    \x1b[33m! allow/deny lists match by URL or command here; "active" may include servers they block\x1b[0m`);
+    }
+    lines.push(`    \x1b[90mplugin servers: see PLUGIN BREAKDOWN · claude.ai connectors are fetched at runtime and not listed\x1b[0m`);
+    return lines;
+}

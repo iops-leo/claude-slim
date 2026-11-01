@@ -28,3 +28,9 @@ export declare function formatReportBox(data: ReportData): string;
 export declare function formatScanSummary(result: ScanResult): string;
 export { formatPluginsTable };
 export type { PluginBreakdown };
+/**
+ * MCP servers by scope, with the ones a session here does not load marked.
+ * Plugin servers appear under PLUGIN BREAKDOWN; claude.ai connectors are
+ * fetched at runtime and have no local definition to list.
+ */
+export declare function formatMcpSection(result: ScanResult): string[];

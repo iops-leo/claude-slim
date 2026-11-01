@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.2] — 2026-11-01
+
+### Fixed
+
+- MCP SERVERS listed the wrong servers. The scanner read only `mcpServers` in
+  `~/.claude/settings.json`, which is not a location Claude Code loads servers from, and
+  never looked where they actually live (https://code.claude.com/docs/en/mcp.md):
+  `~/.claude.json` for user and local scope, and `.mcp.json` in the project or any
+  parent directory for project scope. On the machine where this was found it reported one
+  server that `claude mcp list` does not show and missed four that it does.
+- Each server is now listed with its scope and whether a session in this project loads it:
+  turned off with `/mcp` (`disabledMcpServers`), listed in `disabledMcpjsonServers`, a
+  `.mcp.json` server still awaiting approval (approvals committed to an untrusted repo's
+  `.claude/settings.json` do not count), or blocked by managed policy — `managed-mcp.json`
+  takes exclusive control, `managedMcpServers` in `managed-settings.json` is read, and
+  `deniedMcpServers` name entries are applied; URL/command policy entries are flagged as
+  not evaluated. Per-project state is looked up under the git repository root, so local
+  servers resolve from subdirectories and worktrees too. `mcpServers` / `mcpServerNames` in `--json`
+  now count only active servers; the full list is in the new `mcpServerEntries`. Names
+  found in `settings.json` are reported in `mcpServersNotLoaded` with a pointer to where
+  they belong. Server definitions themselves (`env`, `headers`) are never read into the
+  result.
+- Deleted skills in `~/.claude/skills/.trash/` were counted as installed. The skill walk
+  descended into dot-directories, so skills Claude Code no longer loads were added to the
+  startup total and flagged `unused_skill` / `oversized_skill` — 11 skills, 14 findings
+  and ~1,400 phantom startup tokens on the machine where this was found. Dot-directories
+  are now skipped at every depth, as the Codex scanner already did.
+
 ## [2.15.1] — 2026-11-01
 
 ### Fixed
