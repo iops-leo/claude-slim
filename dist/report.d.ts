@@ -34,3 +34,8 @@ export type { PluginBreakdown };
  * fetched at runtime and have no local definition to list.
  */
 export declare function formatMcpSection(result: ScanResult): string[];
+/**
+ * Skills synced from claude.ai. Managed on claude.ai — a local move would be
+ * undone by the next sync — so they are counted, never offered for cleanup.
+ */
+export declare function formatSyncedSection(result: ScanResult): string[];

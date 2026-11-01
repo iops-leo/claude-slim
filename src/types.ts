@@ -18,7 +18,8 @@ export interface SkillInfo {
    * frontmatter description; see scanner/skill-listing.ts.
    */
   listingTokens: number;
-  source: 'local' | 'plugin';
+  /** `synced`: downloaded from claude.ai into skills/synced/<bucket>/; managed there, never cleaned here. */
+  source: 'local' | 'plugin' | 'synced';
   /**
    * Cache directory this skill was found under — the *marketplace*, not the
    * plugin. Kept as-is because `plugins[]` and the `disabled_plugin` detector
@@ -115,6 +116,14 @@ export interface PluginBreakdown {
 export interface ScanResult {
   localSkills: SkillInfo[];
   pluginSkills: SkillInfo[];
+  /** Skills synced from claude.ai that a session signed in here loads. Never cleaned. */
+  syncedSkills: SkillInfo[];
+  /** `skills/synced/<bucket>/` folders no session here loads (other accounts, sync off). */
+  syncedBucketsInactive: Array<{ bucket: string; skills: number; reason: string }>;
+  /** `autoMemoryEnabled: false` or `CLAUDE_CODE_DISABLE_AUTO_MEMORY` — no memory loads. */
+  autoMemoryDisabled: boolean;
+  /** `autoMemoryDirectory`, when settings move this project's memory there. */
+  autoMemoryDirectory?: string;
   plugins: PluginInfo[];
   brokenSymlinks: BrokenSymlink[];
   memoryFiles: MemoryFile[];

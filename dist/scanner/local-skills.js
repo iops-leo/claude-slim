@@ -95,6 +95,10 @@ export async function scanLocalSkills() {
     await Promise.all(topEntries.map(async (entry) => {
         if (isHiddenEntry(entry))
             return;
+        // Reserved for skills synced from claude.ai — scanned per account by
+        // synced-skills.ts; Claude Code never loads a user skill at this name.
+        if (entry.toLowerCase() === 'synced')
+            return;
         const dirPath = join(skillsDir, entry);
         if (!(await isDirectory(dirPath)))
             return;

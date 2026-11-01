@@ -46,6 +46,7 @@ const FLATTEN_ONLY_KEYS = new Set([
   'root',
   'target',
   'currentProjectSlug',
+  'autoMemoryDirectory',
   'unusedDetectionReason',
 ]);
 

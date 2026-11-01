@@ -40,6 +40,7 @@ const FLATTEN_ONLY_KEYS = new Set([
     'root',
     'target',
     'currentProjectSlug',
+    'autoMemoryDirectory',
     'unusedDetectionReason',
 ]);
 /** Strip anything that could forge a row or hide from a human reader. */
