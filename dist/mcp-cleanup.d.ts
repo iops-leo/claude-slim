@@ -1,4 +1,9 @@
 import type { Issue, DisabledMcpEntry, AnyManifestEntry } from './types.js';
+/**
+ * Dot-prefixed so it can never collide with a disabled skill: skills move to
+ * `skills.disabled/<name>/`, and no scanned skill name starts with `.`. A
+ * plain `mcp-backup/` would be swallowed by restoring a skill of that name.
+ */
 export declare function getMcpBackupDir(): string;
 export declare function isDisabledMcpEntry(e: AnyManifestEntry): e is DisabledMcpEntry;
 /**

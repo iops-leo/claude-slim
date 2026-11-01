@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not flagged; plugins stay with `unused_plugin`.
 - Selecting one removes it with `claude mcp remove -s <scope>` — Claude Code's own
   writer, not a hand edit of `~/.claude.json`, which running sessions rewrite. The
-  definition is first copied to `~/.claude/skills.disabled/mcp-backup/` with mode 0600,
+  definition is first copied to `~/.claude/skills.disabled/.mcp-backup/` with mode 0600,
   since `env` and `headers` can hold tokens; the manifest records only the name, scope and
   backup path. A failed removal deletes the backup, and a failed manifest write re-adds
   the server. `restore` re-adds it with `claude mcp add-json` and clears both. The
@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A server name that two raw names sanitize to (e.g. `server` and `server` + U+200B) is
   refused instead of removing whichever one matched first.
 - Restore resolves the backup path through symlinks and requires a regular file inside
-  `mcp-backup/`; errors from `claude mcp add-json` never include its argv, which holds the
+  `.mcp-backup/`; errors from `claude mcp add-json` never include its argv, which holds the
   server definition.
 - A failed removal or rollback deletes the backup only when the server is verifiably still
   in `~/.claude.json`; otherwise the error names the backup's path.

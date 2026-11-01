@@ -208,7 +208,7 @@ claude-slim never updates itself — that's your package manager's job, and writ
 | **User-controlled** | Interactive runs ask before changes. `--dry-run` previews; `--auto` selects Tier 1 only. |
 | **Hands off** | Never touches CLAUDE.md, settings.json, or plugin configs |
 | **Scoped** | All operations are refused if the target path escapes `~/.claude/` |
-| **MCP through Claude Code** | `~/.claude.json` is never edited by hand. Selected MCP servers are removed with `claude mcp remove`, their definitions backed up (mode 0600) to `~/.claude/skills.disabled/mcp-backup/` |
+| **MCP through Claude Code** | `~/.claude.json` is never edited by hand. Selected MCP servers are removed with `claude mcp remove`, their definitions backed up (mode 0600) to `~/.claude/skills.disabled/.mcp-backup/` |
 
 ### What claude-slim never touches
 

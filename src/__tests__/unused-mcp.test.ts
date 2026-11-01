@@ -96,7 +96,7 @@ describe('disableUnusedMcp / restoreMcpServer', () => {
   }
 
   async function backups(): Promise<string[]> {
-    try { return await readdir(join(tmp.disabledDir, 'mcp-backup')); } catch { return []; }
+    try { return await readdir(join(tmp.disabledDir, '.mcp-backup')); } catch { return []; }
   }
 
   it('backs up the definition privately, removes it through the CLI, and records it', async () => {
@@ -106,6 +106,9 @@ describe('disableUnusedMcp / restoreMcpServer', () => {
     const m = await readManifestV2();
     const e = m.entries[0] as DisabledMcpEntry;
     expect(e).toMatchObject({ type: 'unused_mcp', name: 'pencil', scope: 'user', cwd: tmp.home });
+    // Outside the skill-name namespace: a disabled skill called `mcp-backup`
+    // lives at skills.disabled/mcp-backup/ and must never hold these files.
+    expect(e.backupPath.startsWith(join(tmp.disabledDir, '.mcp-backup') + '/')).toBe(true);
     const backup = JSON.parse(await readFile(e.backupPath, 'utf-8'));
     expect(backup.config).toEqual(config);
     expect((await stat(e.backupPath)).mode & 0o777).toBe(0o600);
@@ -157,13 +160,13 @@ describe('disableUnusedMcp / restoreMcpServer', () => {
     await mkdir(outside, { recursive: true });
     const payload = JSON.stringify({ name: 'pencil', scope: 'user', cwd: tmp.home, config: {} });
     await writeFile(join(outside, 'saved.json'), payload);
-    await mkdir(join(tmp.disabledDir, 'mcp-backup'), { recursive: true });
-    await symlink(outside, join(tmp.disabledDir, 'mcp-backup', 'link'));
+    await mkdir(join(tmp.disabledDir, '.mcp-backup'), { recursive: true });
+    await symlink(outside, join(tmp.disabledDir, '.mcp-backup', 'link'));
     const base = { type: 'unused_mcp' as const, name: 'pencil', scope: 'user' as const, cwd: tmp.home, disabledAt: '' };
 
     await expect(restoreMcpServer({ ...base, backupPath: join(outside, 'saved.json') })).rejects.toThrow(/outside/);
     await expect(
-      restoreMcpServer({ ...base, backupPath: join(tmp.disabledDir, 'mcp-backup', 'link', 'saved.json') }),
+      restoreMcpServer({ ...base, backupPath: join(tmp.disabledDir, '.mcp-backup', 'link', 'saved.json') }),
     ).rejects.toThrow(/outside/);
     expect(addMock).not.toHaveBeenCalled();
     expect(await readFile(join(outside, 'saved.json'), 'utf-8')).toBe(payload);

@@ -10,8 +10,13 @@ import { sanitizeUntrusted } from './scanner/untrusted.js';
 function isObject(v) {
     return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
+/**
+ * Dot-prefixed so it can never collide with a disabled skill: skills move to
+ * `skills.disabled/<name>/`, and no scanned skill name starts with `.`. A
+ * plain `mcp-backup/` would be swallowed by restoring a skill of that name.
+ */
 export function getMcpBackupDir() {
-    return join(getDisabledDir(), 'mcp-backup');
+    return join(getDisabledDir(), '.mcp-backup');
 }
 export function isDisabledMcpEntry(e) {
     return e.type === 'unused_mcp' && 'backupPath' in e && 'scope' in e;
@@ -134,7 +139,7 @@ export async function disableUnusedMcp(issue) {
 }
 /**
  * The backup a manifest entry points at, resolved through symlinks and
- * required to be a regular file inside our own store. A tampered manifest
+ * required to be a regular file inside `.mcp-backup/`. A tampered manifest
  * must not turn restore into "read any file, pass it to `claude`, delete it".
  */
 async function resolveBackupPath(entry) {

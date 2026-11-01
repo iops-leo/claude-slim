@@ -127,7 +127,7 @@ npx skills add iops-leo/claude-slim
 | **ユーザー制御** | 対話モードでは変更前に確認。`--dry-run` でプレビュー、`--auto` は Tier 1 のみ選択 |
 | **危険領域に非接触** | CLAUDE.md、settings.json、プラグイン設定、`~/.claude/agents/`、`~/.claude/commands/` には触れない |
 | **パス封じ込め** | 対象パスが `~/.claude/` の外に出る場合、破壊的操作をすべて拒否 |
-| **MCP は Claude Code 経由のみ** | `~/.claude.json` を直接編集しない。選択した MCP サーバーは `claude mcp remove` で削除し、定義は `~/.claude/skills.disabled/mcp-backup/` に権限 0600 でバックアップ |
+| **MCP は Claude Code 経由のみ** | `~/.claude.json` を直接編集しない。選択した MCP サーバーは `claude mcp remove` で削除し、定義は `~/.claude/skills.disabled/.mcp-backup/` に権限 0600 でバックアップ |
 | **Codex も同じ規則** | `~/.codex/` も同じ 3 段階で整理。移動先は `~/.codex/skills.disabled/` で `restore` により復元 |
 | **エージェント間分離** | パスガードがエージェント単位のため、Codex の項目が `~/.claude/` に、またその逆にも届かない |
 

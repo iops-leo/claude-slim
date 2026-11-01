@@ -177,7 +177,7 @@ npx claude-slim report            # 지난 정리의 절감 리포트
 | **사용자 제어** | 대화형 실행은 변경 전 확인 요청. `--dry-run`으로 미리보기, `--auto`는 Tier 1만 선택. |
 | **위험 영역 미접촉** | CLAUDE.md, settings.json, 플러그인 설정, `~/.claude/agents/`, `~/.claude/commands/` 절대 건드리지 않음 |
 | **경로 봉쇄** | 대상 경로가 `~/.claude/`를 벗어나면 모든 파괴적 작업을 거부 |
-| **MCP는 Claude Code를 거쳐서만** | `~/.claude.json`을 직접 고치지 않음. 선택한 MCP 서버는 `claude mcp remove`로 제거하고, 설정은 `~/.claude/skills.disabled/mcp-backup/`에 0600 권한으로 백업 |
+| **MCP는 Claude Code를 거쳐서만** | `~/.claude.json`을 직접 고치지 않음. 선택한 MCP 서버는 `claude mcp remove`로 제거하고, 설정은 `~/.claude/skills.disabled/.mcp-backup/`에 0600 권한으로 백업 |
 | **Codex 동일 규칙** | `~/.codex/`도 같은 3단계로 정리. 이동 대상은 `~/.codex/skills.disabled/`이고 `restore`로 복구 |
 | **에이전트 간 격리** | 경로 가드가 에이전트별이라 Codex 항목이 `~/.claude/`로, 그 반대로도 뻗지 못함 |
 

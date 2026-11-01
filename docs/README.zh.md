@@ -127,7 +127,7 @@ npx skills add iops-leo/claude-slim
 | **用户可控** | 交互式运行会在更改前确认。`--dry-run` 可预览，`--auto` 只选择 Tier 1 |
 | **不触碰危险区** | 绝不修改CLAUDE.md、settings.json、插件配置、`~/.claude/agents/`、`~/.claude/commands/` |
 | **路径封闭** | 目标路径一旦超出 `~/.claude/`，所有破坏性操作一律拒绝 |
-| **MCP 只经由 Claude Code** | 从不直接编辑 `~/.claude.json`。选中的 MCP 服务器用 `claude mcp remove` 删除，定义以 0600 权限备份到 `~/.claude/skills.disabled/mcp-backup/` |
+| **MCP 只经由 Claude Code** | 从不直接编辑 `~/.claude.json`。选中的 MCP 服务器用 `claude mcp remove` 删除，定义以 0600 权限备份到 `~/.claude/skills.disabled/.mcp-backup/` |
 | **Codex 同规则** | `~/.codex/` 同样按三级清理。移动至 `~/.codex/skills.disabled/`，可通过 `restore` 还原 |
 | **代理间隔离** | 路径守卫按代理隔离，Codex 条目无法解析到 `~/.claude/`，反之亦然 |
 
