@@ -180,10 +180,16 @@ describe('disableUnusedMcp / restoreMcpServer', () => {
     expect(removeMock).not.toHaveBeenCalled();
   });
 
-  it('refuses to act when CLAUDE_CONFIG_DIR points the CLI at another profile', async () => {
-    vi.stubEnv('CLAUDE_CONFIG_DIR', join(tmp.home, 'other'));
-    await expect(disableUnusedMcp(issue('pencil', 'user', ''))).rejects.toThrow(/CLAUDE_CONFIG_DIR/);
-    expect(removeMock).not.toHaveBeenCalled();
+  it('backs up from $CLAUDE_CONFIG_DIR/.claude.json — the file the CLI it runs will edit', async () => {
+    const profile = join(tmp.home, 'work-profile');
+    await mkdir(profile, { recursive: true });
+    const workConfig = { type: 'http', url: 'https://work' };
+    await writeFile(join(profile, '.claude.json'), JSON.stringify({ mcpServers: { pencil: workConfig } }));
+    vi.stubEnv('CLAUDE_CONFIG_DIR', profile);
+
+    const e = await disableUnusedMcp(issue('pencil', 'user', ''));
+    expect(e.backupPath.startsWith(join(profile, 'skills.disabled', '.mcp-backup') + '/')).toBe(true);
+    expect(JSON.parse(await readFile(e.backupPath, 'utf-8')).config).toEqual(workConfig);
   });
 
   it('keeps the backup when removal errors but the server is already gone', async () => {

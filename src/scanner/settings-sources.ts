@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { stat } from 'node:fs/promises';
-import { getClaudeDir } from '../paths.js';
+import { getClaudeDir, getConfigDirOverride } from '../paths.js';
 import { safeReadFile, isDirectory } from './fs-walk.js';
 
 /**
@@ -55,8 +55,9 @@ export function getManagedDir(platform: NodeJS.Platform = process.platform): str
   return '/etc/claude-code';
 }
 
+/** `.claude.json` — beside `~/.claude`, or inside `CLAUDE_CONFIG_DIR` when set. */
 export function getClaudeJsonPath(): string {
-  return join(homedir(), '.claude.json');
+  return join(getConfigDirOverride() ?? homedir(), '.claude.json');
 }
 
 /**
@@ -133,6 +134,8 @@ export interface SettingsSources {
   projectSettings: Json | null;
   /** `.claude/settings.local.json` files, highest precedence first. */
   localSettingsList: Array<Json | null>;
+  /** The local settings file was relocated to the repository root. */
+  localAtRepoRoot: boolean;
   managedSettings: Json | null;
   /** `~/.claude.json` → `projects[<key>]`, when present. */
   projectKey: string | undefined;
@@ -171,11 +174,13 @@ export async function readSettingsSources(
   const dir = resolve(projectDir);
   const repoRoot = await findRepoRoot(dir);
   const root = repoRoot ?? dir;
+  const localPaths = await localSettingsPaths(dir, repoRoot);
+  const localAtRepoRoot = localPaths[0] !== join(dir, '.claude', 'settings.local.json');
   const [claudeJson, userSettings, projectSettings, localSettingsList, managedSettings] = await Promise.all([
     readJson(getClaudeJsonPath()),
     readJson(join(getClaudeDir(), 'settings.json')),
     readJson(join(dir, '.claude', 'settings.json')),
-    localSettingsPaths(dir, repoRoot).then((paths) => Promise.all(paths.map(readJson))),
+    Promise.all(localPaths.map(readJson)),
     readJson(join(managedDir, 'managed-settings.json')),
   ]);
   const projects = isObject(claudeJson?.projects) ? claudeJson.projects : {};
@@ -189,6 +194,7 @@ export async function readSettingsSources(
     userSettings,
     projectSettings,
     localSettingsList,
+    localAtRepoRoot,
     managedSettings,
     projectKey,
     projectState,

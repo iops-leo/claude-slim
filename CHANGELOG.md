@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.2] — 2026-11-01
+
+### Fixed
+
+- `CLAUDE_CONFIG_DIR` was ignored. Claude Code keeps everything that normally lives
+  under `~/.claude` — and `.claude.json` — in that directory
+  (https://code.claude.com/docs/en/claude-directory.md), which is how people run a
+  second account side by side. claude-slim always read `~/.claude` and `~/.claude.json`,
+  so for those users it measured, cleaned and restored the default profile instead of
+  the one in use. Skills, plugins, memory, session logs, settings, MCP servers, the
+  `skills.disabled/` store and its manifest now all follow `CLAUDE_CONFIG_DIR`, read the
+  way Claude Code reads it (no `~` expansion or trimming; a relative value resolves
+  against the working directory). With it set, a valid `CLAUDE_CODE_PROJECT_DIR_NAME`
+  (1-64 letters, digits, `-` or `_`, not a Windows device name) names the memory project
+  folder, and the directory holding a configured `.claude` counts as the configuration
+  home for `settings.local.json` approvals — unless that file was relocated to a
+  repository root. A plugin install under the configured profile is recognised as one
+  by `update` and by the install-directory guard.
+- Known limitation: Codex cleanups are recorded in the same manifest, so run `restore`
+  with the `CLAUDE_CONFIG_DIR` that was set during `clean`.
+- `unused_mcp` removal and restore no longer refuse to run under `CLAUDE_CONFIG_DIR`:
+  the backup is read from the same `.claude.json` the `claude` CLI edits, and every
+  spawned `claude` receives the profile as an absolute path, so a relative value cannot
+  point it at a different profile from its own working directory.
+
 ## [2.16.1] — 2026-11-01
 
 ### Fixed

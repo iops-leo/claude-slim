@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { ClaudeCliMissingError, isClaudeMissing } from './plugin-runtime.js';
+import { getConfigDirOverride } from './paths.js';
 /**
  * Server names reach `claude` as an argv element after `--`, so they cannot be
  * parsed as flags and no shell is involved. Still refuse names that could not
@@ -22,7 +23,12 @@ function validateScope(scope) {
  */
 function runClaude(args, cwd, label) {
     return new Promise((resolve, reject) => {
-        execFile('claude', args, { cwd, timeout: 30000 }, (err, _stdout, stderr) => {
+        // Hand the child the profile this process resolved, as an absolute path:
+        // it runs in a different cwd, where a relative CLAUDE_CONFIG_DIR would
+        // name a different profile than the one we backed up from.
+        const override = getConfigDirOverride();
+        const env = override ? { ...process.env, CLAUDE_CONFIG_DIR: override } : process.env;
+        execFile('claude', args, { cwd, env, timeout: 30000 }, (err, _stdout, stderr) => {
             if (err) {
                 if (isClaudeMissing(err)) {
                     reject(new ClaudeCliMissingError());

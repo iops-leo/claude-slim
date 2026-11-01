@@ -27,6 +27,9 @@ export async function createTmpClaude(): Promise<TmpClaude> {
   await mkdir(projectsDir, { recursive: true });
 
   vi.stubEnv('HOME', home);
+  // A developer shell's own profile must not leak into fixtures.
+  vi.stubEnv('CLAUDE_CONFIG_DIR', '');
+  vi.stubEnv('CLAUDE_CODE_PROJECT_DIR_NAME', '');
 
   return {
     home,

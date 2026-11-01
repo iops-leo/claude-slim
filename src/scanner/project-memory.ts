@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { join, isAbsolute } from 'node:path';
-import { slugifyProjectPath } from '../paths.js';
+import { slugifyProjectPath, getConfigDirOverride } from '../paths.js';
 import { type SettingsSources, type Json, isObject, firstBoolean, firstString } from './settings-sources.js';
 
 /**
@@ -39,6 +39,21 @@ function envOverride(): boolean | undefined {
   return undefined;
 }
 
+/**
+ * `CLAUDE_CODE_PROJECT_DIR_NAME`, honoured only beside `CLAUDE_CONFIG_DIR`
+ * (https://code.claude.com/docs/en/env-vars).
+ */
+function projectDirNameOverride(): string | undefined {
+  if (!getConfigDirOverride()) return undefined;
+  const name = process.env.CLAUDE_CODE_PROJECT_DIR_NAME;
+  // Claude Code accepts 1-64 letters, digits, hyphens or underscores and no
+  // Windows device name; anything else falls back to the derived name.
+  // https://code.claude.com/docs/en/sessions.md#name-the-project-directory-yourself
+  if (!name || !/^[A-Za-z0-9_-]{1,64}$/.test(name)) return undefined;
+  if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i.test(name)) return undefined;
+  return name;
+}
+
 function blocksOutsideReads(s: Json | null | undefined): boolean {
   const perms = s?.permissions;
   return isObject(perms) && perms.blockReadsOutsideWorkingDirectories === true;
@@ -46,8 +61,9 @@ function blocksOutsideReads(s: Json | null | undefined): boolean {
 
 export async function resolveProjectMemory(src: SettingsSources): Promise<ProjectMemoryLocation> {
   // Claude Code keys memory by the repo root and does not fall back to an
-  // older per-cwd folder, so neither does this.
-  const slug = slugifyProjectPath(src.root);
+  // older per-cwd folder, so neither does this. With CLAUDE_CONFIG_DIR set,
+  // CLAUDE_CODE_PROJECT_DIR_NAME names the folder outright.
+  const slug = projectDirNameOverride() ?? slugifyProjectPath(src.root);
 
   const byPrecedence = [src.managedSettings, ...src.localSettingsList, src.projectSettings, src.userSettings];
   const enabled = envOverride() ?? firstBoolean(byPrecedence, 'autoMemoryEnabled') ?? true;

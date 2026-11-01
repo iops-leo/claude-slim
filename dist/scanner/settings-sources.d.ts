@@ -11,6 +11,7 @@ export declare function stringList(container: Json | null | undefined, key: stri
 export declare function firstBoolean(sources: Array<Json | null | undefined>, key: string): boolean | undefined;
 export declare function firstString(sources: Array<Json | null | undefined>, key: string): string | undefined;
 export declare function getManagedDir(platform?: NodeJS.Platform): string;
+/** `.claude.json` — beside `~/.claude`, or inside `CLAUDE_CONFIG_DIR` when set. */
 export declare function getClaudeJsonPath(): string;
 /**
  * The repository root Claude Code files per-project state under: the nearest
@@ -34,6 +35,8 @@ export interface SettingsSources {
     projectSettings: Json | null;
     /** `.claude/settings.local.json` files, highest precedence first. */
     localSettingsList: Array<Json | null>;
+    /** The local settings file was relocated to the repository root. */
+    localAtRepoRoot: boolean;
     managedSettings: Json | null;
     /** `~/.claude.json` → `projects[<key>]`, when present. */
     projectKey: string | undefined;

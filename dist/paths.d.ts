@@ -1,4 +1,26 @@
+/**
+ * `CLAUDE_CONFIG_DIR`, resolved to an absolute path, or undefined when unset.
+ * Claude Code then keeps everything that normally lives under `~/.claude` —
+ * and `.claude.json` — in that directory
+ * (https://code.claude.com/docs/en/claude-directory.md).
+ *
+ * The value is taken as Claude Code takes it: no trimming and no `~`
+ * expansion (a shell expands `~` before either program sees it; a settings
+ * `env` block does not, and Claude Code then uses it literally). A relative
+ * value resolves against this process's cwd, and the `claude` children we
+ * spawn get that absolute path so they cannot resolve it elsewhere.
+ */
+export declare function getConfigDirOverride(): string | undefined;
 export declare function getClaudeDir(): string;
+/**
+ * The "configuration home": the home directory, or the directory whose
+ * `.claude` is `CLAUDE_CONFIG_DIR`. An untracked `settings.local.json` there
+ * applies before the folder is trusted.
+ * https://code.claude.com/docs/en/permissions.md#when-your-local-settings-file-needs-trust
+ */
+/** True for a path inside a Claude Code plugins directory — the default one or this profile's. */
+export declare function isUnderClaudePlugins(path: string): boolean;
+export declare function isConfigHome(dir: string): boolean;
 export declare function getSkillsDir(): string;
 export declare function getPluginsDir(): string;
 export declare function getProjectsDir(): string;

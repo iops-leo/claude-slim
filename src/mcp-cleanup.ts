@@ -33,21 +33,6 @@ function cwdFor(scope: RemovableMcpScope, issuePath: string): string {
   return scope === 'local' ? issuePath : homedir();
 }
 
-/**
- * With `CLAUDE_CONFIG_DIR` set, the `claude` we shell out to reads and writes
- * `$CLAUDE_CONFIG_DIR/.claude.json` while this tool reads `~/.claude.json`.
- * Backing up one file and removing from the other could swap definitions on
- * restore, so refuse instead of guessing.
- */
-function assertDefaultConfigDir(): void {
-  if (process.env.CLAUDE_CONFIG_DIR) {
-    throw new Error(
-      'CLAUDE_CONFIG_DIR is set; claude-slim reads ~/.claude.json and will not remove MCP servers ' +
-        'from a different profile. Use `claude mcp remove` directly.',
-    );
-  }
-}
-
 async function readServers(scope: RemovableMcpScope, projectKey: string): Promise<Json | null> {
   let data: unknown;
   try {
@@ -78,7 +63,7 @@ async function readDefinition(name: string, scope: RemovableMcpScope, projectKey
   }
   const def = servers?.[name];
   if (matches.length === 0 || !isObject(def)) {
-    throw new Error(`MCP server "${name}" not found in ${scope} scope of ~/.claude.json`);
+    throw new Error(`MCP server "${name}" not found in ${scope} scope of ${getClaudeJsonPath()}`);
   }
   return def;
 }
@@ -97,7 +82,6 @@ async function stillDefined(name: string, scope: RemovableMcpScope, projectKey: 
  * is never left removed with neither its definition nor a backup on disk.
  */
 export async function disableUnusedMcp(issue: Issue): Promise<DisabledMcpEntry> {
-  assertDefaultConfigDir();
   const scope = issue.mcpScope;
   if (scope !== 'user' && scope !== 'local') {
     throw new Error(`unused_mcp issue without a removable scope: ${issue.name}`);
@@ -174,7 +158,6 @@ async function resolveBackupPath(entry: DisabledMcpEntry): Promise<string> {
 
 /** Put a removed server back exactly as it was, then drop its record and backup. */
 export async function restoreMcpServer(entry: DisabledMcpEntry): Promise<void> {
-  assertDefaultConfigDir();
   const backupPath = await resolveBackupPath(entry);
 
   let backup: unknown;
