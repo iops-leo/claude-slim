@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.1] — 2026-11-01
+
+### Fixed
+
+- Skills synced from claude.ai were counted once per account folder on disk. They live in
+  `~/.claude/skills/synced/<bucket>/`, one bucket per account, and a session loads only
+  the bucket of the account it is signed in with
+  (https://code.claude.com/docs/en/skills.md, "Where synced skills load"). The local
+  skill walk descended into every bucket: on the machine where this was found it listed
+  38 synced skills where sessions load 9, under names like `synced/<uuid>_<uuid>/xlsx`.
+  Synced skills now have their own CLAUDE.AI SYNCED SKILLS section, named
+  `anthropic-skills:<name>`, with buckets of other accounts — or all of them when not
+  signed in or `syncClaudeAiSkills` is `false` — reported as not loaded. They are never
+  offered for cleanup: they are managed on claude.ai, and a local move would be undone by
+  the next sync. Bucket names are matched as `<organizationUuid>_<accountUuid>` from
+  `oauthAccount` in `~/.claude.json` (lowercased, as Claude Code names them), which is
+  observed rather than documented; with no match, nothing is counted as loaded. A managed
+  `strictPluginOnlyCustomization` lock on skills also counts them as not loaded, and a
+  synced skill whose short name another skill or command already uses is priced under
+  its longer `anthropic-skills:<name>` listing.
+- Project memory was looked up by the literal working directory, so a scan from a
+  subdirectory or a git worktree reported 0 tokens of memory. Claude Code keys auto
+  memory by the git repository root, shared by every subdirectory and worktree
+  (https://code.claude.com/docs/en/memory.md, "Storage location"); claude-slim now does
+  the same. `autoMemoryEnabled: false` now counts memory as 0, with
+  `CLAUDE_CODE_DISABLE_AUTO_MEMORY` overriding it either way (`1` off, `0` forced on).
+  `autoMemoryDirectory` is read instead of `~/.claude/projects/` when user or managed
+  settings set it, or a project's settings do once the folder or a parent inside the
+  repository is trusted — unless `blockReadsOutsideWorkingDirectories` is on, in which
+  case a repository-chosen directory loads nothing. Memory that does not reach the
+  session (off, or redirected) is no longer counted as recoverable.
+- On the machine where these were found, the startup estimate drops from 19,968 to
+  14,506 tokens, and a scan from `src/` now shows the project's 175 tokens of memory
+  instead of 0.
+
 ## [2.16.0] — 2026-11-01
 
 ### Added

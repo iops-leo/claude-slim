@@ -6,11 +6,14 @@
 import { join } from 'node:path';
 import { access } from 'node:fs/promises';
 import { countTokensCached } from '../tokenizer.js';
-import { getClaudeDir, getCurrentProjectSlug, getProjectsDir } from '../paths.js';
+import { getClaudeDir, getProjectsDir } from '../paths.js';
 import { safeReadFile } from './fs-walk.js';
 import { scanLocalSkills } from './local-skills.js';
 import { scanPluginSkills } from './plugin-skills.js';
-import { scanMemoryFiles } from './memory.js';
+import { scanMemoryFiles, memoryIndexStartupSlice } from './memory.js';
+import { readSettingsSources } from './settings-sources.js';
+import { scanSyncedSkills } from './synced-skills.js';
+import { resolveProjectMemory } from './project-memory.js';
 import { scanMcpServers, getClaudeJsonPath } from './mcp.js';
 import { parseClaudeMdSections } from './claude-md.js';
 import { getDisabledPlugins, getInstalledPlugins } from './disabled-plugins.js';
@@ -147,7 +150,13 @@ export async function scan(opts = {}) {
     };
     const activePluginSkills = pluginSkills.filter(isLoadedAtStartup);
     const disabledPluginSkillTokens = sumListing(pluginSkills.filter((s) => !isLoadedAtStartup(s)));
-    const skillListingTokens = sumListing(localSkills) + sumListing(activePluginSkills);
+    // One read of the settings files and project state for this directory,
+    // shared by the synced-skill and memory lookups below.
+    const settingsSources = await readSettingsSources(opts.projectDir ?? process.cwd());
+    const takenNames = new Set([...localSkills.map((s) => s.name), ...userSurfaces.commands.map((c) => c.name)].map((n) => n.toLowerCase()));
+    const synced = await scanSyncedSkills(settingsSources, takenNames);
+    const memoryLocation = await resolveProjectMemory(settingsSources);
+    const skillListingTokens = sumListing(localSkills) + sumListing(activePluginSkills) + sumListing(synced.active);
     const agentListingTokens = sumListing(userSurfaces.agents);
     const commandListingTokens = sumListing(userSurfaces.commands);
     // Memory is per-project: a session loads ~/.claude/projects/<slug>/memory/
@@ -160,10 +169,23 @@ export async function scan(opts = {}) {
     // files are read on demand. Summing every file (pre-2.15 behaviour) put a
     // project with 183 topic files at ~238,000 startup tokens when the session
     // actually received ~10,000. `startupTokens` is 0 for anything but the index.
-    const currentProjectSlug = getCurrentProjectSlug(opts.projectDir);
-    const currentProjectMemoryTokens = memoryFiles
-        .filter((m) => m.project === currentProjectSlug)
-        .reduce((sum, m) => sum + m.startupTokens, 0);
+    const currentProjectSlug = memoryLocation.slug;
+    let currentProjectMemoryTokens = 0;
+    if (memoryLocation.disabled) {
+        currentProjectMemoryTokens = 0;
+    }
+    else if (memoryLocation.customDir) {
+        const indexPath = join(memoryLocation.customDir, 'MEMORY.md');
+        const index = await safeReadFile(indexPath);
+        currentProjectMemoryTokens = index
+            ? countTokensCached(memoryIndexStartupSlice(index).text, `${indexPath}#startup`)
+            : 0;
+    }
+    else {
+        currentProjectMemoryTokens = memoryFiles
+            .filter((m) => m.project === currentProjectSlug)
+            .reduce((sum, m) => sum + m.startupTokens, 0);
+    }
     const allProjectsMemoryTokens = memoryFiles.reduce((sum, m) => sum + m.tokens, 0);
     const totalTokensBefore = skillListingTokens +
         agentListingTokens +
@@ -180,13 +202,20 @@ export async function scan(opts = {}) {
     for (const c of pluginCostBreakdowns) {
         pluginSkillListingTokens.set(c.pluginName, (pluginSkillListingTokens.get(c.pluginName) ?? 0) + c.skillTokens);
     }
-    const recoverableStartupTokens = sumRecoverableStartupTokens(issues, [...localSkills, ...pluginSkills], currentProjectSlug, pluginSkillListingTokens);
+    const recoverableStartupTokens = sumRecoverableStartupTokens(issues, [...localSkills, ...pluginSkills], 
+    // Memory under ~/.claude/projects/ only reaches the session when auto
+    // memory is on and not redirected; otherwise cleaning it recovers nothing.
+    memoryLocation.disabled || memoryLocation.customDir ? '\u0000' : currentProjectSlug, pluginSkillListingTokens);
     // Labels below are authored by whoever wrote each skill, plugin, or memory
     // file, and they reach the agent's context through the report. Flatten them
     // at this one exit rather than at each site that reads a name off disk.
     return sanitizeScanResult({
         localSkills,
         pluginSkills,
+        syncedSkills: synced.active,
+        syncedBucketsInactive: synced.inactive,
+        autoMemoryDisabled: memoryLocation.disabled,
+        ...(memoryLocation.customDir ? { autoMemoryDirectory: memoryLocation.customDir } : {}),
         plugins,
         brokenSymlinks,
         memoryFiles,

@@ -1,3 +1,4 @@
+export { getManagedDir, getClaudeJsonPath, findRepoRoot } from './settings-sources.js';
 /**
  * Where Claude Code reads MCP server definitions from
  * (https://code.claude.com/docs/en/mcp.md, "MCP installation scopes";
@@ -66,14 +67,4 @@ export interface McpScanOptions {
  * connector tools such as `mcp__claude_ai_Gmail__…`).
  */
 export declare function mcpToolPrefix(name: string): string;
-export declare function getManagedDir(platform?: NodeJS.Platform): string;
-export declare function getClaudeJsonPath(): string;
-/**
- * The repository root Claude Code files per-project state under: the nearest
- * ancestor holding `.git`, and for a linked worktree the main checkout it
- * belongs to. A local server added at the repo root is live in every
- * subdirectory and worktree; looking it up by the literal cwd missed it.
- * Null outside a repository.
- */
-export declare function findRepoRoot(dir: string): Promise<string | null>;
 export declare function scanMcpServers(projectDir?: string, opts?: McpScanOptions): Promise<McpScanResult>;

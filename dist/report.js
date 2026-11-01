@@ -258,6 +258,14 @@ export function formatScanSummary(result) {
                 `      \x1b[90mIf you meant a different project, pass --project-dir <path>.\x1b[0m`);
         }
     }
+    if (result.autoMemoryDisabled) {
+        lines.push(`    \x1b[90mauto memory is off (autoMemoryEnabled / CLAUDE_CODE_DISABLE_AUTO_MEMORY) — none loads at startup\x1b[0m`);
+    }
+    else if (result.autoMemoryDirectory) {
+        lines.push(`    \x1b[90mautoMemoryDirectory: this project's memory is read from ${result.autoMemoryDirectory} ` +
+            `(${result.currentProjectMemoryTokens.toLocaleString()} tok at startup)\x1b[0m`);
+    }
+    lines.push(...formatSyncedSection(result));
     // --- MCP SERVERS ---
     lines.push('');
     lines.push(...formatMcpSection(result));
@@ -370,5 +378,27 @@ export function formatMcpSection(result) {
         lines.push(`    \x1b[33m! allow/deny lists match by URL or command here; "active" may include servers they block\x1b[0m`);
     }
     lines.push(`    \x1b[90mplugin servers: see PLUGIN BREAKDOWN · claude.ai connectors are fetched at runtime and not listed\x1b[0m`);
+    return lines;
+}
+/**
+ * Skills synced from claude.ai. Managed on claude.ai — a local move would be
+ * undone by the next sync — so they are counted, never offered for cleanup.
+ */
+export function formatSyncedSection(result) {
+    const active = result.syncedSkills ?? [];
+    const inactive = result.syncedBucketsInactive ?? [];
+    if (active.length === 0 && inactive.length === 0)
+        return [];
+    const listing = active.reduce((sum, s) => sum + s.listingTokens, 0);
+    const lines = ['', `\x1b[1m  CLAUDE.AI SYNCED SKILLS\x1b[0m (${active.length} loaded, ${listing.toLocaleString()} tok listing)`];
+    for (const s of [...active].sort((a, b) => a.name.localeCompare(b.name))) {
+        lines.push(`    ${s.name.padEnd(44)} ${s.listingTokens.toLocaleString().padStart(5)} tok`);
+    }
+    for (const b of inactive) {
+        // Buckets of one org share a long prefix; show both ends so they differ.
+        const label = b.bucket.length > 20 ? `${b.bucket.slice(0, 8)}…${b.bucket.slice(-8)}` : b.bucket;
+        lines.push(`    \x1b[90m${b.skills} skill(s) in synced/${label} not loaded (${b.reason})\x1b[0m`);
+    }
+    lines.push(`    \x1b[90mmanaged on claude.ai — turn a skill off there; never moved by clean\x1b[0m`);
     return lines;
 }
