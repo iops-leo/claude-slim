@@ -190,8 +190,8 @@ function parseTranscript(content) {
     const invocationCount = skills.length + mcpPrefixes.length + commands.length;
     return { skills, mcpPrefixes, commands, invocationCount };
 }
-// Walk every `~/.claude/projects/<slug>/*.jsonl` whose mtime falls inside the
-// lookback window. Per-file results are cached by mtime, so warm scans only
+// Walk every `~/.claude/projects/<slug>/*.jsonl` (and each session's
+// `subagents/*.jsonl`) whose mtime falls inside the lookback window. Per-file results are cached by mtime, so warm scans only
 // re-read files that have changed.
 export async function scanSessionUsage(lookbackDays) {
     const projectsDir = join(getClaudeDir(), 'projects');
@@ -230,10 +230,29 @@ export async function scanSessionUsage(lookbackDays) {
         catch {
             continue;
         }
+        // Subagent transcripts live beside the session as
+        // `<session>/subagents/agent-*.jsonl`. They count as usage — a server or
+        // skill only a subagent calls is still in use — but not as sessions.
+        const files = [];
         for (const entry of entries) {
-            if (!entry.endsWith('.jsonl'))
+            if (entry.endsWith('.jsonl')) {
+                files.push({ filePath: join(projectPath, entry), isSession: true });
                 continue;
-            const filePath = join(projectPath, entry);
+            }
+            let subs = [];
+            try {
+                subs = await readdir(join(projectPath, entry, 'subagents'));
+            }
+            catch {
+                continue;
+            }
+            for (const sub of subs) {
+                if (sub.endsWith('.jsonl')) {
+                    files.push({ filePath: join(projectPath, entry, 'subagents', sub), isSession: false });
+                }
+            }
+        }
+        for (const { filePath, isSession } of files) {
             let mtimeMs;
             try {
                 mtimeMs = (await stat(filePath)).mtimeMs;
@@ -241,10 +260,12 @@ export async function scanSessionUsage(lookbackDays) {
             catch {
                 continue;
             }
-            sessionsScanned++;
+            if (isSession)
+                sessionsScanned++;
             if (mtimeMs < cutoffMs)
                 continue;
-            sessionsInWindow++;
+            if (isSession)
+                sessionsInWindow++;
             // Cache hit: reuse the parsed result only if mtime matches AND the entry
             // has the v2.6 extension fields (mcpPrefixes / commands). Entries from
             // older cache files lack these fields → force a re-parse.

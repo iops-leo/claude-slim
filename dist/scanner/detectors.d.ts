@@ -2,6 +2,7 @@ import type { SkillInfo, BrokenSymlink, MemoryFile, PluginInfo, Issue } from '..
 import type { TempCache } from './plugin-skills.js';
 import type { StaleProject } from './memory.js';
 import type { PluginSurfaces } from './plugin-surfaces.js';
+import type { McpServerEntry } from './mcp.js';
 export interface DetectorContext {
     localSkills: SkillInfo[];
     pluginSkills: SkillInfo[];
@@ -25,6 +26,10 @@ export interface DetectorContext {
     totalUserCallableInvocations: number;
     sessionsInWindow: number;
     pluginCosts: Map<string, number>;
+    mcpServers: McpServerEntry[];
+    /** `~/.claude.json` project key local-scope servers live under. */
+    mcpProjectKey: string;
+    claudeJsonPath: string;
 }
 export interface Detector {
     name: string;

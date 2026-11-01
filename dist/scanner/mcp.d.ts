@@ -53,6 +53,8 @@ export interface McpScanResult {
      * `active` may then include servers policy would block.
      */
     policyNotEvaluated: boolean;
+    /** `~/.claude.json` project key for this directory — where local servers live. */
+    projectKey: string;
 }
 export interface McpScanOptions {
     /** Directory holding `managed-mcp.json` / `managed-settings.json`. */
@@ -71,7 +73,7 @@ export declare function getClaudeJsonPath(): string;
  * ancestor holding `.git`, and for a linked worktree the main checkout it
  * belongs to. A local server added at the repo root is live in every
  * subdirectory and worktree; looking it up by the literal cwd missed it.
- * Falls back to `dir` outside a repository.
+ * Null outside a repository.
  */
-export declare function findProjectRoot(dir: string): Promise<string>;
+export declare function findRepoRoot(dir: string): Promise<string | null>;
 export declare function scanMcpServers(projectDir?: string, opts?: McpScanOptions): Promise<McpScanResult>;

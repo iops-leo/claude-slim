@@ -24,7 +24,7 @@ function validateName(name) {
  * The exact-match on `spawn claude` avoids false positives for hypothetical
  * sibling binaries (e.g. `claude-code`) that might be spawned by future code.
  */
-function isClaudeMissing(err) {
+export function isClaudeMissing(err) {
     if (!(err instanceof Error))
         return false;
     const e = err;

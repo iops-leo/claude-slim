@@ -7,6 +7,7 @@ import { Command } from 'commander';
 import { initTokenizer, flushCache } from './tokenizer.js';
 import { scan, SKILL_PROMPT_OVERHEAD_TOKENS } from './scanner.js';
 import { cleanIssues, restoreItem } from './cleaner.js';
+import { isDisabledMcpEntry } from './mcp-cleanup.js';
 import { readManifest } from './manifest.js';
 import { formatScanSummary, formatReportBox, calculateReport, } from './report.js';
 import { collectDoctorReport, formatDoctorReport } from './doctor.js';
@@ -212,14 +213,15 @@ program
     const allEntries = await readManifest();
     // Separate plugin entries (DisabledPluginEntry shape) from legacy ManifestEntry
     const pluginEntries = allEntries.filter((e) => 'plugin' in e && 'marketplace' in e);
-    const legacyEntries = allEntries.filter((e) => !('plugin' in e && 'marketplace' in e));
+    const mcpEntries = allEntries.filter(isDisabledMcpEntry);
+    const legacyEntries = allEntries.filter((e) => !('plugin' in e && 'marketplace' in e) && !isDisabledMcpEntry(e));
     // v2 manifest contains only currently-disabled entries (restored ones are removed)
     const disabled = legacyEntries.filter((e) => e.type !== 'broken_symlink');
     const NON_RESTORABLE = new Set(['temp_cache', 'disabled_plugin']);
     const restorableLegacy = disabled.filter((e) => !NON_RESTORABLE.has(e.type));
     const infoOnly = disabled.filter((e) => NON_RESTORABLE.has(e.type));
     // Combine restorable: legacy skill/project entries + plugin entries
-    const restorable = [...restorableLegacy, ...pluginEntries];
+    const restorable = [...restorableLegacy, ...pluginEntries, ...mcpEntries];
     if (restorable.length === 0 && infoOnly.length === 0) {
         console.log('\n  Nothing to restore.\n');
         return;
@@ -228,7 +230,11 @@ program
         console.log('\n  Restorable items:\n');
         for (let i = 0; i < restorable.length; i++) {
             const e = restorable[i];
-            if ('plugin' in e && 'marketplace' in e) {
+            if (isDisabledMcpEntry(e)) {
+                const date = new Date(e.disabledAt).toLocaleDateString();
+                console.log(`    ${i + 1}. [mcp] ${e.name} (${e.scope} scope, removed ${date})`);
+            }
+            else if ('plugin' in e && 'marketplace' in e) {
                 const pe = e;
                 const date = new Date(pe.disabledAt).toLocaleDateString();
                 console.log(`    ${i + 1}. [plugin] ${pe.plugin} @ ${pe.marketplace} (disabled ${date})`);
@@ -492,9 +498,10 @@ async function runCleanPipeline(opts) {
     console.log('');
     if (cleanResult.claudeCliMissing) {
         const skippedPluginCount = selectedIssues.filter((i) => i.type === 'unused_plugin').length;
-        console.log(`  \x1b[33m⚠ \`claude\` CLI not found on PATH — skipped ${skippedPluginCount} plugin(s).\x1b[0m`);
-        console.log('    Install Claude Code and re-run to disable unused plugins,');
-        console.log('    or disable them manually via `claude plugin disable <name>`.\n');
+        const skippedMcpCount = selectedIssues.filter((i) => i.type === 'unused_mcp').length;
+        console.log(`  \x1b[33m⚠ \`claude\` CLI not found on PATH — skipped ${skippedPluginCount} plugin(s) and ${skippedMcpCount} MCP server(s).\x1b[0m`);
+        console.log('    Install Claude Code and re-run, or remove them manually with');
+        console.log('    `claude plugin disable <name>` / `claude mcp remove -s <scope> <name>`.\n');
     }
     if (cleanResult.errors.length > 0) {
         console.log('  \x1b[31mErrors:\x1b[0m');

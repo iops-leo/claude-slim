@@ -8,6 +8,13 @@ export declare class ClaudeCliMissingError extends Error {
     constructor();
 }
 /**
+ * Detects the classic "binary missing from PATH" shape of Node's execFile error.
+ * spawn ENOENT surfaces as an Error with { code: 'ENOENT', syscall: 'spawn claude' }.
+ * The exact-match on `spawn claude` avoids false positives for hypothetical
+ * sibling binaries (e.g. `claude-code`) that might be spawned by future code.
+ */
+export declare function isClaudeMissing(err: unknown): boolean;
+/**
  * Best-effort probe: is `claude` on PATH and answering `--version`?
  * Never throws — a false result short-circuits `unused_plugin` cleanup with a
  * friendly message rather than surfacing spawn ENOENT to end users.

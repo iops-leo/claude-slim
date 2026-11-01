@@ -30,7 +30,7 @@ function validateName(name: string): void {
  * The exact-match on `spawn claude` avoids false positives for hypothetical
  * sibling binaries (e.g. `claude-code`) that might be spawned by future code.
  */
-function isClaudeMissing(err: unknown): boolean {
+export function isClaudeMissing(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const e = err as NodeJS.ErrnoException & { syscall?: string };
   return e.code === 'ENOENT' && e.syscall === 'spawn claude';

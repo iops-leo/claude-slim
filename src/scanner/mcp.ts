@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
 import { dirname, join, resolve, isAbsolute } from 'node:path';
+import { stat } from 'node:fs/promises';
 import { getClaudeDir } from '../paths.js';
 import { safeReadFile, isDirectory } from './fs-walk.js';
 
@@ -61,6 +62,8 @@ export interface McpScanResult {
    * `active` may then include servers policy would block.
    */
   policyNotEvaluated: boolean;
+  /** `~/.claude.json` project key for this directory — where local servers live. */
+  projectKey: string;
 }
 
 export interface McpScanOptions {
@@ -138,9 +141,9 @@ function ancestorMcpJsonPaths(dir: string): string[] {
  * ancestor holding `.git`, and for a linked worktree the main checkout it
  * belongs to. A local server added at the repo root is live in every
  * subdirectory and worktree; looking it up by the literal cwd missed it.
- * Falls back to `dir` outside a repository.
+ * Null outside a repository.
  */
-export async function findProjectRoot(dir: string): Promise<string> {
+export async function findRepoRoot(dir: string): Promise<string | null> {
   let current = dir;
   for (;;) {
     const gitPath = join(current, '.git');
@@ -153,9 +156,39 @@ export async function findProjectRoot(dir: string): Promise<string> {
       return common ? dirname(resolve(absGitdir, common)) : current;
     }
     const parent = dirname(current);
-    if (parent === current) return dir;
+    if (parent === current) return null;
     current = parent;
   }
+}
+
+/**
+ * `.claude/settings.local.json` locations, highest precedence first. Inside a
+ * repository Claude Code keeps it at the repo root (the main checkout for a
+ * worktree) and still reads one an older version left in the starting
+ * directory; outside a repo, when the root is the home directory, on Windows,
+ * or when the root, its `.git` or `.claude` is not owned by the current user,
+ * it stays next to `.claude/settings.json`.
+ * https://code.claude.com/docs/en/settings.md — "Where Claude Code keeps the
+ * local file in a git repository".
+ */
+async function ownedByMe(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).uid === process.getuid?.();
+  } catch {
+    return true; // absent entries do not disqualify the root
+  }
+}
+
+async function localSettingsPaths(dir: string, repoRoot: string | null): Promise<string[]> {
+  const atDir = join(dir, '.claude', 'settings.local.json');
+  if (!repoRoot || repoRoot === homedir() || process.platform === 'win32') return [atDir];
+  // A shared checkout owned by someone else keeps the file next to settings.json.
+  const owned = await Promise.all(
+    [repoRoot, join(repoRoot, '.git'), join(repoRoot, '.claude')].map(ownedByMe),
+  );
+  if (owned.includes(false)) return [atDir];
+  const atRoot = join(repoRoot, '.claude', 'settings.local.json');
+  return atRoot === atDir ? [atDir] : [atRoot, atDir];
 }
 
 /** `~/.claude.json` keys projects with forward slashes on every platform. */
@@ -182,13 +215,14 @@ export async function scanMcpServers(
   const managedMcpPath = join(managedDir, 'managed-mcp.json');
   const managedSettingsPath = join(managedDir, 'managed-settings.json');
 
-  const [root, claudeJson, userSettings, projectSettings, localSettings, managedMcp, managedSettings, mcpJsons] =
+  const repoRoot = await findRepoRoot(dir);
+  const root = repoRoot ?? dir;
+  const [claudeJson, userSettings, projectSettings, localSettingsList, managedMcp, managedSettings, mcpJsons] =
     await Promise.all([
-      findProjectRoot(dir),
       readJson(claudeJsonPath),
       readJson(join(getClaudeDir(), 'settings.json')),
       readJson(join(dir, '.claude', 'settings.json')),
-      readJson(join(dir, '.claude', 'settings.local.json')),
+      localSettingsPaths(dir, repoRoot).then((paths) => Promise.all(paths.map(readJson))),
       readJson(managedMcpPath),
       readJson(managedSettingsPath),
       Promise.all(ancestorMcpJsonPaths(dir).map(async (p) => ({ path: p, data: await readJson(p) }))),
@@ -198,20 +232,34 @@ export async function scanMcpServers(
   const projectKey = projectKeyCandidates(root, dir).find((k) => isObject(projects[k]));
   const projectState = projectKey ? (projects[projectKey] as Json) : null;
 
-  // A cloned repo cannot approve its own servers: approvals committed to its
-  // .claude/settings.json count only once the folder is trusted.
+  // .mcp.json approval (https://code.claude.com/docs/en/mcp.md, "Project
+  // server approvals and workspace trust"): a cloned repo cannot approve its
+  // own servers. Approvals in the committed .claude/settings.json need trust;
+  // so do approvals in settings.local.json, unless the folder is the home
+  // directory. User and managed approvals always count. Denials
+  // (disabledMcpjsonServers) count from every file regardless of trust.
   const trusted = projectState?.hasTrustDialogAccepted === true;
-  const committed = trusted ? projectSettings : null;
-  // Highest precedence first: managed, local, project, user, then the
-  // per-project state older Claude Code versions wrote approvals to.
-  const settingsByPrecedence = [managedSettings, localSettings, committed, userSettings, projectState];
+  const localTrusted = trusted || dir === homedir();
+  const approvalsByPrecedence = [
+    managedSettings,
+    ...(localTrusted ? localSettingsList : []),
+    trusted ? projectSettings : null,
+    userSettings,
+    projectState, // where older Claude Code versions wrote approvals
+  ];
+  const allSettings = [managedSettings, ...localSettingsList, projectSettings, userSettings, projectState];
 
   const disabledByToggle = new Set(stringList(projectState, 'disabledMcpServers'));
-  const mcpjsonDisabled = new Set(settingsByPrecedence.flatMap((s) => stringList(s, 'disabledMcpjsonServers')));
-  const mcpjsonEnabled = new Set(settingsByPrecedence.flatMap((s) => stringList(s, 'enabledMcpjsonServers')));
-  const enableAll = firstBoolean(settingsByPrecedence, 'enableAllProjectMcpServers') === true;
+  const mcpjsonDisabled = new Set(allSettings.flatMap((s) => stringList(s, 'disabledMcpjsonServers')));
+  const mcpjsonEnabled = new Set(approvalsByPrecedence.flatMap((s) => stringList(s, 'enabledMcpjsonServers')));
+  // Trusted: the highest-precedence boolean wins, so a local `false` beats a
+  // user `true`. Untrusted: a `true` in any honored file is enough.
+  // https://code.claude.com/docs/en/settings-reference.md#enableallprojectmcpservers
+  const enableAll = trusted
+    ? firstBoolean(approvalsByPrecedence, 'enableAllProjectMcpServers') === true
+    : approvalsByPrecedence.some((s) => s?.enableAllProjectMcpServers === true);
 
-  const policySources = [managedSettings, localSettings, projectSettings, userSettings];
+  const policySources = [managedSettings, ...localSettingsList, projectSettings, userSettings];
   const denied = policySources.flatMap((s) => objectList(s, 'deniedMcpServers'));
   const deniedNames = new Set(denied.map((e) => e.serverName).filter((n): n is string => typeof n === 'string'));
   const policyNotEvaluated =
@@ -249,5 +297,5 @@ export async function scanMcpServers(
   const names = servers.filter((s) => s.status === 'active').map((s) => s.name);
   const notLoaded = serverNames(userSettings).filter((n) => !byName.has(n)).sort();
 
-  return { count: names.length, names, servers, notLoaded, policyNotEvaluated };
+  return { count: names.length, names, servers, notLoaded, policyNotEvaluated, projectKey: projectKey ?? root.replace(/\\/g, '/') };
 }

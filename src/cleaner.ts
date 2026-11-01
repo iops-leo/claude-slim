@@ -4,13 +4,15 @@ import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordD
 import { assertInsideAgentRoot, getAgentRoot, getAgentDisabledDir, getSkillsDir, getProjectsDir } from './paths.js';
 import type { AgentId } from './paths.js';
 import { disablePlugin, enablePlugin, isClaudeCliAvailable, ClaudeCliMissingError } from './plugin-runtime.js';
-import type { Issue, ManifestEntry, DisabledPluginEntry } from './types.js';
+import type { Issue, ManifestEntry, DisabledPluginEntry, DisabledMcpEntry } from './types.js';
+import { disableUnusedMcp, restoreMcpServer, isDisabledMcpEntry } from './mcp-cleanup.js';
 
 /**
  * Issue types whose cleanup consumes a filesystem path — the ones where two
  * findings on the same path cannot both be executed. Types absent here are
  * either report-only (`oversized_memory`, `disabled_plugin`) or addressed by
- * name through the `claude` CLI rather than by path (`unused_plugin`).
+ * name through the `claude` CLI rather than by path (`unused_plugin`,
+ * `unused_mcp`).
  */
 const MOVES_A_PATH = new Set<Issue['type']>([
   'template', 'duplicate', 'skill_dup', 'oversized_skill', 'unused_skill',
@@ -79,7 +81,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
   // Pre-check: if any unused_plugin items are selected, verify `claude` CLI is
   // reachable before we start. Failing fast with a single friendly message
   // beats N raw ENOENTs mid-run. Skip the probe if no plugin items were picked.
-  const wantsPluginOps = issues.some((i) => i.type === 'unused_plugin');
+  const wantsPluginOps = issues.some((i) => i.type === 'unused_plugin' || i.type === 'unused_mcp');
   let claudeCliMissing = false;
   if (wantsPluginOps && !(await isClaudeCliAvailable())) {
     claudeCliMissing = true;
@@ -110,7 +112,10 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
     const disabledDir = await ensureDisabledDir(agent);
     try {
       // unused_plugin and report-only types don't touch filesystem paths directly
-      if (issue.type !== 'unused_plugin' && issue.type !== 'oversized_memory' && issue.type !== 'disabled_plugin') {
+      if (
+        issue.type !== 'unused_plugin' && issue.type !== 'unused_mcp' &&
+        issue.type !== 'oversized_memory' && issue.type !== 'disabled_plugin'
+      ) {
         assertInsideAgentRoot(issue.path, agent);
       }
       if (issue.type === 'broken_symlink') {
@@ -214,6 +219,15 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
         }
         // unused_plugin doesn't contribute to moved (no ManifestEntry shape), track skipped
         skipped.push(issue.name);
+      } else if (issue.type === 'unused_mcp') {
+        if (claudeCliMissing) {
+          skipped.push(issue.name);
+          continue;
+        }
+        // Backs up the definition, removes it through `claude mcp remove`,
+        // and records it; see mcp-cleanup.ts for the rollback order.
+        await disableUnusedMcp(issue);
+        skipped.push(issue.name);
       } else if (issue.type === 'oversized_memory' || issue.type === 'disabled_plugin') {
         // Report only — user manages these manually
         skipped.push(issue.name);
@@ -257,7 +271,12 @@ async function cleanEmptyDirs(dir: string): Promise<void> {
   } catch { /* skip */ }
 }
 
-export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry): Promise<void> {
+export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry | DisabledMcpEntry): Promise<void> {
+  if (isDisabledMcpEntry(entry)) {
+    await restoreMcpServer(entry);
+    return;
+  }
+
   // Handle new-style disabled_plugin entries (plugin + marketplace shape)
   if ('plugin' in entry && 'marketplace' in entry) {
     const pluginEntry = entry as DisabledPluginEntry;
