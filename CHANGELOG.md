@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Dev toolchain lockfile refreshed to clear five `npm audit` advisories (3 high, 2 moderate): `vitest` / `@vitest/mocker` 4.1.11 → 4.1.12, `vite` 6.4.3 → 8.3.8, `tmp` 0.2.5 → 0.2.7, `source-map-js` 1.2.1 → 1.2.2. All are test-only dependencies; the shipped `dist/` and the runtime dependencies are unchanged.
+- `.nvmrc` / `.node-version` pin moved from 22.12.0 to 22.23.4.
+
 ## [2.16.2] — 2026-11-01
 
 ### Fixed
