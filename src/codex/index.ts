@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { getCodexDir } from '../paths.js';
 import { countTokensCached } from '../tokenizer.js';
 import { listingTokens, listingTokensFromContent, parseFrontmatterDescription } from '../scanner/skill-listing.js';
 import { safeReadFile, safeReaddir, isDirectory, isBrokenSymlink } from '../scanner/fs-walk.js';
@@ -67,9 +67,8 @@ export interface CodexScanResult {
   unusedDetectionReason: string;
 }
 
-export function getCodexDir(): string {
-  return join(homedir(), '.codex');
-}
+// One definition, so the scanner and the cleaner's path guard agree on CODEX_HOME.
+export { getCodexDir };
 
 export async function isCodexInstalled(): Promise<boolean> {
   return isDirectory(getCodexDir());

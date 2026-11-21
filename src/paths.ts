@@ -133,8 +133,10 @@ export function getLegacyManifestPath(): string {
  *  destructive operation may reach, so this list is the security boundary. */
 export type AgentId = 'claude' | 'codex';
 
+/** `CODEX_HOME` (resolved like `CLAUDE_CONFIG_DIR`), else `~/.codex` — where Codex itself looks. */
 export function getCodexDir(): string {
-  return join(homedir(), '.codex');
+  const raw = process.env.CODEX_HOME;
+  return raw ? resolve(raw) : join(homedir(), '.codex');
 }
 
 export function getAgentRoot(agent: AgentId): string {
