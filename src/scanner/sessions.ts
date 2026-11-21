@@ -37,11 +37,13 @@ export interface SessionScanResult {
   // used by suppression logic — 0 means no user-callable tool was ever invoked.
   totalUserCallableInvocations: number;
   /**
-   * Days the surviving logs actually cover: the age of the oldest session log
-   * inside the window (so at most the lookback); 0 with no logs in it. Logs
-   * older than the window are ignored — a lone straggler that escaped cleanup
-   * says nothing about the days after it. A quiet stretch at the start of the
-   * window shortens this too; underclaiming is the safe error. Claude Code deletes
+   * Days the surviving logs actually cover; 0 with no logs in the window.
+   * When `cleanupPeriodDays` keeps logs at least as long as the lookback,
+   * nothing in the window was deleted and this is the whole lookback.
+   * Otherwise it is the age of the oldest session log inside the window,
+   * rounded up and capped at the lookback. Logs older than the window are
+   * ignored — a lone straggler that escaped cleanup says nothing about the
+   * days after it. Claude Code deletes
    * logs older than `cleanupPeriodDays`, so this is what "not invoked in Nd"
    * can honestly rest on.
    */
@@ -331,9 +333,12 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
 
   await saveCache({ version: CACHE_VERSION, entries: newEntries });
 
+  const keptLongEnough = (await readCleanupPeriodDays()) >= lookbackDays;
   const effectiveLookbackDays = sessionsInWindow === 0
     ? 0
-    : Math.min(lookbackDays, Math.max(1, Math.floor((now - oldestInWindowMs) / DAY_MS)));
+    : keptLongEnough
+      ? lookbackDays
+      : Math.min(lookbackDays, Math.max(1, Math.ceil((now - oldestInWindowMs) / DAY_MS)));
 
   return {
     invokedSkills,

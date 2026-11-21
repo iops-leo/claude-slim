@@ -38,16 +38,31 @@ async function session(name: string, ageDays: number): Promise<void> {
 describe('effective usage window', () => {
   it('is the age of the oldest surviving log, capped by the lookback', async () => {
     await session('a', 29.5);
-    await session('b', 3);
+    await session('b', 2.5);
     await session('c', 1);
-    expect((await scanSessionUsage(60)).effectiveLookbackDays).toBe(29);
-    // A log outside the window does not stretch it: a straggler that escaped
-    // cleanup says nothing about the days after it.
-    expect((await scanSessionUsage(10)).effectiveLookbackDays).toBe(3);
+    expect((await scanSessionUsage(60)).effectiveLookbackDays).toBe(30);
+    // A 10-day lookback sits inside the 30-day retention: nothing was deleted.
+    expect((await scanSessionUsage(10)).effectiveLookbackDays).toBe(10);
+  });
+
+  it('ignores a straggler older than the window that escaped cleanup', async () => {
+    await session('old', 104);
+    await session('a', 29.5);
+    await session('b', 2.5);
+    expect((await scanSessionUsage(60)).effectiveLookbackDays).toBe(30);
   });
 
   it('is 0 with no logs in the window', async () => {
     expect((await scanSessionUsage(60)).effectiveLookbackDays).toBe(0);
+  });
+
+  it('is the whole lookback when logs are kept at least that long', async () => {
+    // Daily use with cleanupPeriodDays 90: no log in the window is a full 60
+    // days old, yet nothing in the window was deleted — the logs cover all of it.
+    await writeFile(join(tmp.claudeDir, 'settings.json'), JSON.stringify({ cleanupPeriodDays: 90 }));
+    await session('a', 59.2);
+    await session('b', 2.5);
+    expect((await scanSessionUsage(60)).effectiveLookbackDays).toBe(60);
   });
 
   it('reads cleanupPeriodDays from settings.json, defaulting to 30', async () => {
@@ -86,10 +101,10 @@ describe('scan, report and doctor surface the window', () => {
     await session('b', 2);
     await session('c', 1);
     const result = await scan({ lookbackDays: 60 });
-    expect(result.usageWindow).toEqual({ lookbackDays: 60, effectiveDays: 20, cleanupPeriodDays: 30 });
-    expect(result.issues.find((i) => i.name === 'idle')?.detail).toBe('not invoked in 20d of logs');
+    expect(result.usageWindow).toEqual({ lookbackDays: 60, effectiveDays: 21, cleanupPeriodDays: 30 });
+    expect(result.issues.find((i) => i.name === 'idle')?.detail).toBe('not invoked in 21d of logs');
     const text = formatScanSummary(result);
-    expect(text).toContain('20d of session logs');
+    expect(text).toContain('21d of session logs');
     expect(text).toContain('cleanupPeriodDays');
   });
 
