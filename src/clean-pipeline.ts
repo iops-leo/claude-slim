@@ -79,7 +79,10 @@ export async function runCleanPipeline(opts: {
   projectDir?: string;
 }): Promise<void> {
   await initTokenizer();
-  const result = await scan({ lookbackDays: opts.lookbackDays, projectDir: resolveProjectDir(opts.projectDir) });
+  // Resolved once: the after-clean rescan must measure the same project, or
+  // the before/after pair compares two different memory totals.
+  const projectDir = resolveProjectDir(opts.projectDir);
+  const result = await scan({ lookbackDays: opts.lookbackDays, projectDir });
 
   // Codex issues join the same tiered list. They carry `agent: 'codex'`, which
   // is what keeps the cleaner's path guard pointed at ~/.codex/.
@@ -117,6 +120,22 @@ export async function runCleanPipeline(opts: {
     // Explicit non-interactive mode: select Tier 1 only.
     selectedIssues = result.issues.filter((i) => i.tier === 1);
     console.log(`  \x1b[36m→ Auto mode: selecting ${selectedIssues.length} Tier 1 item(s)\x1b[0m\n`);
+  } else if (opts.dryRun) {
+    // A dry run writes nothing, so there is nothing to refuse. Preview the
+    // default selection (Tier 1, what Enter or --auto would take) — this is
+    // how the skill runs it, from a Bash tool with no TTY.
+    selectedIssues = result.issues.filter((i) => i.tier === 1);
+    const optIn = result.issues.length - selectedIssues.length;
+    console.log(
+      `  \x1b[36m→ Non-interactive dry run: previewing the ${selectedIssues.length} Tier 1 item(s) selected by default` +
+      (optIn > 0 ? `; ${optIn} Tier 2/3 item(s) need an explicit selection` : '') +
+      '\x1b[0m',
+    );
+    if (selectedIssues.length === 0) {
+      console.log('\n  \x1b[33m[DRY RUN]\x1b[0m Nothing is selected by default. No changes made.\n');
+      await flushCache();
+      return;
+    }
   } else {
     // Non-TTY without --auto/--dry-run: refuse rather than silently mutating
     // the filesystem. Prior behavior auto-selected Tier 1, which surprised
@@ -151,7 +170,7 @@ export async function runCleanPipeline(opts: {
   const cleanResult = await cleanIssues(selectedIssues);
 
   // Re-scan after cleanup for accurate breakdown
-  const afterResult = await scan({ lookbackDays: opts.lookbackDays });
+  const afterResult = await scan({ lookbackDays: opts.lookbackDays, projectDir });
 
   const reportData = calculateReport(result, afterResult, cleanResult.moved, opts.sessionsPerDay);
   console.log('');
