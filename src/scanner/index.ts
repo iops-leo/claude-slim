@@ -289,6 +289,12 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
   // lower bound and would understate a listing that fits.
   const currentCap = capForCurrentProject(listingVisibility);
   const listingCapTokens = currentCap?.capTokens;
+  // The full listing as of the measured session, or as on disk now if that is
+  // larger (skills added since). Taking the larger keeps the recovery figure
+  // conservative either way: a stale smaller baseline would promise tokens a
+  // still-overflowing listing cannot free.
+  const diskListingTokens = skillListingUncappedTokens + commandListingTokens;
+  const fullListingTokens = Math.max(currentCap?.fullTokens ?? 0, diskListingTokens);
   const listingFamilyTokens = cappedListingTokens(
     skillListingUncappedTokens + commandListingTokens,
     listingCapTokens,
@@ -323,7 +329,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     memoryLocation.disabled || memoryLocation.customDir ? '\u0000' : currentProjectSlug,
     pluginSkillListingTokens,
     {
-      fullTokens: currentCap?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
+      fullTokens: fullListingTokens,
       capTokens: listingCapTokens,
     },
   );
@@ -370,8 +376,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
       effectiveDays: sessionUsage.effectiveLookbackDays,
       cleanupPeriodDays,
     },
-    skillListingUncappedTokens:
-      currentCap?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
+    skillListingUncappedTokens: fullListingTokens,
     ...(measuredStartup ? { measuredStartup } : {}),
     ...(listingVisibility ? { listingVisibility } : {}),
   });

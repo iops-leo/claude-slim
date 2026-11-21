@@ -225,6 +225,12 @@ export async function scan(opts = {}) {
     // lower bound and would understate a listing that fits.
     const currentCap = capForCurrentProject(listingVisibility);
     const listingCapTokens = currentCap?.capTokens;
+    // The full listing as of the measured session, or as on disk now if that is
+    // larger (skills added since). Taking the larger keeps the recovery figure
+    // conservative either way: a stale smaller baseline would promise tokens a
+    // still-overflowing listing cannot free.
+    const diskListingTokens = skillListingUncappedTokens + commandListingTokens;
+    const fullListingTokens = Math.max(currentCap?.fullTokens ?? 0, diskListingTokens);
     const listingFamilyTokens = cappedListingTokens(skillListingUncappedTokens + commandListingTokens, listingCapTokens);
     const totalTokensBefore = listingFamilyTokens +
         agentListingTokens +
@@ -244,7 +250,7 @@ export async function scan(opts = {}) {
     // Memory under ~/.claude/projects/ only reaches the session when auto
     // memory is on and not redirected; otherwise cleaning it recovers nothing.
     memoryLocation.disabled || memoryLocation.customDir ? '\u0000' : currentProjectSlug, pluginSkillListingTokens, {
-        fullTokens: currentCap?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
+        fullTokens: fullListingTokens,
         capTokens: listingCapTokens,
     });
     // Labels below are authored by whoever wrote each skill, plugin, or memory
@@ -289,7 +295,7 @@ export async function scan(opts = {}) {
             effectiveDays: sessionUsage.effectiveLookbackDays,
             cleanupPeriodDays,
         },
-        skillListingUncappedTokens: currentCap?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
+        skillListingUncappedTokens: fullListingTokens,
         ...(measuredStartup ? { measuredStartup } : {}),
         ...(listingVisibility ? { listingVisibility } : {}),
     });
