@@ -41,9 +41,9 @@ describe('effective usage window', () => {
     await session('b', 3);
     await session('c', 1);
     expect((await scanSessionUsage(60)).effectiveLookbackDays).toBe(29);
-    // A log older than the lookback proves the logs reach the whole window,
-    // even if no session happened in its first days.
-    expect((await scanSessionUsage(10)).effectiveLookbackDays).toBe(10);
+    // A log outside the window does not stretch it: a straggler that escaped
+    // cleanup says nothing about the days after it.
+    expect((await scanSessionUsage(10)).effectiveLookbackDays).toBe(3);
   });
 
   it('is 0 with no logs in the window', async () => {

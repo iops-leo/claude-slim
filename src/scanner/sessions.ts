@@ -38,8 +38,10 @@ export interface SessionScanResult {
   totalUserCallableInvocations: number;
   /**
    * Days the surviving logs actually cover: the age of the oldest session log
-   * on disk, capped at the lookback; 0 with no logs in the window. A quiet
-   * stretch with no sessions does not shorten it — only deleted logs do. Claude Code deletes
+   * inside the window (so at most the lookback); 0 with no logs in it. Logs
+   * older than the window are ignored — a lone straggler that escaped cleanup
+   * says nothing about the days after it. A quiet stretch at the start of the
+   * window shortens this too; underclaiming is the safe error. Claude Code deletes
    * logs older than `cleanupPeriodDays`, so this is what "not invoked in Nd"
    * can honestly rest on.
    */
@@ -225,7 +227,7 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
   const projectsDir = join(getClaudeDir(), 'projects');
   const now = Date.now();
   const cutoffMs = now - lookbackDays * DAY_MS;
-  let oldestSessionMs = Infinity;
+  let oldestInWindowMs = Infinity;
   const cache = await loadCache();
   // Pruned cache: only entries seen this scan survive. Keeps the file bounded
   // across many scans even as old session logs get rotated/deleted.
@@ -280,12 +282,12 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
       let mtimeMs: number;
       try { mtimeMs = (await stat(filePath)).mtimeMs; } catch { continue; }
 
-      if (isSession) {
-        sessionsScanned++;
-        if (mtimeMs < oldestSessionMs) oldestSessionMs = mtimeMs;
-      }
+      if (isSession) sessionsScanned++;
       if (mtimeMs < cutoffMs) continue;
-      if (isSession) sessionsInWindow++;
+      if (isSession) {
+        sessionsInWindow++;
+        if (mtimeMs < oldestInWindowMs) oldestInWindowMs = mtimeMs;
+      }
 
       // Cache hit: reuse the parsed result only if mtime matches AND the entry
       // has the v2.6 extension fields (mcpPrefixes / commands). Entries from
@@ -331,7 +333,7 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
 
   const effectiveLookbackDays = sessionsInWindow === 0
     ? 0
-    : Math.min(lookbackDays, Math.max(1, Math.floor((now - oldestSessionMs) / DAY_MS)));
+    : Math.min(lookbackDays, Math.max(1, Math.floor((now - oldestInWindowMs) / DAY_MS)));
 
   return {
     invokedSkills,
