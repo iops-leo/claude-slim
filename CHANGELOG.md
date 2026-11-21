@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Skills invoked by typing `/name` were reported unused. That logs only `<command-name>`, with no Skill tool call, and only Skill calls were counted. Slash invocations now count, including nested names (`org/ship`, `org:ship`, `apps/web:deploy`).
+- Plugins used only through `/plugin:command` or `/plugin:skill` were reported unused, and PLUGIN BREAKDOWN marked them `unused`: commands are stored bare but logged namespaced.
+- "Not invoked in 60d" overclaimed. Claude Code deletes session logs after `cleanupPeriodDays` (default 30), so the evidence covered at most that. Findings now name the span the surviving logs cover ("not invoked in 29d of logs"), the report and `--json` (`usageWindow`) show it, and `doctor` warns when `cleanupPeriodDays` is shorter than the lookback.
+- Claude Code's own usage record in `.claude.json` (`skillUsage`, `pluginUsage`), which outlives log cleanup, is now a usage signal: a skill or plugin it saw used inside the lookback is not reported unused. Read only.
+- Restoring a Codex skill removed the manifest entry of a Claude skill with the same name, stranding its backup. Restore now matches agent and original path.
+- A project with untouched memory but recent sessions was offered as `stale_project`. Its session logs must also be older than 90 days.
+- `clean --project-dir` computed the after-clean figures against the working directory's project.
+- Disabling one plugin marked its whole marketplace disabled, and PLUGINS listed marketplaces while PLUGIN BREAKDOWN listed plugins. Enable state is now per `plugin@marketplace`, PLUGINS lists plugin names, and `disabled_plugin` is raised per plugin.
+- An unparseable `manifest.json` was read as empty and overwritten. It is now kept, copied to `manifest.json.corrupt-<timestamp>`, and clean/restore/report stop with an error.
+- `clean --dry-run` was refused without a TTY, although the skill runs it from a Bash tool. A non-interactive dry run now previews the default (Tier 1) selection.
+- The path guard was lexical, so a symlinked directory under `skills/` (or the plugin cache) let clean move or delete files outside it. The target's parent must now resolve inside one of the managed directories; moving a symlink entry itself still works, as do profiles whose managed directories are links into another profile.
+- `CODEX_HOME` is honoured like `CLAUDE_CONFIG_DIR`.
+- A successful `claude plugin disable` that printed a warning on stderr was treated as a failure, leaving the plugin disabled with no manifest record. The exit code now decides; stderr is shown as a warning.
+- The test suite no longer depends on the developer's `CLAUDE_CONFIG_DIR`/`CODEX_HOME` or runs the real `claude` CLI (which left `backups/.claude.json.backup.*` in the repository).
+
 ### Changed
 
 - Dev toolchain lockfile refreshed to clear five `npm audit` advisories (3 high, 2 moderate): `vitest` / `@vitest/mocker` 4.1.11 → 4.1.12, `vite` 6.4.3 → 8.3.8, `tmp` 0.2.5 → 0.2.7, `source-map-js` 1.2.1 → 1.2.2. All are test-only dependencies; the shipped `dist/` and the runtime dependencies are unchanged.
