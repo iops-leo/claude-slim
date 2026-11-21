@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, rename, access } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename, access, copyFile } from 'node:fs/promises';
 import type { Manifest, ManifestEntry, AnyManifestEntry, DisabledPluginEntry } from './types.js';
 import {
   getDisabledDir as getDir,
@@ -100,20 +100,60 @@ export async function migrateLegacyIfNeeded(): Promise<void> {
   }
 }
 
+/**
+ * The manifest exists but cannot be used. It is the only record of what clean
+ * moved and how to put it back, so nothing may write over it: callers stop
+ * instead of treating it as empty.
+ */
+export class ManifestCorruptError extends Error {
+  constructor(path: string, reason: string, copy: string | null) {
+    super(
+      `The claude-slim manifest at ${path} is unreadable (${reason}). ` +
+      (copy ? `A copy was saved to ${copy}. ` : '') +
+      'Nothing was changed. Repair the file or move it aside, then re-run.',
+    );
+    this.name = 'ManifestCorruptError';
+  }
+}
+
+// One backup copy per corrupt file per run, not one per read.
+const copiedCorrupt = new Map<string, string>();
+
+async function preserveCorrupt(path: string): Promise<string | null> {
+  const done = copiedCorrupt.get(path);
+  if (done) return done;
+  const copy = `${path}.corrupt-${Date.now()}`;
+  try {
+    await copyFile(path, copy);
+    copiedCorrupt.set(path, copy);
+    return copy;
+  } catch {
+    return null;
+  }
+}
+
 export async function readManifestV2(): Promise<Manifest> {
   await migrateLegacyIfNeeded();
 
   const newPath = getManifestPath();
+  let content: string;
   try {
-    const content = await readFile(newPath, 'utf-8');
+    content = await readFile(newPath, 'utf-8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return { version: 2, entries: [] };
+    throw err;
+  }
+  let reason: string;
+  try {
     const parsed = JSON.parse(content);
     if (parsed && parsed.version === 2 && Array.isArray(parsed.entries)) {
       return parsed as Manifest;
     }
-  } catch {
-    // fall through to empty manifest
+    reason = 'not a version 2 manifest';
+  } catch (err) {
+    reason = err instanceof Error ? err.message : 'invalid JSON';
   }
-  return { version: 2, entries: [] };
+  throw new ManifestCorruptError(newPath, reason, await preserveCorrupt(newPath));
 }
 
 export async function writeManifestV2(manifest: Manifest): Promise<void> {

@@ -1,6 +1,6 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve, sep } from 'node:path';
-import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordDisabledPlugin, removeDisabledPlugin } from './manifest.js';
+import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordDisabledPlugin, removeDisabledPlugin, readManifestV2 } from './manifest.js';
 import { assertInsideAgentRoot, getAgentRoot, getAgentDisabledDir, getSkillsDir, getProjectsDir } from './paths.js';
 import type { AgentId } from './paths.js';
 import { disablePlugin, enablePlugin, isClaudeCliAvailable, ClaudeCliMissingError } from './plugin-runtime.js';
@@ -73,6 +73,9 @@ async function recordOrRollback(
 }
 
 export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
+  // Fail before touching anything if the manifest cannot record the moves:
+  // otherwise every item would be moved, fail to record, and roll back one by one.
+  await readManifestV2();
 
   const moved: ManifestEntry[] = [];
   const skipped: string[] = [];

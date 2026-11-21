@@ -9,7 +9,7 @@ import { initTokenizer, flushCache } from './tokenizer.js';
 import { scan, SKILL_PROMPT_OVERHEAD_TOKENS } from './scanner.js';
 import { cleanIssues, restoreItem } from './cleaner.js';
 import { isDisabledMcpEntry } from './mcp-cleanup.js';
-import { readManifest } from './manifest.js';
+import { readManifest, ManifestCorruptError } from './manifest.js';
 import {
   formatScanSummary,
   formatReportBox,
@@ -603,4 +603,13 @@ function askUser(prompt: string): Promise<string> {
   });
 }
 
-program.parse();
+program.parseAsync().catch((err: unknown) => {
+  // An unreadable manifest stops clean/restore/report before they write.
+  // Say so plainly instead of dumping a stack trace.
+  if (err instanceof ManifestCorruptError) {
+    console.error(`\n  error: ${err.message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  throw err;
+});
