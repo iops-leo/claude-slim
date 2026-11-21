@@ -195,6 +195,18 @@ export interface ScanResult {
    * vanish: it is what re-enabling everything would cost.
    */
   disabledPluginSkillTokens: number;
+  /**
+   * What the unused-* findings rest on. `effectiveDays` is how far back the
+   * surviving session logs reach (≤ `lookbackDays`); Claude Code deletes logs
+   * older than `cleanupPeriodDays`. Optional only for hand-built fixtures.
+   */
+  usageWindow?: UsageWindow;
+}
+
+export interface UsageWindow {
+  lookbackDays: number;
+  effectiveDays: number;
+  cleanupPeriodDays: number;
 }
 
 // Flat "skill/memory moved" record written by the cleaner.

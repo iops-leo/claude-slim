@@ -34,6 +34,11 @@ export interface DetectorContext {
   // or schema drift; see scanner/sessions.ts).
   sessionDataAvailable: boolean;
   lookbackDays: number;
+  /**
+   * Days the surviving session logs cover (see SessionScanResult). Absent
+   * means the whole lookback. Issue details claim only this much.
+   */
+  effectiveLookbackDays?: number;
   // v2.6 unused_plugin detector fields
   pluginSurfaces: PluginSurfaces[];
   enabledPlugins: Array<{ name: string; marketplace: string }>;
@@ -51,6 +56,17 @@ export interface DetectorContext {
   /** `~/.claude.json` project key local-scope servers live under. */
   mcpProjectKey: string;
   claudeJsonPath: string;
+}
+
+/**
+ * The span an "unused" finding rests on. Claude Code deletes logs after
+ * `cleanupPeriodDays`, so a 60-day lookback may be backed by 30 days of logs;
+ * saying "60d" then overclaims.
+ */
+function usageWindowLabel(lookbackDays: number, effective: number | undefined): string {
+  return effective !== undefined && effective < lookbackDays
+    ? `${effective}d of logs`
+    : `${lookbackDays}d`;
 }
 
 // A Detector is a pure function of context → Issue[]. Add a new detector by
@@ -231,6 +247,7 @@ const unusedSkillDetector: Detector = {
     recentMcpPrefixes,
     sessionDataAvailable,
     lookbackDays,
+    effectiveLookbackDays,
   }) {
     // Suppress entirely when the data source is unreliable — better no signal
     // than a wrong one that flags every skill as unused.
@@ -248,7 +265,7 @@ const unusedSkillDetector: Detector = {
         type: 'unused_skill',
         tier: 3,
         name: skill.name,
-        detail: `not invoked in ${lookbackDays}d`,
+        detail: `not invoked in ${usageWindowLabel(lookbackDays, effectiveLookbackDays)}`,
         tokens: skill.tokens,
         path: skill.path,
       });
@@ -269,6 +286,7 @@ const unusedPluginDetector: Detector = {
     totalUserCallableInvocations,
     sessionsInWindow,
     lookbackDays,
+    effectiveLookbackDays,
     pluginCosts,
   }) {
     // (a) Global suppression: too few sessions to draw a conclusion
@@ -306,7 +324,7 @@ const unusedPluginDetector: Detector = {
         tier: 3,
         name: ps.pluginName,
         marketplace: ps.marketplace,
-        detail: `not invoked in ${lookbackDays}d (${ps.marketplace})`,
+        detail: `not invoked in ${usageWindowLabel(lookbackDays, effectiveLookbackDays)} (${ps.marketplace})`,
         tokens: pluginCosts.get(ps.pluginName) ?? 0,
         path: ps.installDir,
       });
@@ -341,7 +359,7 @@ const unusedMcpDetector: Detector = {
   name: 'unused_mcp',
   detect({
     mcpServers, recentMcpPrefixes, sessionsInWindow, totalUserCallableInvocations,
-    lookbackDays, mcpProjectKey, claudeJsonPath,
+    lookbackDays, effectiveLookbackDays, mcpProjectKey, claudeJsonPath,
   }) {
     // Same global suppressions as unused_plugin.
     if (sessionsInWindow < 3) return [];
@@ -358,7 +376,7 @@ const unusedMcpDetector: Detector = {
         tier: 3,
         name: server.name,
         mcpScope: server.scope,
-        detail: `no tool called in ${lookbackDays}d (${server.scope} scope)`,
+        detail: `no tool called in ${usageWindowLabel(lookbackDays, effectiveLookbackDays)} (${server.scope} scope)`,
         tokens: MCP_SERVER_TOOLS_AVG * DEFERRED_TOOL_OVERHEAD_TOKENS,
         path: server.scope === 'local' ? mcpProjectKey : claudeJsonPath,
       });

@@ -1,6 +1,7 @@
 import { readFile, readdir, stat, writeFile, mkdir, rename } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { getClaudeDir } from '../paths.js';
+import { readJson } from './settings-sources.js';
 
 const CACHE_VERSION = 1;
 // Below this many sessions in the lookback window we suppress unused-skill
@@ -35,6 +36,26 @@ export interface SessionScanResult {
   // Total of skill + mcp + command invocations (raw event count, not unique);
   // used by suppression logic — 0 means no user-callable tool was ever invoked.
   totalUserCallableInvocations: number;
+  /**
+   * Days the surviving logs actually cover: the age of the oldest session log
+   * on disk, capped at the lookback; 0 with no logs in the window. A quiet
+   * stretch with no sessions does not shorten it — only deleted logs do. Claude Code deletes
+   * logs older than `cleanupPeriodDays`, so this is what "not invoked in Nd"
+   * can honestly rest on.
+   */
+  effectiveLookbackDays: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Claude Code's default `cleanupPeriodDays`. */
+export const DEFAULT_CLEANUP_PERIOD_DAYS = 30;
+
+/** `cleanupPeriodDays` from this profile's settings.json, else Claude Code's default. */
+export async function readCleanupPeriodDays(): Promise<number> {
+  const settings = await readJson(join(getClaudeDir(), 'settings.json'));
+  const v = settings?.cleanupPeriodDays;
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : DEFAULT_CLEANUP_PERIOD_DAYS;
 }
 
 // Parsed result for a single JSONL file
@@ -202,7 +223,9 @@ function parseTranscript(content: string): FileParseResult {
 // re-read files that have changed.
 export async function scanSessionUsage(lookbackDays: number): Promise<SessionScanResult> {
   const projectsDir = join(getClaudeDir(), 'projects');
-  const cutoffMs = Date.now() - lookbackDays * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const cutoffMs = now - lookbackDays * DAY_MS;
+  let oldestSessionMs = Infinity;
   const cache = await loadCache();
   // Pruned cache: only entries seen this scan survive. Keeps the file bounded
   // across many scans even as old session logs get rotated/deleted.
@@ -226,6 +249,7 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
       mcpPrefixesInvoked,
       commandsInvoked,
       totalUserCallableInvocations: 0,
+      effectiveLookbackDays: 0,
     };
   }
 
@@ -256,7 +280,10 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
       let mtimeMs: number;
       try { mtimeMs = (await stat(filePath)).mtimeMs; } catch { continue; }
 
-      if (isSession) sessionsScanned++;
+      if (isSession) {
+        sessionsScanned++;
+        if (mtimeMs < oldestSessionMs) oldestSessionMs = mtimeMs;
+      }
       if (mtimeMs < cutoffMs) continue;
       if (isSession) sessionsInWindow++;
 
@@ -302,6 +329,10 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
 
   await saveCache({ version: CACHE_VERSION, entries: newEntries });
 
+  const effectiveLookbackDays = sessionsInWindow === 0
+    ? 0
+    : Math.min(lookbackDays, Math.max(1, Math.floor((now - oldestSessionMs) / DAY_MS)));
+
   return {
     invokedSkills,
     dataAvailable,
@@ -310,5 +341,6 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
     mcpPrefixesInvoked,
     commandsInvoked,
     totalUserCallableInvocations,
+    effectiveLookbackDays,
   };
 }

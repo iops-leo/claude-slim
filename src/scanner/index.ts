@@ -18,7 +18,7 @@ import { resolveProjectMemory } from './project-memory.js';
 import { scanMcpServers, getClaudeJsonPath } from './mcp.js';
 import { parseClaudeMdSections } from './claude-md.js';
 import { getDisabledPlugins, getInstalledPlugins } from './disabled-plugins.js';
-import { scanSessionUsage } from './sessions.js';
+import { scanSessionUsage, readCleanupPeriodDays } from './sessions.js';
 import { readUsageRecord } from './usage-record.js';
 import { classifyIssues } from './detectors.js';
 import { scanPluginSurfaces } from './plugin-surfaces.js';
@@ -70,6 +70,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     scanUserRules(),
     readUsageRecord(lookbackDays),
   ]);
+  const cleanupPeriodDays = await readCleanupPeriodDays();
 
   // Skills seen in a surviving transcript, plus those Claude Code's own usage
   // record (`skillUsage`, which outlives log cleanup) saw inside the lookback.
@@ -138,6 +139,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     usedPlugins: usageRecord.plugins,
     sessionDataAvailable: sessionUsage.dataAvailable,
     lookbackDays,
+    effectiveLookbackDays: sessionUsage.effectiveLookbackDays,
     pluginSurfaces,
     enabledPlugins,
     recentMcpPrefixes: sessionUsage.mcpPrefixesInvoked,
@@ -318,6 +320,11 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     allProjectsMemoryTokens,
     recoverableStartupTokens,
     disabledPluginSkillTokens,
+    usageWindow: {
+      lookbackDays,
+      effectiveDays: sessionUsage.effectiveLookbackDays,
+      cleanupPeriodDays,
+    },
   });
 }
 

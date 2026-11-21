@@ -401,6 +401,13 @@ export function formatScanSummary(result: ScanResult): string {
     lines.push('  \x1b[32mAlready slim!\x1b[0m No issues found.');
   } else {
     lines.push(`\x1b[1m  ISSUES\x1b[0m (${result.issues.length} found)`);
+    const win = result.usageWindow;
+    if (win && win.effectiveDays < win.lookbackDays) {
+      lines.push(
+        `  \x1b[33m!\x1b[0m Usage findings rest on ${win.effectiveDays}d of session logs, not the ${win.lookbackDays}d lookback:\n` +
+        `    Claude Code deletes logs after cleanupPeriodDays (${win.cleanupPeriodDays}). Raise it in settings.json for a longer record.`,
+      );
+    }
     lines.push('');
 
     const tierLabels: Record<number, string> = { 1: 'Auto', 2: 'Recommended', 3: 'Optional' };
