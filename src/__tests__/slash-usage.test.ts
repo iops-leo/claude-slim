@@ -144,3 +144,31 @@ describe('PLUGIN BREAKDOWN — used column matches namespaced slash invocations'
     expect(row.status).toBe('used');
   });
 });
+
+describe('slash-only users still get unused-skill findings', () => {
+  it('lets an installed skill seen through /name satisfy the reliability gate', () => {
+    const issues = unusedSkill.detect(
+      ctx({
+        localSkills: [skill('daily'), skill('weekly')],
+        recentSkillInvocations: new Set(),
+        recentCommands: new Set(['daily']),
+        sessionDataAvailable: false,
+        sessionsInWindow: 4,
+      }),
+    );
+    expect(issues.map((i) => i.name)).toEqual(['weekly']);
+  });
+
+  it('stays silent when nothing installed is seen in use', () => {
+    const issues = unusedSkill.detect(
+      ctx({
+        localSkills: [skill('daily'), skill('weekly')],
+        recentSkillInvocations: new Set(),
+        recentCommands: new Set(['clear', 'model']),
+        sessionDataAvailable: false,
+        sessionsInWindow: 4,
+      }),
+    );
+    expect(issues).toEqual([]);
+  });
+});

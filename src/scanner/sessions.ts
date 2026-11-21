@@ -39,7 +39,8 @@ export interface SessionScanResult {
   /**
    * Days the surviving logs actually cover; 0 with no logs in the window.
    * When `cleanupPeriodDays` keeps logs at least as long as the lookback,
-   * nothing in the window was deleted and this is the whole lookback.
+   * nothing in the window was deleted and this is the age of the oldest log
+   * on disk, capped at the lookback.
    * Otherwise it is the age of the oldest session log inside the window,
    * rounded up and capped at the lookback. Logs older than the window are
    * ignored — a lone straggler that escaped cleanup says nothing about the
@@ -230,6 +231,7 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
   const now = Date.now();
   const cutoffMs = now - lookbackDays * DAY_MS;
   let oldestInWindowMs = Infinity;
+  let oldestAnyMs = Infinity;
   const cache = await loadCache();
   // Pruned cache: only entries seen this scan survive. Keeps the file bounded
   // across many scans even as old session logs get rotated/deleted.
@@ -284,7 +286,10 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
       let mtimeMs: number;
       try { mtimeMs = (await stat(filePath)).mtimeMs; } catch { continue; }
 
-      if (isSession) sessionsScanned++;
+      if (isSession) {
+        sessionsScanned++;
+        if (mtimeMs < oldestAnyMs) oldestAnyMs = mtimeMs;
+      }
       if (mtimeMs < cutoffMs) continue;
       if (isSession) {
         sessionsInWindow++;
@@ -333,12 +338,17 @@ export async function scanSessionUsage(lookbackDays: number): Promise<SessionSca
 
   await saveCache({ version: CACHE_VERSION, entries: newEntries });
 
+  // Retention is a ceiling, not proof of history: a profile reset two days ago
+  // has two days of logs whatever cleanupPeriodDays says. When nothing in the
+  // window can have been deleted, coverage runs back to the oldest log at all
+  // (so a log just past the window counts as the full lookback). Otherwise a
+  // straggler older than the window says nothing about the days after it, and
+  // only logs inside the window count.
   const keptLongEnough = (await readCleanupPeriodDays()) >= lookbackDays;
+  const oldestMs = keptLongEnough ? oldestAnyMs : oldestInWindowMs;
   const effectiveLookbackDays = sessionsInWindow === 0
     ? 0
-    : keptLongEnough
-      ? lookbackDays
-      : Math.min(lookbackDays, Math.max(1, Math.ceil((now - oldestInWindowMs) / DAY_MS)));
+    : Math.min(lookbackDays, Math.max(1, Math.ceil((now - oldestMs) / DAY_MS)));
 
   return {
     invokedSkills,

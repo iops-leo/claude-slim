@@ -9,7 +9,8 @@ export interface SessionScanResult {
     /**
      * Days the surviving logs actually cover; 0 with no logs in the window.
      * When `cleanupPeriodDays` keeps logs at least as long as the lookback,
-     * nothing in the window was deleted and this is the whole lookback.
+     * nothing in the window was deleted and this is the age of the oldest log
+     * on disk, capped at the lookback.
      * Otherwise it is the age of the oldest session log inside the window,
      * rounded up and capped at the lookback. Logs older than the window are
      * ignored — a lone straggler that escaped cleanup says nothing about the

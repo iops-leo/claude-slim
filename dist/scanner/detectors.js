@@ -169,16 +169,21 @@ const staleProjectDetector = {
 };
 const unusedSkillDetector = {
     name: 'unused_skill',
-    detect({ localSkills, recentSkillInvocations, recentCommands, recentMcpPrefixes, sessionDataAvailable, lookbackDays, effectiveLookbackDays, }) {
-        // Suppress entirely when the data source is unreliable — better no signal
-        // than a wrong one that flags every skill as unused.
-        if (!sessionDataAvailable)
-            return [];
+    detect({ localSkills, recentSkillInvocations, recentCommands, recentMcpPrefixes, sessionDataAvailable, sessionsInWindow, lookbackDays, effectiveLookbackDays, }) {
         const signals = {
             skills: recentSkillInvocations,
             commands: recentCommands,
             mcpPrefixes: recentMcpPrefixes,
         };
+        // Suppress entirely when the data source is unreliable — better no signal
+        // than a wrong one that flags every skill as unused. `sessionDataAvailable`
+        // needs a Skill tool call; someone who only types `/daily` never makes one.
+        // An installed skill seen in use by any signal proves the logs parse just
+        // as well, so it satisfies the gate too.
+        const corroborated = sessionDataAvailable ||
+            (sessionsInWindow >= 3 && localSkills.some((s) => isLocalSkillUsed(s.name, signals)));
+        if (!corroborated)
+            return [];
         const issues = [];
         for (const skill of localSkills) {
             if (isLocalSkillUsed(skill.name, signals))

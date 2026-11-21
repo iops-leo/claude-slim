@@ -65,6 +65,14 @@ describe('effective usage window', () => {
     expect((await scanSessionUsage(60)).effectiveLookbackDays).toBe(60);
   });
 
+  it('does not claim history a long retention merely permits', async () => {
+    // Reset two days ago, cleanupPeriodDays 90: two days of logs, not 60.
+    await writeFile(join(tmp.claudeDir, 'settings.json'), JSON.stringify({ cleanupPeriodDays: 90 }));
+    await session('a', 1.5);
+    await session('b', 0.5);
+    expect((await scanSessionUsage(60)).effectiveLookbackDays).toBe(2);
+  });
+
   it('reads cleanupPeriodDays from settings.json, defaulting to 30', async () => {
     expect(await readCleanupPeriodDays()).toBe(30);
     await writeFile(join(tmp.claudeDir, 'settings.json'), JSON.stringify({ cleanupPeriodDays: 90 }));
