@@ -29,6 +29,29 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+// ─── exit code is the truth ───────────────────────────────────────────────────
+// A successful `claude plugin disable` that prints a warning on stderr was
+// treated as a failure: the plugin ended up disabled with no manifest record,
+// so `restore` could not bring it back.
+describe('stderr on a zero exit', () => {
+  it('disablePlugin resolves and surfaces the warning', async () => {
+    vi.mocked(childProcess.execFile).mockImplementation(
+      makeExecFile({ stderr: 'Warning: settings migrated' }) as never,
+    );
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(disablePlugin('my-plugin')).resolves.toBeUndefined();
+    expect(warn.mock.calls.flat().join(' ')).toContain('Warning: settings migrated');
+    warn.mockRestore();
+  });
+
+  it('enablePlugin resolves too', async () => {
+    vi.mocked(childProcess.execFile).mockImplementation(makeExecFile({ stderr: 'note' }) as never);
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(enablePlugin('my-plugin')).resolves.toBeUndefined();
+    warn.mockRestore();
+  });
+});
+
 // ─── disablePlugin ────────────────────────────────────────────────────────────
 
 describe('disablePlugin', () => {
