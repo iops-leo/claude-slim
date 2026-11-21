@@ -33,6 +33,7 @@ import {
   analyzeListingVisibility,
   cappedListingTokens,
   cappedRecovery,
+  capForCurrentProject,
   type ListingVisibility,
 } from './listing-visibility.js';
 import { listingSettingsFrom } from './listing-settings.js';
@@ -286,7 +287,8 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
   // User commands share the skill listing and its budget. The cap applies only
   // when the measured listing overflowed — below the budget it is merely a
   // lower bound and would understate a listing that fits.
-  const listingCapTokens = listingVisibility?.overBudget?.capTokens;
+  const currentCap = capForCurrentProject(listingVisibility);
+  const listingCapTokens = currentCap?.capTokens;
   const listingFamilyTokens = cappedListingTokens(
     skillListingUncappedTokens + commandListingTokens,
     listingCapTokens,
@@ -321,7 +323,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     memoryLocation.disabled || memoryLocation.customDir ? '\u0000' : currentProjectSlug,
     pluginSkillListingTokens,
     {
-      fullTokens: listingVisibility?.overBudget?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
+      fullTokens: currentCap?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
       capTokens: listingCapTokens,
     },
   );
@@ -369,7 +371,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
       cleanupPeriodDays,
     },
     skillListingUncappedTokens:
-      listingVisibility?.overBudget?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
+      currentCap?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
     ...(measuredStartup ? { measuredStartup } : {}),
     ...(listingVisibility ? { listingVisibility } : {}),
   });

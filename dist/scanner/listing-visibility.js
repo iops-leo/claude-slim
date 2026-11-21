@@ -122,6 +122,14 @@ export function analyzeListingVisibility(m, ctx) {
         restoredIfFlaggedCleaned: restored,
     };
 }
+/**
+ * The overflow figures to apply to this project's estimate. A measurement
+ * borrowed from another project is still worth showing, but its cap is not:
+ * project skills and settings differ, so only that listing may overflow.
+ */
+export function capForCurrentProject(v) {
+    return v && !v.fromOtherProject ? v.overBudget : undefined;
+}
 /** The skill listing never costs more than its budget. */
 export function cappedListingTokens(fullTokens, capTokens) {
     return capTokens === undefined ? fullTokens : Math.min(fullTokens, capTokens);

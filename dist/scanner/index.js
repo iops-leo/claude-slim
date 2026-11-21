@@ -28,7 +28,7 @@ import { scanUserRules } from './rules.js';
 import { resolveClaudeMdImports } from './claude-md-imports.js';
 import { sanitizeScanResult } from './untrusted.js';
 import { findMeasuredSession } from './measured-startup.js';
-import { analyzeListingVisibility, cappedListingTokens, cappedRecovery, } from './listing-visibility.js';
+import { analyzeListingVisibility, cappedListingTokens, cappedRecovery, capForCurrentProject, } from './listing-visibility.js';
 import { listingSettingsFrom } from './listing-settings.js';
 const DEFAULT_LOOKBACK_DAYS = 60;
 export async function scan(opts = {}) {
@@ -223,7 +223,8 @@ export async function scan(opts = {}) {
     // User commands share the skill listing and its budget. The cap applies only
     // when the measured listing overflowed — below the budget it is merely a
     // lower bound and would understate a listing that fits.
-    const listingCapTokens = listingVisibility?.overBudget?.capTokens;
+    const currentCap = capForCurrentProject(listingVisibility);
+    const listingCapTokens = currentCap?.capTokens;
     const listingFamilyTokens = cappedListingTokens(skillListingUncappedTokens + commandListingTokens, listingCapTokens);
     const totalTokensBefore = listingFamilyTokens +
         agentListingTokens +
@@ -243,7 +244,7 @@ export async function scan(opts = {}) {
     // Memory under ~/.claude/projects/ only reaches the session when auto
     // memory is on and not redirected; otherwise cleaning it recovers nothing.
     memoryLocation.disabled || memoryLocation.customDir ? '\u0000' : currentProjectSlug, pluginSkillListingTokens, {
-        fullTokens: listingVisibility?.overBudget?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
+        fullTokens: currentCap?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
         capTokens: listingCapTokens,
     });
     // Labels below are authored by whoever wrote each skill, plugin, or memory
@@ -288,7 +289,7 @@ export async function scan(opts = {}) {
             effectiveDays: sessionUsage.effectiveLookbackDays,
             cleanupPeriodDays,
         },
-        skillListingUncappedTokens: listingVisibility?.overBudget?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
+        skillListingUncappedTokens: currentCap?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
         ...(measuredStartup ? { measuredStartup } : {}),
         ...(listingVisibility ? { listingVisibility } : {}),
     });

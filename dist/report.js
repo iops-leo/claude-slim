@@ -298,7 +298,7 @@ export function formatScanSummary(result) {
     lines.push('');
     lines.push(`\x1b[1m  ESTIMATED OVERHEAD\x1b[0m: ~${result.totalTokensBefore.toLocaleString()} tokens at session start`);
     const uncapped = result.skillListingUncappedTokens;
-    const cap = result.listingVisibility?.overBudget?.capTokens;
+    const cap = result.listingVisibility?.fromOtherProject ? undefined : result.listingVisibility?.overBudget?.capTokens;
     if (uncapped !== undefined && cap !== undefined && uncapped > cap) {
         // Over budget, Claude Code drops descriptions rather than growing the
         // prompt — so the listing costs the budget, and removing skills frees

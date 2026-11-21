@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The startup estimate counts an over-budget skill listing at its budget instead of summing every skill's line, and `RECOVERABLE` applies the same cap: removing skills from a listing that stays over budget brings descriptions back rather than shrinking the prompt. The cap applies only when a session log shows the budgeted listing; the uncapped figure is reported as `skillListingUncappedTokens`.
+- The startup estimate counts an over-budget skill listing at its budget instead of summing every skill's line, and `RECOVERABLE` applies the same cap: removing skills from a listing that stays over budget brings descriptions back rather than shrinking the prompt. The cap applies only when a session log from the current project shows the listing overflowing; the uncapped figure is reported as `skillListingUncappedTokens`.
 - Dev toolchain lockfile refreshed to clear five `npm audit` advisories (3 high, 2 moderate): `vitest` / `@vitest/mocker` 4.1.11 → 4.1.12, `vite` 6.4.3 → 8.3.8, `tmp` 0.2.5 → 0.2.7, `source-map-js` 1.2.1 → 1.2.2. All are test-only dependencies; the shipped `dist/` and the runtime dependencies are unchanged.
 - `.nvmrc` / `.node-version` pin moved from 22.12.0 to 22.23.4.
 

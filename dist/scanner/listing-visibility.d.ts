@@ -66,6 +66,12 @@ export interface VisibilityContext {
     now: number;
 }
 export declare function analyzeListingVisibility(m: MeasuredStartup | null, ctx: VisibilityContext): ListingVisibility | null;
+/**
+ * The overflow figures to apply to this project's estimate. A measurement
+ * borrowed from another project is still worth showing, but its cap is not:
+ * project skills and settings differ, so only that listing may overflow.
+ */
+export declare function capForCurrentProject(v: ListingVisibility | null | undefined): ListingVisibility['overBudget'];
 /** The skill listing never costs more than its budget. */
 export declare function cappedListingTokens(fullTokens: number, capTokens: number | undefined): number;
 /**

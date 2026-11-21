@@ -5,6 +5,7 @@ import {
   analyzeListingVisibility,
   cappedListingTokens,
   cappedRecovery,
+  capForCurrentProject,
   type VisibilityContext,
 } from '../scanner/listing-visibility.js';
 import type { MeasuredStartup } from '../scanner/measured-startup.js';
@@ -196,5 +197,20 @@ describe('cappedListingTokens / cappedRecovery', () => {
     expect(cappedRecovery(12_000, 3_000, 10_000)).toBe(1_000);
     expect(cappedRecovery(8_000, 1_000, 10_000)).toBe(1_000);
     expect(cappedRecovery(8_000, 1_000, undefined)).toBe(1_000);
+  });
+});
+
+describe('capForCurrentProject', () => {
+  it('applies an overflow cap only when the measurement is from this project', () => {
+    const m = measured([
+      { name: 'f', width: 5_990, collapsed: false },
+      { name: 'c1', width: 4, collapsed: true },
+    ]);
+    const own = analyzeListingVisibility(m, ctx({}))!;
+    expect(capForCurrentProject(own)).toEqual(own.overBudget);
+    const borrowed = analyzeListingVisibility({ ...m, fromOtherProject: true }, ctx({}))!;
+    expect(borrowed.overBudget).toBeDefined();
+    expect(capForCurrentProject(borrowed)).toBeUndefined();
+    expect(capForCurrentProject(null)).toBeUndefined();
   });
 });
