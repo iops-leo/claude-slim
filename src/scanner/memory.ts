@@ -49,6 +49,19 @@ export function memoryIndexStartupSlice(content: string): { text: string; trunca
   return { text, truncated };
 }
 
+/** Newest mtime among a project's session logs (`<project>/*.jsonl`), or 0. */
+async function newestSessionMtime(projectDir: string): Promise<number> {
+  let newest = 0;
+  for (const entry of await safeReaddir(projectDir)) {
+    if (!entry.endsWith('.jsonl')) continue;
+    try {
+      const s = await stat(join(projectDir, entry));
+      if (s.mtimeMs > newest) newest = s.mtimeMs;
+    } catch { /* skip */ }
+  }
+  return newest;
+}
+
 export async function scanMemoryFiles(): Promise<MemoryScanResult> {
   const memoryFiles: MemoryFile[] = [];
   const staleProjects: StaleProject[] = [];
@@ -101,9 +114,11 @@ export async function scanMemoryFiles(): Promise<MemoryScanResult> {
       }
     }
 
-    // Check for stale project (no files modified in 90+ days)
+    // Stale = neither its memory nor its session logs touched in 90+ days. A
+    // project with settled memory but a session yesterday is in active use.
     if (mdFiles.length > 0 && newestMtime > 0) {
-      const ageDays = Math.floor((now - newestMtime) / (1000 * 60 * 60 * 24));
+      const newestActivity = Math.max(newestMtime, await newestSessionMtime(join(projectsDir, project)));
+      const ageDays = Math.floor((now - newestActivity) / (1000 * 60 * 60 * 24));
       if (ageDays > STALE_DAYS) {
         staleProjects.push({ project, path: memDir, ageDays, fileCount: mdFiles.length, totalBytes });
       }
