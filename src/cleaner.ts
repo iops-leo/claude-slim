@@ -348,5 +348,8 @@ export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry | D
     await rename(src, legacyEntry.from);
   }
 
-  await removeEntry(legacyEntry.name);
+  await removeEntry(legacyEntry.name, {
+    agent: legacyEntry.agent ?? 'claude',
+    from: legacyEntry.from,
+  });
 }

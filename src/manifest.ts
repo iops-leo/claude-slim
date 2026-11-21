@@ -132,13 +132,25 @@ export async function addEntry(entry: AnyManifestEntry): Promise<void> {
   await writeManifestV2(m);
 }
 
-export async function removeEntry(name: string): Promise<ManifestEntry | null> {
+/**
+ * Remove one skill/memory entry. Pass `match` to pin it to an agent and
+ * original path: a Claude skill and a Codex skill can share a name, and a
+ * name-only match let restoring one erase the other's record.
+ */
+export async function removeEntry(
+  name: string,
+  match?: { agent?: AgentId; from?: string },
+): Promise<ManifestEntry | null> {
   const m = await readManifestV2();
   // Name-addressed removal is for skill/memory entries only; plugin and MCP
   // records have their own keys and a same-named skill must not clear them.
-  const idx = m.entries.findIndex(
-    (e) => !isDisabledPluginEntry(e) && e.type !== 'unused_mcp' && e.name === name,
-  );
+  const idx = m.entries.findIndex((e) => {
+    if (isDisabledPluginEntry(e) || e.type === 'unused_mcp' || e.name !== name) return false;
+    if (!match) return true;
+    const entry = e as ManifestEntry;
+    if (match.agent !== undefined && (entry.agent ?? 'claude') !== match.agent) return false;
+    return match.from === undefined || entry.from === match.from;
+  });
   if (idx === -1) return null;
   const [removed] = m.entries.splice(idx, 1);
   await writeManifestV2(m);
