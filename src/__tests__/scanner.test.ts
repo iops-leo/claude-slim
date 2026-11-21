@@ -136,7 +136,7 @@ describe('parseDisabledPlugins', () => {
     expect(parseDisabledPlugins('').size).toBe(0);
   });
 
-  it('extracts marketplace name from sub-plugin@marketplace entries', () => {
+  it('keys disabled entries by plugin@marketplace', () => {
     const output = [
       '❯ alpha@marketplace-one',
       '  disabled',
@@ -144,14 +144,14 @@ describe('parseDisabledPlugins', () => {
       '  enabled',
     ].join('\n');
     const result = parseDisabledPlugins(output);
-    expect(result.has('marketplace-one')).toBe(true);
-    expect(result.has('marketplace-two')).toBe(false);
+    expect(result.has('alpha@marketplace-one')).toBe(true);
+    expect(result.has('beta@marketplace-two')).toBe(false);
   });
 
-  it('falls back to full name when no @ separator', () => {
+  it('uses the full name on both sides when there is no @ separator', () => {
     const output = '❯ solo-plugin\n  disabled\n';
     const result = parseDisabledPlugins(output);
-    expect(result.has('solo-plugin')).toBe(true);
+    expect(result.has('solo-plugin@solo-plugin')).toBe(true);
   });
 
   it('handles mixed enabled/disabled entries', () => {
@@ -164,13 +164,13 @@ describe('parseDisabledPlugins', () => {
       '  disabled',
     ].join('\n');
     const result = parseDisabledPlugins(output);
-    expect(Array.from(result).sort()).toEqual(['m2', 'm3']);
+    expect(Array.from(result).sort()).toEqual(['b@m2', 'c@m3']);
   });
 
   it('is case-insensitive for enabled/disabled tokens', () => {
     const output = '❯ a@m1\n  DISABLED\n❯ b@m2\n  Enabled\n';
-    expect(parseDisabledPlugins(output).has('m1')).toBe(true);
-    expect(parseDisabledPlugins(output).has('m2')).toBe(false);
+    expect(parseDisabledPlugins(output).has('a@m1')).toBe(true);
+    expect(parseDisabledPlugins(output).has('b@m2')).toBe(false);
   });
 
   it('ignores dangling status line without a preceding entry', () => {

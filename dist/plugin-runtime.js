@@ -42,9 +42,11 @@ function runPluginCommand(subcommand, name) {
                 reject(new Error(`${err.message}${detail}`));
                 return;
             }
+            // Exit status is the truth. A zero exit with stderr output (a
+            // deprecation or migration notice) still did the work; rejecting it
+            // left a plugin disabled with no manifest record to restore it from.
             if (stderr?.trim()) {
-                reject(new Error(stderr.trim()));
-                return;
+                console.error(`  \x1b[33m!\x1b[0m claude plugin ${subcommand} ${name}: ${stderr.trim()}`);
             }
             resolve();
         });

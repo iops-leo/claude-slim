@@ -2,22 +2,20 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { createInterface } from 'node:readline';
 import { Command } from 'commander';
 import { initTokenizer, flushCache } from './tokenizer.js';
 import { scan, SKILL_PROMPT_OVERHEAD_TOKENS } from './scanner.js';
-import { cleanIssues, restoreItem } from './cleaner.js';
+import { restoreItem } from './cleaner.js';
 import { isDisabledMcpEntry } from './mcp-cleanup.js';
-import { readManifest } from './manifest.js';
+import { readManifest, ManifestCorruptError } from './manifest.js';
 import { formatScanSummary, formatReportBox, calculateReport, } from './report.js';
 import { collectDoctorReport, formatDoctorReport } from './doctor.js';
-import { looksLikeToolInstallDir, projectDirError, getDisabledDir } from './paths.js';
+import { runCleanPipeline, resolveProjectDir, askUser, warnIgnoredSelection } from './clean-pipeline.js';
 import { checkForUpdate, formatUpdateNotice } from './update-check.js';
 import { confirmDecision, planUpdate, renderStep, runUpdate } from './update-run.js';
 import { scanCodex } from './codex/index.js';
 import { formatCodexSummary } from './codex/report.js';
-import { classifyCodexIssues } from './codex/detectors.js';
-import { resolveSelection, resolveRestoreSelection, parseSelection } from './selection.js';
+import { resolveRestoreSelection } from './selection.js';
 const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
 const { version: PKG_VERSION } = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 // Parse a non-negative-integer CLI option, keeping explicit 0 distinct from an
@@ -376,152 +374,13 @@ program.action(async () => {
     }
     await runCleanPipeline({ dryRun: false, auto: false, sessionsPerDay: 2, lookbackDays: 60, codex: true });
 });
-/**
- * Name the fragments of a selection that were thrown away.
- *
- * Silence here is dangerous in one direction only: the user believes they
- * selected more than they did, sees a short confirmation, and assumes the rest
- * is coming. Keywords (`all`, `none`, empty) are handled by the resolvers and
- * are not fragments, so they are not reported as invalid.
- */
-function warnIgnoredSelection(input, count) {
-    const trimmed = input.trim().toLowerCase();
-    if (trimmed === '' || ['all', 'a', 'none', 'n', 'enter'].includes(trimmed))
-        return;
-    const { invalid } = parseSelection(trimmed, count);
-    if (invalid.length === 0)
-        return;
-    console.log(`  \x1b[33m!\x1b[0m Ignored ${invalid.length} unrecognised entr${invalid.length === 1 ? 'y' : 'ies'}: ` +
-        `${invalid.join(', ')}  \x1b[90m(valid: 1-${count}, e.g. "3", "5-12")\x1b[0m`);
-}
-/**
- * Resolve which directory's project memory counts toward the startup estimate.
- *
- * Warns when the CLI is running from its own install directory and no explicit
- * directory was given: the slug would resolve to the plugin cache, match no
- * project, and silently zero out every project-memory token. Warning beats
- * guessing — we cannot know which project the user meant.
- *
- * A `--project-dir` that does not exist is a hard error rather than a warning.
- * The slug is derived from the path string, so a typo happily resolves to a
- * slug that matches nothing and reports 0 — reintroducing, through the very
- * flag added to prevent it, the silent zero of v2.12.1. An explicit flag with a
- * bad value is unambiguously a mistake, so fail instead of guessing.
- */
-function resolveProjectDir(explicit) {
-    if (explicit) {
-        const err = projectDirError(explicit);
-        if (err) {
-            // Exit rather than fall back to cwd: continuing would print a full,
-            // confident report built on the wrong project.
-            console.error(`error: ${err}`);
-            process.exit(1);
-        }
-        return explicit;
-    }
-    if (looksLikeToolInstallDir()) {
-        console.error('  \x1b[33m!\x1b[0m Running from claude-slim\'s own install directory, so project memory\n' +
-            '    cannot be attributed and is reported as 0. Pass --project-dir <path>\n' +
-            '    (or run from your project) for an accurate startup total.\n');
-    }
-    return undefined;
-}
-// --- shared clean pipeline ---
-async function runCleanPipeline(opts) {
-    await initTokenizer();
-    const result = await scan({ lookbackDays: opts.lookbackDays, projectDir: resolveProjectDir(opts.projectDir) });
-    // Codex issues join the same tiered list. They carry `agent: 'codex'`, which
-    // is what keeps the cleaner's path guard pointed at ~/.codex/.
-    const codexContents = new Map();
-    const codexScan = opts.codex ? await scanCodex(codexContents) : null;
-    if (codexScan) {
-        result.issues.push(...(await classifyCodexIssues({ scan: codexScan, contents: codexContents })));
-        result.issues.sort((a, b) => a.tier - b.tier || b.tokens - a.tokens);
-    }
-    if (result.issues.length === 0) {
-        console.log('\n  \x1b[32mAlready slim!\x1b[0m No issues found.\n');
-        await flushCache();
-        return;
-    }
-    console.log(formatScanSummary(result));
-    const isInteractive = !opts.auto && process.stdin.isTTY;
-    let selectedIssues;
-    if (isInteractive) {
-        console.log('  Actions:');
-        console.log('    Enter    → accept pre-selected (Tier 1 only)');
-        console.log('    1,3,5    → select specific items');
-        console.log('    1-9      → select a range');
-        console.log('    all      → select everything');
-        console.log('    none     → cancel');
-        console.log('');
-        const selection = await askUser('  Your choice: ');
-        warnIgnoredSelection(selection, result.issues.length);
-        selectedIssues = resolveSelection(selection, result.issues);
-    }
-    else if (opts.auto) {
-        // Explicit non-interactive mode: select Tier 1 only.
-        selectedIssues = result.issues.filter((i) => i.tier === 1);
-        console.log(`  \x1b[36m→ Auto mode: selecting ${selectedIssues.length} Tier 1 item(s)\x1b[0m\n`);
-    }
-    else {
-        // Non-TTY without --auto/--dry-run: refuse rather than silently mutating
-        // the filesystem. Prior behavior auto-selected Tier 1, which surprised
-        // users who ran the CLI from scripts/nohup expecting a no-op.
-        console.log('\n  \x1b[33m⚠ Non-interactive shell detected.\x1b[0m ' +
-            'Re-run with \x1b[1m--auto\x1b[0m (apply Tier 1) or \x1b[1m--dry-run\x1b[0m (preview only).\n');
-        await flushCache();
+program.parseAsync().catch((err) => {
+    // An unreadable manifest stops clean/restore/report before they write.
+    // Say so plainly instead of dumping a stack trace.
+    if (err instanceof ManifestCorruptError) {
+        console.error(`\n  error: ${err.message}\n`);
         process.exitCode = 1;
         return;
     }
-    if (selectedIssues.length === 0) {
-        console.log('\n  Cancelled. No changes made.\n');
-        await flushCache();
-        return;
-    }
-    if (opts.dryRun) {
-        console.log('\n  \x1b[33m[DRY RUN]\x1b[0m Would disable:');
-        for (const issue of selectedIssues) {
-            console.log(`    • ${issue.name} (${issue.type})`);
-        }
-        console.log(`\n  Estimated token savings: ~${selectedIssues.reduce((s, i) => s + i.tokens, 0).toLocaleString()}`);
-        console.log('');
-        await flushCache();
-        return;
-    }
-    console.log('');
-    const cleanResult = await cleanIssues(selectedIssues);
-    // Re-scan after cleanup for accurate breakdown
-    const afterResult = await scan({ lookbackDays: opts.lookbackDays });
-    const reportData = calculateReport(result, afterResult, cleanResult.moved, opts.sessionsPerDay);
-    console.log('');
-    console.log(formatReportBox(reportData));
-    console.log('');
-    if (cleanResult.claudeCliMissing) {
-        const skippedPluginCount = selectedIssues.filter((i) => i.type === 'unused_plugin').length;
-        const skippedMcpCount = selectedIssues.filter((i) => i.type === 'unused_mcp').length;
-        console.log(`  \x1b[33m⚠ \`claude\` CLI not found on PATH — skipped ${skippedPluginCount} plugin(s) and ${skippedMcpCount} MCP server(s).\x1b[0m`);
-        console.log('    Install Claude Code and re-run, or remove them manually with');
-        console.log('    `claude plugin disable <name>` / `claude mcp remove -s <scope> <name>`.\n');
-    }
-    if (cleanResult.errors.length > 0) {
-        console.log('  \x1b[31mErrors:\x1b[0m');
-        for (const err of cleanResult.errors) {
-            console.log(`    • ${err.name}: ${err.error}`);
-        }
-        console.log('');
-    }
-    console.log(`  Recovery: ${getDisabledDir()}`);
-    console.log(`  Restore:  npx claude-slim restore\n`);
-    await flushCache();
-}
-// --- helpers ---
-function askUser(prompt) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    return new Promise((resolve) => {
-        rl.question(prompt, (answer) => {
-            rl.close();
-            resolve(answer.trim());
-        });
-    });
-}
-program.parse();
+    throw err;
+});

@@ -34,4 +34,12 @@ export declare function scan(opts?: ScanOptions): Promise<ScanResult>;
  */
 export declare function sumRecoverableStartupTokens(issues: Issue[], skills: SkillInfo[], currentProjectSlug: string, 
 /** Plugin name → its skill-listing tokens. See the `unused_plugin` branch. */
-pluginSkillListingTokens?: Map<string, number>): number;
+pluginSkillListingTokens?: Map<string, number>, 
+/**
+ * The listing's uncapped size and budget. Removing a skill from a listing
+ * that stays over budget frees nothing — other descriptions take its place.
+ */
+listing?: {
+    fullTokens: number;
+    capTokens?: number;
+}): number;

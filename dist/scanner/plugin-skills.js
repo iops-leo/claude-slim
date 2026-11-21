@@ -57,7 +57,9 @@ export async function scanPluginSkills() {
             tempCaches.push({ name: pluginName, path: pluginDir, sizeKB: Math.round(size / 1024) });
             return;
         }
-        const pluginSkillNames = [];
+        // Skill names per plugin in this marketplace. Enable state is per plugin,
+        // so each one is reported on its own rather than summed into the marketplace.
+        const skillsByPlugin = new Map();
         const walkDir = async (dir, plugin) => {
             // Kept generic: a plugin's content root is normally
             // `<plugin>/<version>/`, but the walk also has to reach skills nested
@@ -77,7 +79,8 @@ export async function scanPluginSkills() {
                         const skillMd = join(skillPath, 'SKILL.md');
                         const content = await safeReadFile(skillMd);
                         if (content !== null) {
-                            pluginSkillNames.push(skillDir);
+                            const key = plugin ?? pluginName;
+                            skillsByPlugin.set(key, [...(skillsByPlugin.get(key) ?? []), skillDir]);
                             skills.push({
                                 name: skillDir,
                                 path: skillPath,
@@ -99,12 +102,8 @@ export async function scanPluginSkills() {
         for (const root of await resolveContentRoots(pluginDir)) {
             await walkDir(root.dir, root.plugin);
         }
-        if (pluginSkillNames.length > 0) {
-            plugins.push({
-                name: pluginName,
-                skillCount: pluginSkillNames.length,
-                skills: pluginSkillNames,
-            });
+        for (const [name, names] of skillsByPlugin) {
+            plugins.push({ name, marketplace: pluginName, skillCount: names.length, skills: names });
         }
     });
     await Promise.all(scanPromises);

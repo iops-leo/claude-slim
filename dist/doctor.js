@@ -1,7 +1,7 @@
 import { access, readdir } from 'node:fs/promises';
 import { getClaudeDir, getPluginsDir, getProjectsDir, getSkillsDir } from './paths.js';
 import { runCommand } from './scanner/fs-walk.js';
-import { scanSessionUsage } from './scanner/sessions.js';
+import { scanSessionUsage, readCleanupPeriodDays } from './scanner/sessions.js';
 import { checkForUpdate } from './update-check.js';
 const MIN_RUNTIME_NODE_MAJOR = 20;
 export function isSupportedRuntimeNode(version) {
@@ -82,12 +82,25 @@ export async function collectDoctorReport(opts = {}) {
         checks.push({
             label: 'Session transcripts',
             status: usage.dataAvailable ? 'ok' : 'warn',
-            detail: `${usage.sessionsInWindow} sessions in last ${lookbackDays}d, ${usage.invokedSkills.size} invoked skills`,
+            detail: `${usage.sessionsInWindow} sessions in last ${lookbackDays}d (logs reach back ${usage.effectiveLookbackDays}d), ${usage.invokedSkills.size} invoked skills`,
             hint: usage.dataAvailable
                 ? undefined
                 : 'Unused-skill detection will be suppressed until enough reliable session data exists.',
         });
     }
+    // Claude Code deletes session logs older than cleanupPeriodDays, so a longer
+    // lookback cannot be backed by logs; the unused-* findings then rest on less.
+    const cleanupPeriodDays = await readCleanupPeriodDays();
+    const retentionShort = cleanupPeriodDays < lookbackDays;
+    checks.push({
+        label: 'Session log retention',
+        status: retentionShort ? 'warn' : 'ok',
+        detail: `cleanupPeriodDays ${cleanupPeriodDays}, lookback ${lookbackDays}d`,
+        hint: retentionShort
+            ? `Claude Code deletes logs after ${cleanupPeriodDays} days, so "unused" covers at most that. ` +
+                `Set "cleanupPeriodDays": ${lookbackDays} (or more) in ${getClaudeDir()}/settings.json for a full window.`
+            : undefined,
+    });
     // Version drift, last: it is the only check that touches the network, and it
     // is opt-in so `doctor` stays offline-safe when the caller wants that.
     if (opts.checkUpdate) {

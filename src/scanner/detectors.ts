@@ -10,6 +10,7 @@ import {
   MCP_SERVER_TOOLS_AVG, DEFERRED_TOOL_OVERHEAD_TOKENS,
 } from './constants.js';
 import { detectBackupArtifact } from './backup-artifacts.js';
+import { isLocalSkillUsed, isPluginSurfaceUsed } from './usage-match.js';
 
 // Everything a detector needs — threaded explicitly through context instead of
 // relying on module-global state, so detectors are pure functions of their input.
@@ -20,6 +21,7 @@ export interface DetectorContext {
   memoryFiles: MemoryFile[];
   tempCaches: TempCache[];
   staleProjects: StaleProject[];
+  /** Disabled plugins as `<plugin>@<marketplace>`. */
   disabledPlugins: Set<string>;
   plugins: PluginInfo[];
   // SKILL.md content keyed by absolute path, populated during local-skill scan.
@@ -33,11 +35,18 @@ export interface DetectorContext {
   // or schema drift; see scanner/sessions.ts).
   sessionDataAvailable: boolean;
   lookbackDays: number;
+  /**
+   * Days the surviving session logs cover (see SessionScanResult). Absent
+   * means the whole lookback. Issue details claim only this much.
+   */
+  effectiveLookbackDays?: number;
   // v2.6 unused_plugin detector fields
   pluginSurfaces: PluginSurfaces[];
   enabledPlugins: Array<{ name: string; marketplace: string }>;
   recentMcpPrefixes: Set<string>;
   recentCommands: Set<string>;
+  /** `plugin@marketplace` identities `.claude.json` `pluginUsage` saw used inside the lookback. */
+  usedPlugins?: Set<string>;
   totalUserCallableInvocations: number;
   sessionsInWindow: number;
   // Per-plugin estimated token cost keyed by plugin name. Populated from
@@ -48,6 +57,17 @@ export interface DetectorContext {
   /** `~/.claude.json` project key local-scope servers live under. */
   mcpProjectKey: string;
   claudeJsonPath: string;
+}
+
+/**
+ * The span an "unused" finding rests on. Claude Code deletes logs after
+ * `cleanupPeriodDays`, so a 60-day lookback may be backed by 30 days of logs;
+ * saying "60d" then overclaims.
+ */
+function usageWindowLabel(lookbackDays: number, effective: number | undefined): string {
+  return effective !== undefined && effective < lookbackDays
+    ? `${effective}d of logs`
+    : `${lookbackDays}d`;
 }
 
 // A Detector is a pure function of context → Issue[]. Add a new detector by
@@ -224,28 +244,35 @@ const unusedSkillDetector: Detector = {
   detect({
     localSkills,
     recentSkillInvocations,
+    recentCommands,
+    recentMcpPrefixes,
     sessionDataAvailable,
+    sessionsInWindow,
     lookbackDays,
+    effectiveLookbackDays,
   }) {
+    const signals = {
+      skills: recentSkillInvocations,
+      commands: recentCommands,
+      mcpPrefixes: recentMcpPrefixes,
+    };
     // Suppress entirely when the data source is unreliable — better no signal
-    // than a wrong one that flags every skill as unused.
-    if (!sessionDataAvailable) return [];
-
+    // than a wrong one that flags every skill as unused. `sessionDataAvailable`
+    // needs a Skill tool call; someone who only types `/daily` never makes one.
+    // An installed skill seen in use by any signal proves the logs parse just
+    // as well, so it satisfies the gate too.
+    const corroborated =
+      sessionDataAvailable ||
+      (sessionsInWindow >= 3 && localSkills.some((s) => isLocalSkillUsed(s.name, signals)));
+    if (!corroborated) return [];
     const issues: Issue[] = [];
     for (const skill of localSkills) {
-      // Direct hit: invocation set contains the skill name as-is.
-      if (recentSkillInvocations.has(skill.name)) continue;
-      // Nested skill (e.g. "org/ship"): also check the bare leaf name, which
-      // is how it would appear in a Skill tool_use input.
-      if (skill.name.includes('/')) {
-        const leaf = skill.name.split('/').pop()!;
-        if (recentSkillInvocations.has(leaf)) continue;
-      }
+      if (isLocalSkillUsed(skill.name, signals)) continue;
       issues.push({
         type: 'unused_skill',
         tier: 3,
         name: skill.name,
-        detail: `not invoked in ${lookbackDays}d`,
+        detail: `not invoked in ${usageWindowLabel(lookbackDays, effectiveLookbackDays)}`,
         tokens: skill.tokens,
         path: skill.path,
       });
@@ -262,9 +289,11 @@ const unusedPluginDetector: Detector = {
     recentSkillInvocations,
     recentMcpPrefixes,
     recentCommands,
+    usedPlugins,
     totalUserCallableInvocations,
     sessionsInWindow,
     lookbackDays,
+    effectiveLookbackDays,
     pluginCosts,
   }) {
     // (a) Global suppression: too few sessions to draw a conclusion
@@ -289,23 +318,20 @@ const unusedPluginDetector: Detector = {
       // cache mtime indiscriminately, making install age unreliable. Dropped.
       // Tier 3 (never auto-selected) lets users sanity-check any flagged plugin.
 
+      if (usedPlugins?.has(`${ps.pluginName}@${ps.marketplace}`)) continue;
       // Usage check: any skill/mcp/command from this plugin invoked?
-      const usedSkill = ps.skills.some(
-        (s) =>
-          recentSkillInvocations.has(s) ||
-          recentSkillInvocations.has(`${ps.pluginName}:${s}`),
-      );
-      const usedMcp = ps.mcpToolPrefixes.some((p) => recentMcpPrefixes.has(p));
-      const usedCmd = ps.commands.some((c) => recentCommands.has(c));
-
-      if (usedSkill || usedMcp || usedCmd) continue;
+      if (isPluginSurfaceUsed(ps, {
+        skills: recentSkillInvocations,
+        commands: recentCommands,
+        mcpPrefixes: recentMcpPrefixes,
+      })) continue;
 
       issues.push({
         type: 'unused_plugin',
         tier: 3,
         name: ps.pluginName,
         marketplace: ps.marketplace,
-        detail: `not invoked in ${lookbackDays}d (${ps.marketplace})`,
+        detail: `not invoked in ${usageWindowLabel(lookbackDays, effectiveLookbackDays)} (${ps.marketplace})`,
         tokens: pluginCosts.get(ps.pluginName) ?? 0,
         path: ps.installDir,
       });
@@ -340,7 +366,7 @@ const unusedMcpDetector: Detector = {
   name: 'unused_mcp',
   detect({
     mcpServers, recentMcpPrefixes, sessionsInWindow, totalUserCallableInvocations,
-    lookbackDays, mcpProjectKey, claudeJsonPath,
+    lookbackDays, effectiveLookbackDays, mcpProjectKey, claudeJsonPath,
   }) {
     // Same global suppressions as unused_plugin.
     if (sessionsInWindow < 3) return [];
@@ -357,7 +383,7 @@ const unusedMcpDetector: Detector = {
         tier: 3,
         name: server.name,
         mcpScope: server.scope,
-        detail: `no tool called in ${lookbackDays}d (${server.scope} scope)`,
+        detail: `no tool called in ${usageWindowLabel(lookbackDays, effectiveLookbackDays)} (${server.scope} scope)`,
         tokens: MCP_SERVER_TOOLS_AVG * DEFERRED_TOOL_OVERHEAD_TOKENS,
         path: server.scope === 'local' ? mcpProjectKey : claudeJsonPath,
       });
@@ -371,16 +397,20 @@ const disabledPluginDetector: Detector = {
   detect({ plugins, disabledPlugins }) {
     const issues: Issue[] = [];
     for (const plugin of plugins) {
-      if (disabledPlugins.has(plugin.name)) {
-        issues.push({
-          type: 'disabled_plugin',
-          tier: 2,
-          name: plugin.name,
-          detail: `${plugin.skillCount} skills`,
-          tokens: plugin.skillCount * SKILL_PROMPT_OVERHEAD_TOKENS,
-          path: join(getPluginsDir(), plugin.name),
-        });
-      }
+      // `disabledPlugins` holds `<plugin>@<marketplace>` identities.
+      const marketplace = plugin.marketplace ?? plugin.name;
+      if (!disabledPlugins.has(`${plugin.name}@${marketplace}`)) continue;
+      issues.push({
+        type: 'disabled_plugin',
+        tier: 2,
+        name: plugin.name,
+        marketplace,
+        detail: `${plugin.skillCount} skills, ${marketplace}`,
+        tokens: plugin.skillCount * SKILL_PROMPT_OVERHEAD_TOKENS,
+        path: plugin.name === marketplace
+          ? join(getPluginsDir(), marketplace)
+          : join(getPluginsDir(), marketplace, plugin.name),
+      });
     }
     return issues;
   },

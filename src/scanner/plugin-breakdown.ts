@@ -3,11 +3,14 @@ import type { PluginSurfaces } from './plugin-surfaces.js';
 import type { InstalledPlugin } from './disabled-plugins.js';
 import type { ClaudeMdSection } from './plugin-cost.js';
 import { computePluginCosts } from './plugin-cost.js';
+import { isPluginSurfaceUsed } from './usage-match.js';
 
 export interface PluginBreakdownOptions {
   surfaces: PluginSurfaces[];
   installedPlugins: InstalledPlugin[];
   invokedSkills: Set<string>;
+  /** `plugin@marketplace` identities `.claude.json` `pluginUsage` saw used inside the lookback. */
+  usedPlugins?: Set<string>;
   mcpPrefixesInvoked: Set<string>;
   commandsInvoked: Set<string>;
   totalUserCallableInvocations: number;
@@ -20,13 +23,15 @@ const MIN_SESSIONS = 3;
 function classifyStatus(opts: {
   surface: PluginSurfaces | undefined;
   enabled: boolean;
+  /** `.claude.json` `pluginUsage` recorded a use inside the lookback. */
+  recordedUse: boolean;
   invokedSkills: Set<string>;
   mcpPrefixesInvoked: Set<string>;
   commandsInvoked: Set<string>;
   totalUserCallableInvocations: number;
   sessionsInWindow: number;
 }): PluginBreakdown['status'] {
-  const { surface, enabled, invokedSkills, mcpPrefixesInvoked, commandsInvoked,
+  const { surface, enabled, recordedUse, invokedSkills, mcpPrefixesInvoked, commandsInvoked,
     totalUserCallableInvocations, sessionsInWindow } = opts;
 
   if (!enabled) return 'disabled';
@@ -38,29 +43,27 @@ function classifyStatus(opts: {
 
   if (userCallableSurfaces === 0) return 'agent-only';
 
+  // Claude Code's own record outlives the transcripts, so it settles "used"
+  // even when too few logs survive to judge.
+  if (recordedUse) return 'used';
+
   // Suppression: not enough session data
   if (sessionsInWindow < MIN_SESSIONS || totalUserCallableInvocations === 0) {
     return 'insufficient data';
   }
 
-  // Check if any surface was actually invoked
-  const skillUsed = surface.skills.some((s) => {
-    // Skills may be invoked as <pluginName>:<skillName> or just <skillName>
-    return (
-      invokedSkills.has(`${surface.pluginName}:${s}`) ||
-      invokedSkills.has(s)
-    );
+  const used = isPluginSurfaceUsed(surface, {
+    skills: invokedSkills,
+    commands: commandsInvoked,
+    mcpPrefixes: mcpPrefixesInvoked,
   });
-  const mcpUsed = surface.mcpToolPrefixes.some((p) => mcpPrefixesInvoked.has(p));
-  const cmdUsed = surface.commands.some((c) => commandsInvoked.has(c));
-
-  if (skillUsed || mcpUsed || cmdUsed) return 'used';
+  if (used) return 'used';
   return 'unused';
 }
 
 export function computePluginBreakdown(opts: PluginBreakdownOptions): PluginBreakdown[] {
   const {
-    surfaces, installedPlugins, invokedSkills, mcpPrefixesInvoked,
+    surfaces, installedPlugins, invokedSkills, usedPlugins, mcpPrefixesInvoked,
     commandsInvoked, totalUserCallableInvocations, sessionsInWindow, claudeMdSections,
   } = opts;
 
@@ -108,6 +111,7 @@ export function computePluginBreakdown(opts: PluginBreakdownOptions): PluginBrea
     const status = classifyStatus({
       surface,
       enabled,
+      recordedUse: usedPlugins?.has(`${name}@${marketplace}`) ?? false,
       invokedSkills,
       mcpPrefixesInvoked,
       commandsInvoked,

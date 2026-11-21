@@ -4,6 +4,8 @@ import type { ClaudeMdImport } from './scanner/claude-md-imports.js';
 import type { AgentId } from './paths.js';
 import type { McpServerEntry } from './scanner/mcp.js';
 export type { UserSurfaceEntry, RuleEntry, ClaudeMdImport, AgentId, McpServerEntry };
+import type { MeasuredStartup } from './scanner/measured-startup.js';
+import type { ListingVisibility } from './scanner/listing-visibility.js';
 export interface SkillInfo {
     name: string;
     path: string;
@@ -20,8 +22,8 @@ export interface SkillInfo {
     source: 'local' | 'plugin' | 'synced';
     /**
      * Cache directory this skill was found under — the *marketplace*, not the
-     * plugin. Kept as-is because `plugins[]` and the `disabled_plugin` detector
-     * match cache directories by this name (see parseDisabledPlugins).
+     * plugin. Together with `plugin` it forms the `<plugin>@<marketplace>`
+     * identity enable state is keyed by.
      */
     pluginName?: string;
     /**
@@ -56,7 +58,10 @@ export interface MemoryFile {
     truncated: boolean;
 }
 export interface PluginInfo {
+    /** Plugin name; the cache entry's name when it has no plugin level. */
     name: string;
+    /** Marketplace (cache directory) the plugin was installed from. */
+    marketplace?: string;
     skillCount: number;
     skills: string[];
     status?: 'enabled' | 'disabled';
@@ -180,6 +185,28 @@ export interface ScanResult {
      * vanish: it is what re-enabling everything would cost.
      */
     disabledPluginSkillTokens: number;
+    /**
+     * What the unused-* findings rest on. `effectiveDays` is how far back the
+     * surviving session logs reach (≤ `lookbackDays`); Claude Code deletes logs
+     * older than `cleanupPeriodDays`. Optional only for hand-built fixtures.
+     */
+    usageWindow?: UsageWindow;
+    /**
+     * The skill listing (skills and user commands) with every description
+     * shown. When the measured listing overflowed, this is the whole listing —
+     * built-in and MCP skills included — and Claude Code renders only
+     * `listingVisibility.overBudget.capTokens` of it.
+     */
+    skillListingUncappedTokens?: number;
+    /** Session-start context as recorded in the newest session log, if any. */
+    measuredStartup?: MeasuredStartup;
+    /** Which skills that session showed by name only, and why. */
+    listingVisibility?: ListingVisibility;
+}
+export interface UsageWindow {
+    lookbackDays: number;
+    effectiveDays: number;
+    cleanupPeriodDays: number;
 }
 export interface ManifestEntry {
     date: string;

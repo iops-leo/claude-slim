@@ -1,7 +1,7 @@
 import { rename, readdir, rmdir, rm, unlink, lstat, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve, sep } from 'node:path';
-import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordDisabledPlugin, removeDisabledPlugin } from './manifest.js';
-import { assertInsideAgentRoot, getAgentRoot, getAgentDisabledDir, getSkillsDir, getProjectsDir } from './paths.js';
+import { appendManifest, ensureDisabledDir, getDisabledDir, removeEntry, recordDisabledPlugin, removeDisabledPlugin, readManifestV2 } from './manifest.js';
+import { assertInsideAgentRoot, assertRealPathInsideAgentRoots, getAgentRoot, getAgentDisabledDir, getSkillsDir, getProjectsDir } from './paths.js';
 import type { AgentId } from './paths.js';
 import { disablePlugin, enablePlugin, isClaudeCliAvailable, ClaudeCliMissingError } from './plugin-runtime.js';
 import type { Issue, ManifestEntry, DisabledPluginEntry, DisabledMcpEntry } from './types.js';
@@ -73,6 +73,9 @@ async function recordOrRollback(
 }
 
 export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
+  // Fail before touching anything if the manifest cannot record the moves:
+  // otherwise every item would be moved, fail to record, and roll back one by one.
+  await readManifestV2();
 
   const moved: ManifestEntry[] = [];
   const skipped: string[] = [];
@@ -117,6 +120,7 @@ export async function cleanIssues(issues: Issue[]): Promise<CleanResult> {
         issue.type !== 'oversized_memory' && issue.type !== 'disabled_plugin'
       ) {
         assertInsideAgentRoot(issue.path, agent);
+        assertRealPathInsideAgentRoots(issue.path, agent);
       }
       if (issue.type === 'broken_symlink') {
         await unlink(issue.path);
@@ -317,6 +321,8 @@ export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry | D
         `Remove or rename it first.`,
       );
     }
+    // Checked before mkdir, which would otherwise create directories through a link.
+    assertRealPathInsideAgentRoots(legacyEntry.from, legacyEntry.agent ?? 'claude');
     await mkdir(dirname(legacyEntry.from), { recursive: true });
     // Atomic directory rename — requires same FS (guaranteed since both paths are under ~/.claude/)
     await rename(backupDir, legacyEntry.from);
@@ -344,9 +350,14 @@ export async function restoreItem(entry: ManifestEntry | DisabledPluginEntry | D
         `Remove or rename it first.`,
       );
     }
+    // Checked before mkdir, which would otherwise create directories through a link.
+    assertRealPathInsideAgentRoots(legacyEntry.from, legacyEntry.agent ?? 'claude');
     await mkdir(dirname(legacyEntry.from), { recursive: true });
     await rename(src, legacyEntry.from);
   }
 
-  await removeEntry(legacyEntry.name);
+  await removeEntry(legacyEntry.name, {
+    agent: legacyEntry.agent ?? 'claude',
+    from: legacyEntry.from,
+  });
 }

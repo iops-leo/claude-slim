@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { getCodexDir } from '../paths.js';
 import { countTokensCached } from '../tokenizer.js';
 import { listingTokens, listingTokensFromContent, parseFrontmatterDescription } from '../scanner/skill-listing.js';
 import { safeReadFile, safeReaddir, isDirectory, isBrokenSymlink } from '../scanner/fs-walk.js';
@@ -29,9 +29,8 @@ import { sanitizeUntrustedTree } from '../scanner/untrusted.js';
 // 408 session files, a 56,724-row log database, and the thread_dynamic_tools
 // table (a tool registry, not a history). See UNUSED_DETECTION_REASON.
 export const UNUSED_DETECTION_REASON = 'Codex session logs record the skill catalog, not invocations — there is no reliable usage signal to detect unused skills from.';
-export function getCodexDir() {
-    return join(homedir(), '.codex');
-}
+// One definition, so the scanner and the cleaner's path guard agree on CODEX_HOME.
+export { getCodexDir };
 export async function isCodexInstalled() {
     return isDirectory(getCodexDir());
 }

@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { statSync } from 'node:fs';
+import { statSync, realpathSync } from 'node:fs';
 import { join, resolve, sep, basename, dirname } from 'node:path';
 /**
  * `CLAUDE_CONFIG_DIR`, resolved to an absolute path, or undefined when unset.
@@ -115,8 +115,10 @@ export function getManifestPath() {
 export function getLegacyManifestPath() {
     return join(getDisabledDir(), '.claude-slim-manifest.jsonl');
 }
+/** `CODEX_HOME` (resolved like `CLAUDE_CONFIG_DIR`), else `~/.codex` — where Codex itself looks. */
 export function getCodexDir() {
-    return join(homedir(), '.codex');
+    const raw = process.env.CODEX_HOME;
+    return raw ? resolve(raw) : join(homedir(), '.codex');
 }
 export function getAgentRoot(agent) {
     return agent === 'claude' ? getClaudeDir() : getCodexDir();
@@ -142,6 +144,49 @@ export function assertInsideAgentRoot(p, agent) {
     if (!isInside(p, getAgentRoot(agent))) {
         const label = agent === 'claude' ? '~/.claude/' : '~/.codex/';
         throw new Error(`Refusing to operate on path outside ${label}: ${p}`);
+    }
+}
+/**
+ * The directories an agent's destructive operations may act inside. Claude's
+ * are listed one by one rather than as the profile root because a profile may
+ * link them in from elsewhere (`~/.claude-acc3/skills -> ~/.claude/skills`);
+ * Codex's root itself is included for `.tmp` install leftovers.
+ */
+export function getAgentManagedRoots(agent) {
+    if (agent === 'claude')
+        return [getSkillsDir(), getProjectsDir(), getPluginsDir(), getDisabledDir()];
+    const root = getCodexDir();
+    return [join(root, 'skills'), getAgentDisabledDir('codex'), root];
+}
+/** Real path of `p`, resolving symlinks in the longest prefix that exists. */
+function realResolve(p) {
+    const abs = resolve(p);
+    let head = abs;
+    const tail = [];
+    for (;;) {
+        try {
+            return join(realpathSync(head), ...tail.reverse());
+        }
+        catch {
+            const parent = dirname(head);
+            if (parent === head)
+                return abs;
+            tail.push(basename(head));
+            head = parent;
+        }
+    }
+}
+/**
+ * Refuse a path whose parent resolves, through symlinks, outside every managed
+ * root. The lexical check alone let `skills/group -> /ext-repo/group` move
+ * `/ext-repo/group/a`. The entry itself is not resolved: renaming or unlinking
+ * a symlink acts on the link, never on what it points at.
+ */
+export function assertRealPathInsideAgentRoots(p, agent) {
+    const parent = realResolve(dirname(resolve(p)));
+    const roots = getAgentManagedRoots(agent).map(realResolve);
+    if (!roots.some((r) => parent === r || parent.startsWith(r + sep))) {
+        throw new Error(`Refusing to operate on path that resolves outside managed directories: ${p}`);
     }
 }
 /** Back-compat wrapper — the Claude path is by far the most common caller. */
