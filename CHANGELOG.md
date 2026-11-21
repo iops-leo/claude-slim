@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.0] — 2026-11-22
+
+### Added
+
+- **MEASURED AT SESSION START.** `scan` now reads the startup context Claude Code recorded in the newest session log (`attachment` events: skill listing, deferred tool names, MCP server instructions, agent catalog, instruction files), preferring an interactive session in the current project. It reports what disk analysis cannot see: claude.ai connectors, MCP tool names, and the first turn's real input size. `--json` carries it as `measuredStartup` and `listingVisibility`.
+- **Skills shown by name only.** Claude Code caps the skill listing at 1% of the context window (`SLASH_COMMAND_TOOL_CHAR_BUDGET` or `skillListingBudgetFraction` override it) and, past the cap, renders the least-used skills (ranked by `skillUsage`, 7-day half-life) as a bare `- name`. The scan lists them grouped by plugin, marks the ones already flagged unused, and estimates how many descriptions cleaning those would bring back. The renderer was read from Claude Code 2.1.323 and is modelled in `scanner/listing-budget.ts`.
+- **One connector added twice.** Two MCP servers exposing mostly the same tool names (≥3 shared, ≥80% of the smaller) are reported as a likely duplicate, with what the extra copy's names cost; other tool names exposed by more than one server are reported as collisions. The sign-in placeholder tools every unauthenticated server gets are ignored.
+
+### Changed
+
+- The startup estimate counts an over-budget skill listing at its budget instead of summing every skill's line, and `RECOVERABLE` applies the same cap: removing skills from a listing that stays over budget brings descriptions back rather than shrinking the prompt. The cap applies only when a session log shows the budgeted listing; the uncapped figure is reported as `skillListingUncappedTokens`.
+- Dev toolchain lockfile refreshed to clear five `npm audit` advisories (3 high, 2 moderate): `vitest` / `@vitest/mocker` 4.1.11 → 4.1.12, `vite` 6.4.3 → 8.3.8, `tmp` 0.2.5 → 0.2.7, `source-map-js` 1.2.1 → 1.2.2. All are test-only dependencies; the shipped `dist/` and the runtime dependencies are unchanged.
+- `.nvmrc` / `.node-version` pin moved from 22.12.0 to 22.23.4.
+
 ### Fixed
 
 - Skills invoked by typing `/name` were reported unused. That logs only `<command-name>`, with no Skill tool call, and only Skill calls were counted. Slash invocations now count, including nested names (`org/ship`, `org:ship`, `apps/web:deploy`).
@@ -23,11 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CODEX_HOME` is honoured like `CLAUDE_CONFIG_DIR`.
 - A successful `claude plugin disable` that printed a warning on stderr was treated as a failure, leaving the plugin disabled with no manifest record. The exit code now decides; stderr is shown as a warning.
 - The test suite no longer depends on the developer's `CLAUDE_CONFIG_DIR`/`CODEX_HOME` or runs the real `claude` CLI (which left `backups/.claude.json.backup.*` in the repository).
-
-### Changed
-
-- Dev toolchain lockfile refreshed to clear five `npm audit` advisories (3 high, 2 moderate): `vitest` / `@vitest/mocker` 4.1.11 → 4.1.12, `vite` 6.4.3 → 8.3.8, `tmp` 0.2.5 → 0.2.7, `source-map-js` 1.2.1 → 1.2.2. All are test-only dependencies; the shipped `dist/` and the runtime dependencies are unchanged.
-- `.nvmrc` / `.node-version` pin moved from 22.12.0 to 22.23.4.
 
 ## [2.16.2] — 2026-11-01
 

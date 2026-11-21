@@ -1,4 +1,5 @@
 import { homedir } from 'node:os';
+import { formatMeasuredSection } from './report-measured.js';
 import { isUsingFallback } from './tokenizer.js';
 import { formatPluginsTable } from './scanner/plugin-breakdown.js';
 import { slugifyProjectPath } from './paths.js';
@@ -170,7 +171,10 @@ export function formatScanSummary(result) {
     const sortedPlugins = [...result.plugins].sort((a, b) => b.skillCount - a.skillCount);
     for (const plugin of sortedPlugins) {
         const status = plugin.status === 'disabled' ? ' \x1b[33m(disabled)\x1b[0m' : '';
-        lines.push(`    ${plugin.name.padEnd(28)} ${String(plugin.skillCount).padStart(3)} skills${status}`);
+        const market = plugin.marketplace && plugin.marketplace !== plugin.name
+            ? `  \x1b[90m@${plugin.marketplace}\x1b[0m`
+            : '';
+        lines.push(`    ${plugin.name.padEnd(28)} ${String(plugin.skillCount).padStart(3)} skills${market}${status}`);
     }
     // --- CLAUDE.MD ---
     lines.push('');
@@ -289,9 +293,19 @@ export function formatScanSummary(result) {
         }
         lines.push(`    \x1b[90mreported only — not touched by clean\x1b[0m`);
     }
+    lines.push(...formatMeasuredSection(result));
     // --- SUMMARY ---
     lines.push('');
     lines.push(`\x1b[1m  ESTIMATED OVERHEAD\x1b[0m: ~${result.totalTokensBefore.toLocaleString()} tokens at session start`);
+    const uncapped = result.skillListingUncappedTokens;
+    const cap = result.listingVisibility?.overBudget?.capTokens;
+    if (uncapped !== undefined && cap !== undefined && uncapped > cap) {
+        // Over budget, Claude Code drops descriptions rather than growing the
+        // prompt — so the listing costs the budget, and removing skills frees
+        // descriptions for the rest instead of tokens.
+        lines.push(`  \x1b[90mskill listing counted at its budget (~${cap.toLocaleString()} tok); the full listing would be ` +
+            `~${uncapped.toLocaleString()} tok\x1b[0m`);
+    }
     if (result.disabledPluginSkillTokens > 0) {
         // Stated rather than silently omitted: the figure moved out of the total in
         // 2.13.0, and a total that drops with no explanation reads like a bug.
@@ -306,6 +320,10 @@ export function formatScanSummary(result) {
             `\x1b[90mif every issue below is acted on (startup cost only — the per-issue\n` +
             `  figures below are full file sizes, paid when a skill runs, not at startup)\x1b[0m`);
     }
+    if (result.issues.length > 0 && uncapped !== undefined && cap !== undefined && uncapped > cap) {
+        lines.push(`  \x1b[90mthe skill listing is over budget, so removing skills mostly brings descriptions back ` +
+            `rather than shrinking the prompt\x1b[0m`);
+    }
     if (isUsingFallback()) {
         lines.push(`  \x1b[33m\u26a0 Using bytes/4 approximation (js-tiktoken unavailable)\x1b[0m`);
     }
@@ -316,6 +334,11 @@ export function formatScanSummary(result) {
     }
     else {
         lines.push(`\x1b[1m  ISSUES\x1b[0m (${result.issues.length} found)`);
+        const win = result.usageWindow;
+        if (win && win.effectiveDays < win.lookbackDays) {
+            lines.push(`  \x1b[33m!\x1b[0m Usage findings rest on ${win.effectiveDays}d of session logs, not the ${win.lookbackDays}d lookback:\n` +
+                `    Claude Code deletes logs after cleanupPeriodDays (${win.cleanupPeriodDays}). Raise it in settings.json for a longer record.`);
+        }
         lines.push('');
         const tierLabels = { 1: 'Auto', 2: 'Recommended', 3: 'Optional' };
         const tierColors = { 1: '31', 2: '33', 3: '37' };

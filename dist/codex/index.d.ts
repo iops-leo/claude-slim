@@ -1,3 +1,4 @@
+import { getCodexDir } from '../paths.js';
 import { parseFrontmatterDescription } from '../scanner/skill-listing.js';
 export declare const UNUSED_DETECTION_REASON = "Codex session logs record the skill catalog, not invocations \u2014 there is no reliable usage signal to detect unused skills from.";
 export interface CodexSkill {
@@ -31,7 +32,7 @@ export interface CodexScanResult {
     unusedDetectionAvailable: false;
     unusedDetectionReason: string;
 }
-export declare function getCodexDir(): string;
+export { getCodexDir };
 export declare function isCodexInstalled(): Promise<boolean>;
 /**
  * Pull `description` out of a Codex agent TOML.

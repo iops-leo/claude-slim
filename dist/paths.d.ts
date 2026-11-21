@@ -69,6 +69,7 @@ export declare function getLegacyManifestPath(): string;
 /** The agents claude-slim is allowed to touch. Adding one widens what every
  *  destructive operation may reach, so this list is the security boundary. */
 export type AgentId = 'claude' | 'codex';
+/** `CODEX_HOME` (resolved like `CLAUDE_CONFIG_DIR`), else `~/.codex` — where Codex itself looks. */
 export declare function getCodexDir(): string;
 export declare function getAgentRoot(agent: AgentId): string;
 export declare function getAgentDisabledDir(agent: AgentId): string;
@@ -82,6 +83,20 @@ export declare function getAgentDisabledDir(agent: AgentId): string;
  * exactly the failure this exists to prevent.
  */
 export declare function assertInsideAgentRoot(p: string, agent: AgentId): void;
+/**
+ * The directories an agent's destructive operations may act inside. Claude's
+ * are listed one by one rather than as the profile root because a profile may
+ * link them in from elsewhere (`~/.claude-acc3/skills -> ~/.claude/skills`);
+ * Codex's root itself is included for `.tmp` install leftovers.
+ */
+export declare function getAgentManagedRoots(agent: AgentId): string[];
+/**
+ * Refuse a path whose parent resolves, through symlinks, outside every managed
+ * root. The lexical check alone let `skills/group -> /ext-repo/group` move
+ * `/ext-repo/group/a`. The entry itself is not resolved: renaming or unlinking
+ * a symlink acts on the link, never on what it points at.
+ */
+export declare function assertRealPathInsideAgentRoots(p: string, agent: AgentId): void;
 /** Back-compat wrapper — the Claude path is by far the most common caller. */
 export declare function assertInsideClaudeDir(p: string): void;
 /** Which agent owns this path, or null if it belongs to neither. */

@@ -10,12 +10,18 @@ export interface DetectorContext {
     memoryFiles: MemoryFile[];
     tempCaches: TempCache[];
     staleProjects: StaleProject[];
+    /** Disabled plugins as `<plugin>@<marketplace>`. */
     disabledPlugins: Set<string>;
     plugins: PluginInfo[];
     contents: Map<string, string>;
     recentSkillInvocations: Set<string>;
     sessionDataAvailable: boolean;
     lookbackDays: number;
+    /**
+     * Days the surviving session logs cover (see SessionScanResult). Absent
+     * means the whole lookback. Issue details claim only this much.
+     */
+    effectiveLookbackDays?: number;
     pluginSurfaces: PluginSurfaces[];
     enabledPlugins: Array<{
         name: string;
@@ -23,6 +29,8 @@ export interface DetectorContext {
     }>;
     recentMcpPrefixes: Set<string>;
     recentCommands: Set<string>;
+    /** `plugin@marketplace` identities `.claude.json` `pluginUsage` saw used inside the lookback. */
+    usedPlugins?: Set<string>;
     totalUserCallableInvocations: number;
     sessionsInWindow: number;
     pluginCosts: Map<string, number>;

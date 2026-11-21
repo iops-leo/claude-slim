@@ -1,7 +1,8 @@
 import { computePluginCosts } from './plugin-cost.js';
+import { isPluginSurfaceUsed } from './usage-match.js';
 const MIN_SESSIONS = 3;
 function classifyStatus(opts) {
-    const { surface, enabled, invokedSkills, mcpPrefixesInvoked, commandsInvoked, totalUserCallableInvocations, sessionsInWindow } = opts;
+    const { surface, enabled, recordedUse, invokedSkills, mcpPrefixesInvoked, commandsInvoked, totalUserCallableInvocations, sessionsInWindow } = opts;
     if (!enabled)
         return 'disabled';
     if (!surface)
@@ -9,24 +10,25 @@ function classifyStatus(opts) {
     const userCallableSurfaces = surface.skills.length + surface.mcpServerKeys.length + surface.commands.length;
     if (userCallableSurfaces === 0)
         return 'agent-only';
+    // Claude Code's own record outlives the transcripts, so it settles "used"
+    // even when too few logs survive to judge.
+    if (recordedUse)
+        return 'used';
     // Suppression: not enough session data
     if (sessionsInWindow < MIN_SESSIONS || totalUserCallableInvocations === 0) {
         return 'insufficient data';
     }
-    // Check if any surface was actually invoked
-    const skillUsed = surface.skills.some((s) => {
-        // Skills may be invoked as <pluginName>:<skillName> or just <skillName>
-        return (invokedSkills.has(`${surface.pluginName}:${s}`) ||
-            invokedSkills.has(s));
+    const used = isPluginSurfaceUsed(surface, {
+        skills: invokedSkills,
+        commands: commandsInvoked,
+        mcpPrefixes: mcpPrefixesInvoked,
     });
-    const mcpUsed = surface.mcpToolPrefixes.some((p) => mcpPrefixesInvoked.has(p));
-    const cmdUsed = surface.commands.some((c) => commandsInvoked.has(c));
-    if (skillUsed || mcpUsed || cmdUsed)
+    if (used)
         return 'used';
     return 'unused';
 }
 export function computePluginBreakdown(opts) {
-    const { surfaces, installedPlugins, invokedSkills, mcpPrefixesInvoked, commandsInvoked, totalUserCallableInvocations, sessionsInWindow, claudeMdSections, } = opts;
+    const { surfaces, installedPlugins, invokedSkills, usedPlugins, mcpPrefixesInvoked, commandsInvoked, totalUserCallableInvocations, sessionsInWindow, claudeMdSections, } = opts;
     // Build map: pluginName → surface
     const surfaceMap = new Map();
     for (const s of surfaces) {
@@ -66,6 +68,7 @@ export function computePluginBreakdown(opts) {
         const status = classifyStatus({
             surface,
             enabled,
+            recordedUse: usedPlugins?.has(`${name}@${marketplace}`) ?? false,
             invokedSkills,
             mcpPrefixesInvoked,
             commandsInvoked,

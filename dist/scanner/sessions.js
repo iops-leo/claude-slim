@@ -1,10 +1,20 @@
 import { readFile, readdir, stat, writeFile, mkdir, rename } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { getClaudeDir } from '../paths.js';
+import { readJson } from './settings-sources.js';
 const CACHE_VERSION = 1;
 // Below this many sessions in the lookback window we suppress unused-skill
 // classification — too little signal, "unused" would be misleading.
 const MIN_SESSIONS_FOR_DATA_AVAILABLE = 3;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Claude Code's default `cleanupPeriodDays`. */
+export const DEFAULT_CLEANUP_PERIOD_DAYS = 30;
+/** `cleanupPeriodDays` from this profile's settings.json, else Claude Code's default. */
+export async function readCleanupPeriodDays() {
+    const settings = await readJson(join(getClaudeDir(), 'settings.json'));
+    const v = settings?.cleanupPeriodDays;
+    return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : DEFAULT_CLEANUP_PERIOD_DAYS;
+}
 function getCachePath() {
     return join(getClaudeDir(), '.skill-usage-cache.json');
 }
@@ -195,7 +205,9 @@ function parseTranscript(content) {
 // re-read files that have changed.
 export async function scanSessionUsage(lookbackDays) {
     const projectsDir = join(getClaudeDir(), 'projects');
-    const cutoffMs = Date.now() - lookbackDays * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const cutoffMs = now - lookbackDays * DAY_MS;
+    let oldestInWindowMs = Infinity;
     const cache = await loadCache();
     // Pruned cache: only entries seen this scan survive. Keeps the file bounded
     // across many scans even as old session logs get rotated/deleted.
@@ -219,6 +231,7 @@ export async function scanSessionUsage(lookbackDays) {
             mcpPrefixesInvoked,
             commandsInvoked,
             totalUserCallableInvocations: 0,
+            effectiveLookbackDays: 0,
         };
     }
     for (const projectName of projectDirs) {
@@ -264,8 +277,11 @@ export async function scanSessionUsage(lookbackDays) {
                 sessionsScanned++;
             if (mtimeMs < cutoffMs)
                 continue;
-            if (isSession)
+            if (isSession) {
                 sessionsInWindow++;
+                if (mtimeMs < oldestInWindowMs)
+                    oldestInWindowMs = mtimeMs;
+            }
             // Cache hit: reuse the parsed result only if mtime matches AND the entry
             // has the v2.6 extension fields (mcpPrefixes / commands). Entries from
             // older cache files lack these fields → force a re-parse.
@@ -310,6 +326,12 @@ export async function scanSessionUsage(lookbackDays) {
     }
     const dataAvailable = sessionsInWindow >= MIN_SESSIONS_FOR_DATA_AVAILABLE && invokedSkills.size > 0;
     await saveCache({ version: CACHE_VERSION, entries: newEntries });
+    const keptLongEnough = (await readCleanupPeriodDays()) >= lookbackDays;
+    const effectiveLookbackDays = sessionsInWindow === 0
+        ? 0
+        : keptLongEnough
+            ? lookbackDays
+            : Math.min(lookbackDays, Math.max(1, Math.ceil((now - oldestInWindowMs) / DAY_MS)));
     return {
         invokedSkills,
         dataAvailable,
@@ -318,5 +340,6 @@ export async function scanSessionUsage(lookbackDays) {
         mcpPrefixesInvoked,
         commandsInvoked,
         totalUserCallableInvocations,
+        effectiveLookbackDays,
     };
 }

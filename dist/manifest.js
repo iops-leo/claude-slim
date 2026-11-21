@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, rename, access } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename, access, copyFile } from 'node:fs/promises';
 import { getDisabledDir as getDir, getAgentDisabledDir, getManifestPath, getLegacyManifestPath, } from './paths.js';
 export function getDisabledDir() {
     return getDir();
@@ -85,20 +85,59 @@ export async function migrateLegacyIfNeeded() {
         // Already renamed by a concurrent migration — safe to ignore
     }
 }
+/**
+ * The manifest exists but cannot be used. It is the only record of what clean
+ * moved and how to put it back, so nothing may write over it: callers stop
+ * instead of treating it as empty.
+ */
+export class ManifestCorruptError extends Error {
+    constructor(path, reason, copy) {
+        super(`The claude-slim manifest at ${path} is unreadable (${reason}). ` +
+            (copy ? `A copy was saved to ${copy}. ` : '') +
+            'Nothing was changed. Repair the file or move it aside, then re-run.');
+        this.name = 'ManifestCorruptError';
+    }
+}
+// One backup copy per corrupt file per run, not one per read.
+const copiedCorrupt = new Map();
+async function preserveCorrupt(path) {
+    const done = copiedCorrupt.get(path);
+    if (done)
+        return done;
+    const copy = `${path}.corrupt-${Date.now()}`;
+    try {
+        await copyFile(path, copy);
+        copiedCorrupt.set(path, copy);
+        return copy;
+    }
+    catch {
+        return null;
+    }
+}
 export async function readManifestV2() {
     await migrateLegacyIfNeeded();
     const newPath = getManifestPath();
+    let content;
     try {
-        const content = await readFile(newPath, 'utf-8');
+        content = await readFile(newPath, 'utf-8');
+    }
+    catch (err) {
+        if (err?.code === 'ENOENT')
+            return { version: 2, entries: [] };
+        throw err;
+    }
+    let reason;
+    try {
         const parsed = JSON.parse(content);
         if (parsed && parsed.version === 2 && Array.isArray(parsed.entries)) {
             return parsed;
         }
+        reason = 'not a version 2 manifest';
     }
-    catch {
-        // fall through to empty manifest
+    catch (err) {
+        reason = err instanceof Error ? err.message : 'invalid JSON';
     }
-    return { version: 2, entries: [] };
+    throw new ManifestCorruptError(newPath, reason, await preserveCorrupt(newPath));
 }
 export async function writeManifestV2(manifest) {
     await ensureDisabledDir();
@@ -114,11 +153,25 @@ export async function addEntry(entry) {
     m.entries.push(entry);
     await writeManifestV2(m);
 }
-export async function removeEntry(name) {
+/**
+ * Remove one skill/memory entry. Pass `match` to pin it to an agent and
+ * original path: a Claude skill and a Codex skill can share a name, and a
+ * name-only match let restoring one erase the other's record.
+ */
+export async function removeEntry(name, match) {
     const m = await readManifestV2();
     // Name-addressed removal is for skill/memory entries only; plugin and MCP
     // records have their own keys and a same-named skill must not clear them.
-    const idx = m.entries.findIndex((e) => !isDisabledPluginEntry(e) && e.type !== 'unused_mcp' && e.name === name);
+    const idx = m.entries.findIndex((e) => {
+        if (isDisabledPluginEntry(e) || e.type === 'unused_mcp' || e.name !== name)
+            return false;
+        if (!match)
+            return true;
+        const entry = e;
+        if (match.agent !== undefined && (entry.agent ?? 'claude') !== match.agent)
+            return false;
+        return match.from === undefined || entry.from === match.from;
+    });
     if (idx === -1)
         return null;
     const [removed] = m.entries.splice(idx, 1);

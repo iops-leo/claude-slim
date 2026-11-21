@@ -31,19 +31,17 @@ No proxy, no compression, no changes to how Claude Code talks to the API — it 
   <img src="docs/demo.gif" alt="claude-slim cleanup: 11,442 tokens of overhead reduced to ~5,800 in 45 seconds" width="900" />
 </p>
 
-Where the bloat hides — measured on one real install:
+Where the bloat hides — what Claude Code actually sent at the start of one real session, read back from its own session log:
 
 | Source | What it costs | |
 |--------|:---:|---|
-| Skill listings | ~10,100 tokens | 256 skills × their `name: description` line |
-| Agent catalog | ~2,250 tokens | `~/.claude/agents/`, 12 agents |
-| CLAUDE.md | ~2,000 tokens | plugin instructions, plus any `@path` imports |
-| Rules | ~1,200 tokens | `~/.claude/rules/` without `paths:` — path-scoped rules load later |
-| Deferred tools list | ~1,500 tokens | MCP tool schemas |
-| Slash commands | ~80 tokens | `~/.claude/commands/` |
-| Memory index | **0 – 6,500 tokens** | current project's `MEMORY.md` only, first 200 lines / 25KB — topic files are read on demand |
+| MCP tool names | ~10,700 tokens | 768 names. Tool search defers the schemas, not the names — one connector alone listed 160 |
+| Skill listing | ~8,200 tokens | 213 skills, capped at 1% of the context window — **99 of them shown by name only** |
+| Instruction files | ~6,300 tokens | CLAUDE.md, `@path` imports, rules without `paths:`, the project's `MEMORY.md` |
+| MCP server instructions | ~3,600 tokens | 10 servers, claude.ai connectors included |
+| Agent catalog | ~2,200 tokens | 33 agents |
 
-Skill listings are the part people underestimate: each installed skill contributes one `- name: description` line to the system prompt, and those run anywhere from **30 to 509 tokens each**. Sixty terse skills and sixty verbose ones are not the same bill.
+The skill listing has a budget: 1% of the context window (6,000 characters on a 200k model, 30,000 on 1M). Past it, Claude Code doesn't grow the prompt — it quietly drops descriptions, starting with the skills you use least. Those skills are still installed and still invocable, but the model only sees `- skill-name`, so it can't tell when to reach for them. On the install above, nearly half the skills were in that state.
 
 That's slower responses. Hitting your usage cap faster. Paying for context you're not using — on every turn, of every session.
 
@@ -238,6 +236,7 @@ claude-slim scans these locations. No plugin-specific logic — pure filesystem 
 ├── CLAUDE.md                ← system instructions + @imports (read-only)
 ├── rules/                   ← user rules (measured, read-only; path-scoped ones listed separately)
 ├── projects/*/memory/       ← auto-memory (only the current project's MEMORY.md counts toward startup)
+├── projects/*/*.jsonl       ← session logs: what you invoke, and what the newest session loaded (read-only)
 └── settings.json            ← settings (read-only; MCP servers defined here are flagged as not loaded)
 ~/.claude.json               ← user and local MCP servers
 <project>/.mcp.json          ← project MCP servers (read-only)
@@ -264,16 +263,22 @@ claude-slim reports what a session in **this** directory pays. Memory is per-pro
 
 Token counts come from [js-tiktoken](https://github.com/nicolo-ribaudo/js-tiktoken) against the actual file contents. The only estimates left are marked with `~`: MCP tool schemas (~8 tokens/tool) and skills whose frontmatter can't be parsed (~30 tokens). Everything else is measured.
 
+**MEASURED AT SESSION START** goes one step further: it reads the startup context Claude Code recorded in your newest session log, so it covers what disk analysis can't see — claude.ai connectors, MCP tool names, and which skills were cut to a bare name. When the skill listing is over budget, the estimate counts it at the budget, and `RECOVERABLE` says so: removing skills from an over-budget listing brings descriptions back instead of shrinking the prompt.
+
 ---
 
-## v2.16.0 — What's new
+## v2.17.0 — What's new
 
-- **Added: unused MCP servers.** User- and local-scope servers whose tools were never called in your last 60 days of sessions are now flagged (`unused_mcp`, Tier 3, never auto-selected). Selecting one removes it with `claude mcp remove`, after copying its definition — `env` and `headers` included — to a 0600 backup. `restore` adds it back exactly as it was.
-- **Fixed (2.15.2): MCP SERVERS listed the wrong servers.** It read `~/.claude/settings.json`, which Claude Code does not load servers from. It now reads `~/.claude.json` and `.mcp.json` the way Claude Code does, and marks each server as active, turned off, awaiting approval, or blocked by managed policy.
-- **Fixed (2.15.2): deleted skills in `~/.claude/skills/.trash/` were counted as installed** — 11 skills, 14 false findings and ~1,400 phantom startup tokens on one machine.
-- **Fixed (2.15.1): project memory reported 0 on Windows**, and on any path with `.`, `_` or a space (#20).
+- **Added: MEASURED AT SESSION START.** `scan` reads the startup context Claude Code recorded in your newest session log — skill listing, MCP tool names, server instructions, agent catalog, instruction files — and reports:
+  - **skills shown by name only.** The listing is capped at 1% of the context window; past it, descriptions are dropped from the least-used skills. They are listed, grouped by plugin, with how many descriptions cleaning the unused ones would bring back.
+  - **one connector added twice** — two MCP servers exposing the same tool names (e.g. a claude.ai connector and a manual install), and tool names two servers both expose.
+  - the first turn's real input size, Claude Code's own prompt included.
+- **Changed: the estimate follows the listing budget.** An over-budget skill listing is counted at its budget, and `RECOVERABLE` no longer promises tokens that removing skills from it can't free.
+- **Fixed: unused detection.** Skills typed as `/name` and plugins used only through `/plugin:command` were reported unused. Claude Code's own `skillUsage` record now counts as use too. "Not invoked in 60d" claimed more than the logs hold — Claude Code deletes them after 30 days by default — so findings now say how many days of logs they rest on, and `doctor` tells you how to keep more.
+- **Fixed: restore and safety.** Restoring a Codex skill could drop the record of a Claude skill with the same name. A corrupt `manifest.json` was silently overwritten. A symlinked folder under `skills/` let clean move files outside `~/.claude/`. All three are closed.
+- Also fixed: active projects offered as stale, plugin state judged per marketplace instead of per plugin, `clean --dry-run` refusing to run without a TTY, inflated after-clean figures with `--project-dir`, `CODEX_HOME` ignored.
 
-Tests: 529 → 580.
+Tests: 580 → 703.
 
 For older release notes, see [CHANGELOG.md](CHANGELOG.md).
 

@@ -6,6 +6,8 @@ export interface PluginBreakdownOptions {
     surfaces: PluginSurfaces[];
     installedPlugins: InstalledPlugin[];
     invokedSkills: Set<string>;
+    /** `plugin@marketplace` identities `.claude.json` `pluginUsage` saw used inside the lookback. */
+    usedPlugins?: Set<string>;
     mcpPrefixesInvoked: Set<string>;
     commandsInvoked: Set<string>;
     totalUserCallableInvocations: number;
