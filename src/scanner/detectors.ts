@@ -10,6 +10,7 @@ import {
   MCP_SERVER_TOOLS_AVG, DEFERRED_TOOL_OVERHEAD_TOKENS,
 } from './constants.js';
 import { detectBackupArtifact } from './backup-artifacts.js';
+import { isLocalSkillUsed, isPluginSurfaceUsed } from './usage-match.js';
 
 // Everything a detector needs — threaded explicitly through context instead of
 // relying on module-global state, so detectors are pure functions of their input.
@@ -224,6 +225,8 @@ const unusedSkillDetector: Detector = {
   detect({
     localSkills,
     recentSkillInvocations,
+    recentCommands,
+    recentMcpPrefixes,
     sessionDataAvailable,
     lookbackDays,
   }) {
@@ -231,16 +234,14 @@ const unusedSkillDetector: Detector = {
     // than a wrong one that flags every skill as unused.
     if (!sessionDataAvailable) return [];
 
+    const signals = {
+      skills: recentSkillInvocations,
+      commands: recentCommands,
+      mcpPrefixes: recentMcpPrefixes,
+    };
     const issues: Issue[] = [];
     for (const skill of localSkills) {
-      // Direct hit: invocation set contains the skill name as-is.
-      if (recentSkillInvocations.has(skill.name)) continue;
-      // Nested skill (e.g. "org/ship"): also check the bare leaf name, which
-      // is how it would appear in a Skill tool_use input.
-      if (skill.name.includes('/')) {
-        const leaf = skill.name.split('/').pop()!;
-        if (recentSkillInvocations.has(leaf)) continue;
-      }
+      if (isLocalSkillUsed(skill.name, signals)) continue;
       issues.push({
         type: 'unused_skill',
         tier: 3,
@@ -290,15 +291,11 @@ const unusedPluginDetector: Detector = {
       // Tier 3 (never auto-selected) lets users sanity-check any flagged plugin.
 
       // Usage check: any skill/mcp/command from this plugin invoked?
-      const usedSkill = ps.skills.some(
-        (s) =>
-          recentSkillInvocations.has(s) ||
-          recentSkillInvocations.has(`${ps.pluginName}:${s}`),
-      );
-      const usedMcp = ps.mcpToolPrefixes.some((p) => recentMcpPrefixes.has(p));
-      const usedCmd = ps.commands.some((c) => recentCommands.has(c));
-
-      if (usedSkill || usedMcp || usedCmd) continue;
+      if (isPluginSurfaceUsed(ps, {
+        skills: recentSkillInvocations,
+        commands: recentCommands,
+        mcpPrefixes: recentMcpPrefixes,
+      })) continue;
 
       issues.push({
         type: 'unused_plugin',

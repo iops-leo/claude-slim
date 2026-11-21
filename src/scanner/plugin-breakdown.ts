@@ -3,6 +3,7 @@ import type { PluginSurfaces } from './plugin-surfaces.js';
 import type { InstalledPlugin } from './disabled-plugins.js';
 import type { ClaudeMdSection } from './plugin-cost.js';
 import { computePluginCosts } from './plugin-cost.js';
+import { isPluginSurfaceUsed } from './usage-match.js';
 
 export interface PluginBreakdownOptions {
   surfaces: PluginSurfaces[];
@@ -43,18 +44,12 @@ function classifyStatus(opts: {
     return 'insufficient data';
   }
 
-  // Check if any surface was actually invoked
-  const skillUsed = surface.skills.some((s) => {
-    // Skills may be invoked as <pluginName>:<skillName> or just <skillName>
-    return (
-      invokedSkills.has(`${surface.pluginName}:${s}`) ||
-      invokedSkills.has(s)
-    );
+  const used = isPluginSurfaceUsed(surface, {
+    skills: invokedSkills,
+    commands: commandsInvoked,
+    mcpPrefixes: mcpPrefixesInvoked,
   });
-  const mcpUsed = surface.mcpToolPrefixes.some((p) => mcpPrefixesInvoked.has(p));
-  const cmdUsed = surface.commands.some((c) => commandsInvoked.has(c));
-
-  if (skillUsed || mcpUsed || cmdUsed) return 'used';
+  if (used) return 'used';
   return 'unused';
 }
 
