@@ -177,3 +177,16 @@ describe('findMeasuredSession', () => {
     expect(await findMeasuredSession(projects, 'proj')).toBeNull();
   });
 });
+
+describe('analyzeDeferredTools — auth placeholders', () => {
+  it('does not report the sign-in placeholder tools as collisions', () => {
+    const r = analyzeDeferredTools([
+      'mcp__claude_ai_Asana__authenticate',
+      'mcp__claude_ai_Box__authenticate',
+      'mcp__claude_ai_Asana__complete_authentication',
+      'mcp__claude_ai_Box__complete_authentication',
+    ]);
+    expect(r.collisions).toEqual([]);
+    expect(r.duplicateServers).toEqual([]);
+  });
+});

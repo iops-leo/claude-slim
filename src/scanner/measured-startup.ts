@@ -96,6 +96,9 @@ export function parseSkillListing(content: string, names: readonly string[]): Li
   });
 }
 
+// Claude Code gives every MCP server that still needs sign-in the same two
+// placeholder tools. Sharing them is not a collision anyone can act on.
+const AUTH_PLACEHOLDER_TOOLS = new Set(['authenticate', 'complete_authentication']);
 const DUPLICATE_MIN_SHARED = 3;
 const DUPLICATE_MIN_RATIO = 0.8;
 
@@ -134,7 +137,9 @@ export function analyzeDeferredTools(
     const server = m ? m[1] : BUILT_IN;
     const cur = byServer.get(server) ?? { tools: 0, chars: 0 };
     byServer.set(server, { tools: cur.tools + 1, chars: cur.chars + l.length + 1 });
-    if (m) byTool.set(m[2], new Set([...(byTool.get(m[2]) ?? []), m[1]]));
+    if (m && !AUTH_PLACEHOLDER_TOOLS.has(m[2])) {
+      byTool.set(m[2], new Set([...(byTool.get(m[2]) ?? []), m[1]]));
+    }
   }
   const text = lines.join('\n');
   return {

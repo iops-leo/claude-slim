@@ -1,4 +1,5 @@
 import { homedir } from 'node:os';
+import { formatMeasuredSection } from './report-measured.js';
 import type { ScanResult, Issue, ManifestEntry, PluginBreakdown } from './types.js';
 import { isUsingFallback } from './tokenizer.js';
 import { formatPluginsTable } from './scanner/plugin-breakdown.js';
@@ -372,9 +373,22 @@ export function formatScanSummary(result: ScanResult): string {
     lines.push(`    \x1b[90mreported only — not touched by clean\x1b[0m`);
   }
 
+  lines.push(...formatMeasuredSection(result));
+
   // --- SUMMARY ---
   lines.push('');
   lines.push(`\x1b[1m  ESTIMATED OVERHEAD\x1b[0m: ~${result.totalTokensBefore.toLocaleString()} tokens at session start`);
+  const uncapped = result.skillListingUncappedTokens;
+  const cap = result.listingVisibility?.budgetTokens;
+  if (uncapped !== undefined && cap !== undefined && uncapped > cap) {
+    // Over budget, Claude Code drops descriptions rather than growing the
+    // prompt — so the listing costs the budget, and removing skills frees
+    // descriptions for the rest instead of tokens.
+    lines.push(
+      `  \x1b[90mskill listing counted at its budget (~${cap.toLocaleString()} tok); the full listing would be ` +
+        `~${uncapped.toLocaleString()} tok\x1b[0m`,
+    );
+  }
   if (result.disabledPluginSkillTokens > 0) {
     // Stated rather than silently omitted: the figure moved out of the total in
     // 2.13.0, and a total that drops with no explanation reads like a bug.
@@ -391,6 +405,12 @@ export function formatScanSummary(result: ScanResult): string {
       `  \x1b[1mRECOVERABLE\x1b[0m: ~${result.recoverableStartupTokens.toLocaleString()} tokens ` +
         `\x1b[90mif every issue below is acted on (startup cost only — the per-issue\n` +
         `  figures below are full file sizes, paid when a skill runs, not at startup)\x1b[0m`,
+    );
+  }
+  if (result.issues.length > 0 && uncapped !== undefined && cap !== undefined && uncapped > cap) {
+    lines.push(
+      `  \x1b[90mthe skill listing is over budget, so removing skills mostly brings descriptions back ` +
+        `rather than shrinking the prompt\x1b[0m`,
     );
   }
 

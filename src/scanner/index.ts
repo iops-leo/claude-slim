@@ -28,6 +28,14 @@ import { scanUserSurfaces } from './user-surfaces.js';
 import { scanUserRules } from './rules.js';
 import { resolveClaudeMdImports } from './claude-md-imports.js';
 import { sanitizeScanResult } from './untrusted.js';
+import { findMeasuredSession } from './measured-startup.js';
+import {
+  analyzeListingVisibility,
+  cappedListingTokens,
+  cappedRecovery,
+  type ListingVisibility,
+} from './listing-visibility.js';
+import { listingSettingsFrom } from './listing-settings.js';
 
 export interface ScanOptions {
   // Days of session history to consider when classifying skills as unused.
@@ -221,7 +229,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
   const synced = await scanSyncedSkills(settingsSources, takenNames);
   const memoryLocation = await resolveProjectMemory(settingsSources);
 
-  const skillListingTokens =
+  const skillListingUncappedTokens =
     sumListing(localSkills) + sumListing(activePluginSkills) + sumListing(synced.active);
   const agentListingTokens = sumListing(userSurfaces.agents);
   const commandListingTokens = sumListing(userSurfaces.commands);
@@ -253,6 +261,30 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
   }
   const allProjectsMemoryTokens = memoryFiles.reduce((sum, m) => sum + m.tokens, 0);
 
+  // The skill listing has a character budget (1% of the context window). Past
+  // it, Claude Code drops descriptions instead of growing the prompt, so the
+  // listing never costs more than the budget. The budget is only applied when
+  // a session log shows this Claude Code renders a budgeted listing.
+  const measuredStartup = await findMeasuredSession(getProjectsDir(), currentProjectSlug).catch(
+    () => null,
+  );
+  const listingSettings = listingSettingsFrom(settingsSources);
+  const listingVisibility: ListingVisibility | null = analyzeListingVisibility(measuredStartup, {
+    localSkills,
+    pluginSkills: activePluginSkills,
+    syncedSkills: synced.active,
+    issues,
+    skillUsage: listingSettings.skillUsage,
+    settings: {
+      env: process.env.SLASH_COMMAND_TOOL_CHAR_BUDGET,
+      fraction: listingSettings.fraction,
+      skillOverrides: listingSettings.skillOverrides,
+    },
+    now: Date.now(),
+  });
+  const listingCapTokens = listingVisibility?.budgetTokens;
+  const skillListingTokens = cappedListingTokens(skillListingUncappedTokens, listingCapTokens);
+
   const totalTokensBefore =
     skillListingTokens +
     agentListingTokens +
@@ -282,6 +314,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     // memory is on and not redirected; otherwise cleaning it recovers nothing.
     memoryLocation.disabled || memoryLocation.customDir ? '\u0000' : currentProjectSlug,
     pluginSkillListingTokens,
+    { fullTokens: skillListingUncappedTokens, capTokens: listingCapTokens },
   );
 
   // Labels below are authored by whoever wrote each skill, plugin, or memory
@@ -326,6 +359,9 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
       effectiveDays: sessionUsage.effectiveLookbackDays,
       cleanupPeriodDays,
     },
+    skillListingUncappedTokens,
+    ...(measuredStartup ? { measuredStartup } : {}),
+    ...(listingVisibility ? { listingVisibility } : {}),
   });
 }
 
@@ -370,11 +406,17 @@ export function sumRecoverableStartupTokens(
   currentProjectSlug: string,
   /** Plugin name → its skill-listing tokens. See the `unused_plugin` branch. */
   pluginSkillListingTokens: Map<string, number> = new Map(),
+  /**
+   * The listing's uncapped size and budget. Removing a skill from a listing
+   * that stays over budget frees nothing — other descriptions take its place.
+   */
+  listing?: { fullTokens: number; capTokens?: number },
 ): number {
   const listingByPath = new Map(skills.map((s) => [s.path, s.listingTokens]));
   const countedPaths = new Set<string>();
   const countedPlugins = new Set<string>();
   let total = 0;
+  let listingRemoved = 0;
 
   // `stale_project` names the slug alone; `oversized_memory` names
   // `<slug>/<file>`. Match both without letting a sibling slug through — plain
@@ -399,7 +441,7 @@ export function sumRecoverableStartupTokens(
       if (countedPaths.has(issue.path)) continue;
       countedPaths.add(issue.path);
       // A skill missing from the listing map costs nothing at startup.
-      total += listingByPath.get(issue.path) ?? 0;
+      listingRemoved += listingByPath.get(issue.path) ?? 0;
     } else if (issue.type === 'unused_plugin') {
       // Deliberately NOT `issue.tokens`. That is the plugin's full estimated
       // cost from computePluginCosts — CLAUDE.md section + skills + MCP tools +
@@ -416,7 +458,7 @@ export function sumRecoverableStartupTokens(
       // two cached versions raises two findings.
       if (countedPlugins.has(issue.name)) continue;
       countedPlugins.add(issue.name);
-      total += pluginSkillListingTokens.get(issue.name) ?? 0;
+      listingRemoved += pluginSkillListingTokens.get(issue.name) ?? 0;
     }
     // `oversized_memory` contributes nothing: the cleaner treats it as
     // report-only, and for a truncated index the advice — trim it under the
@@ -425,5 +467,8 @@ export function sumRecoverableStartupTokens(
     // return.
   }
 
-  return total;
+  return (
+    total +
+    (listing ? cappedRecovery(listing.fullTokens, listingRemoved, listing.capTokens) : listingRemoved)
+  );
 }

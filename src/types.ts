@@ -5,6 +5,8 @@ import type { AgentId } from './paths.js';
 import type { McpServerEntry } from './scanner/mcp.js';
 
 export type { UserSurfaceEntry, RuleEntry, ClaudeMdImport, AgentId, McpServerEntry };
+import type { MeasuredStartup } from './scanner/measured-startup.js';
+import type { ListingVisibility } from './scanner/listing-visibility.js';
 
 export interface SkillInfo {
   name: string;
@@ -204,6 +206,16 @@ export interface ScanResult {
    * older than `cleanupPeriodDays`. Optional only for hand-built fixtures.
    */
   usageWindow?: UsageWindow;
+  /**
+   * Skill-listing tokens before the listing budget is applied. Equal to the
+   * listing share of `totalTokensBefore` unless the listing is over budget,
+   * in which case Claude Code renders only `listingVisibility.budgetTokens`.
+   */
+  skillListingUncappedTokens?: number;
+  /** Session-start context as recorded in the newest session log, if any. */
+  measuredStartup?: MeasuredStartup;
+  /** Which skills that session showed by name only, and why. */
+  listingVisibility?: ListingVisibility;
 }
 
 export interface UsageWindow {
