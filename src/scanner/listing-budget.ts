@@ -1,23 +1,23 @@
-// Model of how Claude Code fits the skill listing into the system prompt.
+// How Claude Code budgets the skill listing in the system prompt.
 //
-// Reverse-read from Claude Code 2.1.323. The listing is not "every skill's
-// description, summed": it has a character budget, and once the full listing
-// exceeds it Claude Code keeps descriptions in priority order and renders the
-// rest as a bare `- name`. Those skills stay invocable, but the model only sees
-// their name — it cannot tell from the listing what they are for.
+// Read from Claude Code 2.1.323. The listing is not "every skill's description,
+// summed": it has a budget, and once the full listing exceeds it Claude Code
+// keeps descriptions in priority order and renders the rest as a bare
+// `- name`. Those skills stay invocable, but the model sees only the name.
 //
 //   budget   = contextWindowTokens × charsPerToken × skillListingBudgetFraction
-//              (SLASH_COMMAND_TOOL_CHAR_BUDGET env replaces the whole formula)
-//   entry    = `- name: description[ - when_to_use]`, description capped at 1536 chars
+//              (SLASH_COMMAND_TOOL_CHAR_BUDGET replaces the whole formula),
+//              spent in display width — wide characters count twice
+//   entry    = `- name: description[ - when_to_use]`, description capped at
+//              skillListingMaxDescChars (1536)
 //   priority = skillUsage.usageCount × max(0.5^(daysSinceUse / 7), 0.1)
 //
-// Bundled (built-in) skills and skills set to `name-only` in skillOverrides are
-// never collapsed. Everything else is collapsed to its name first, then
-// descriptions are added back greedily in priority order while they fit.
+// Built-in skills and skills set to `name-only` in skillOverrides are never
+// collapsed. Everything else is collapsed first, then descriptions are added
+// back greedily in priority order while they fit.
 
 export const DEFAULT_BUDGET_FRACTION = 0.01;
 export const DEFAULT_CONTEXT_WINDOW = 200_000;
-export const MAX_DESC_CHARS = 1536;
 const HALF_LIFE_DAYS = 7;
 const PRIORITY_FLOOR = 0.1;
 const DAY_MS = 86_400_000;
@@ -51,91 +51,49 @@ export function skillPriority(usage: SkillUsageRecord | undefined, now: number):
   return usage.usageCount * Math.max(Math.pow(0.5, days / HALF_LIFE_DAYS), PRIORITY_FLOOR);
 }
 
-export interface ListingSkill {
-  name: string;
-  description: string;
-  whenToUse?: string;
-  /** `skillOverrides: { name: "name-only" }` — always rendered as `- name`. */
-  nameOnly?: boolean;
-  /** Built into Claude Code — always rendered in full. */
-  bundled?: boolean;
-}
+// Code points that take two terminal columns: Hangul, CJK, kana, fullwidth
+// forms and emoji. Claude Code spends the listing budget in display width, not
+// string length — a listing heavy in Korean is ~5% wider than its `.length`.
+// Checked against live logs: listings of 28.4k–28.8k chars measured
+// 29,957–29,983 wide under a 30,000 budget.
+const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x1100, 0x115f], [0x231a, 0x231b], [0x2329, 0x232a], [0x23e9, 0x23ec],
+  [0x23f0, 0x23f0], [0x23f3, 0x23f3], [0x25fd, 0x25fe], [0x2614, 0x2615],
+  [0x2648, 0x2653], [0x267f, 0x267f], [0x2693, 0x2693], [0x26a1, 0x26a1],
+  [0x26aa, 0x26ab], [0x26bd, 0x26be], [0x26c4, 0x26c5], [0x26ce, 0x26ce],
+  [0x26d4, 0x26d4], [0x26ea, 0x26ea], [0x26f2, 0x26f3], [0x26f5, 0x26f5],
+  [0x26fa, 0x26fa], [0x26fd, 0x26fd], [0x2705, 0x2705], [0x270a, 0x270b],
+  [0x2728, 0x2728], [0x274c, 0x274c], [0x274e, 0x274e], [0x2753, 0x2755],
+  [0x2757, 0x2757], [0x2795, 0x2797], [0x27b0, 0x27b0], [0x27bf, 0x27bf],
+  [0x2b1b, 0x2b1c], [0x2b50, 0x2b50], [0x2b55, 0x2b55], [0x2e80, 0x303e],
+  [0x3041, 0x33ff], [0x3400, 0x4dbf], [0x4e00, 0x9fff], [0xa000, 0xa4cf],
+  [0xa960, 0xa97f], [0xac00, 0xd7a3], [0xf900, 0xfaff], [0xfe10, 0xfe19],
+  [0xfe30, 0xfe6f], [0xff00, 0xff60], [0xffe0, 0xffe6], [0x1f004, 0x1f004],
+  [0x1f0cf, 0x1f0cf], [0x1f18e, 0x1f18e], [0x1f191, 0x1f19a], [0x1f200, 0x1f251],
+  [0x1f300, 0x1f64f], [0x1f680, 0x1f6ff], [0x1f7e0, 0x1f7eb], [0x1f90c, 0x1f9ff],
+  [0x1fa70, 0x1faff], [0x20000, 0x3fffd],
+];
+const ZERO_WIDTH = /[̀-ͯ​-‏⁠-⁤︀-️⃐-⃿]/u;
 
-export function renderedDescription(skill: ListingSkill): string {
-  const text = skill.whenToUse ? `${skill.description} - ${skill.whenToUse}` : skill.description;
-  return text.length > MAX_DESC_CHARS ? text.slice(0, MAX_DESC_CHARS - 1) + '…' : text;
-}
-
-export interface ListingSimulation {
-  mode: 'fits' | 'priority';
-  budgetChars: number;
-  /** Size the listing would have with every description shown. */
-  fullChars: number;
-  /** Size of the listing Claude Code actually renders. */
-  renderedChars: number;
-  /** Skills shown as a bare name because the budget ran out, in input order. */
-  collapsed: string[];
-  /** Skills the user set to name-only. */
-  nameOnly: string[];
-}
-
-export interface SimulateOptions {
-  budgetChars: number;
-  priority: (name: string) => number;
-}
-
-interface Entry {
-  skill: ListingSkill;
-  index: number;
-  nameLine: number;
-  fullLine: number;
-  fixed: boolean;
-}
-
-export function simulateListing(
-  skills: readonly ListingSkill[],
-  opts: SimulateOptions,
-): ListingSimulation {
-  const entries: Entry[] = skills.map((skill, index) => {
-    const nameLine = `- ${skill.name}`.length;
-    const fullLine = skill.nameOnly ? nameLine : nameLine + 2 + renderedDescription(skill).length;
-    return { skill, index, nameLine, fullLine, fixed: Boolean(skill.nameOnly || skill.bundled) };
-  });
-  const newlines = Math.max(0, entries.length - 1);
-  const fullChars = entries.reduce((sum, e) => sum + e.fullLine, 0) + newlines;
-  const nameOnly = skills.filter((s) => s.nameOnly).map((s) => s.name);
-  const base = { budgetChars: opts.budgetChars, fullChars, nameOnly };
-
-  if (fullChars <= opts.budgetChars) {
-    return { ...base, mode: 'fits', renderedChars: fullChars, collapsed: [] };
+function isWide(cp: number): boolean {
+  let lo = 0;
+  let hi = WIDE_RANGES.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const [a, b] = WIDE_RANGES[mid];
+    if (cp < a) hi = mid - 1;
+    else if (cp > b) lo = mid + 1;
+    else return true;
   }
+  return false;
+}
 
-  const floor =
-    entries.reduce((sum, e) => sum + (e.fixed ? e.fullLine : e.nameLine), 0) + newlines;
-  let remaining = opts.budgetChars - floor;
-  // Array.prototype.sort is stable, so equal priorities keep listing order —
-  // the same tie-break Claude Code gets.
-  const candidates = entries
-    .filter((e) => !e.fixed)
-    .sort((a, b) => opts.priority(b.skill.name) - opts.priority(a.skill.name));
-  const kept = new Set<number>();
-  for (const e of candidates) {
-    const extra = e.fullLine - e.nameLine;
-    if (extra <= remaining) {
-      kept.add(e.index);
-      remaining -= extra;
-    }
+/** Terminal display width: wide characters count 2, combining marks 0. */
+export function displayWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) {
+    if (ZERO_WIDTH.test(ch)) continue;
+    width += isWide(ch.codePointAt(0)!) ? 2 : 1;
   }
-  const collapsedEntries = entries.filter((e) => !e.fixed && !kept.has(e.index));
-  const renderedChars =
-    entries.reduce(
-      (sum, e) => sum + (e.fixed || kept.has(e.index) ? e.fullLine : e.nameLine),
-      0,
-    ) + newlines;
-  return {
-    ...base,
-    mode: 'priority',
-    renderedChars,
-    collapsed: collapsedEntries.map((e) => e.skill.name),
-  };
+  return width;
 }

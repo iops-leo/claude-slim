@@ -1,19 +1,26 @@
 // Joins the skill listing Claude Code actually rendered (measured-startup.ts)
 // with what is installed on disk, so the report can say which skills the model
 // sees by name only, where they come from, and what cleaning would change.
+//
+// The measured listing is the baseline. Rebuilding the whole listing from disk
+// cannot work: built-in skills, user commands, MCP skills and project skills
+// share the budget but are not all visible on disk, and a rebuilt baseline
+// disagreed with the logged one by up to 20 collapsed skills. Only the change
+// a cleanup makes is estimated.
 import type { Issue, SkillInfo } from '../types.js';
 import type { MeasuredStartup } from './measured-startup.js';
 import {
   DEFAULT_BUDGET_FRACTION,
+  displayWidth,
   listingBudgetChars,
-  simulateListing,
   skillPriority,
-  type ListingSkill,
   type SkillUsageRecord,
 } from './listing-budget.js';
 
 /** Context windows Claude Code models ship with. */
 const STANDARD_WINDOWS = [200_000, 1_000_000];
+/** Listing cost assumed for a skill whose SKILL.md could not be matched. */
+const UNKNOWN_SKILL_TOKENS = 30;
 
 // Claude Code budgets 4 chars/token for these model families and 3 for
 // everything newer (2.1.323). Matched on the normalized model id.
@@ -31,7 +38,7 @@ export function bytesPerTokenForModel(model: string | undefined): number {
 }
 
 export interface BudgetSettings {
-  /** `SLASH_COMMAND_TOOL_CHAR_BUDGET`. */
+  /** `SLASH_COMMAND_TOOL_CHAR_BUDGET`, from settings `env` or the environment. */
   env?: string;
   /** Effective `skillListingBudgetFraction`. */
   fraction?: number;
@@ -45,14 +52,14 @@ export interface InferredBudget {
 /**
  * The listing budget for the measured session. The context window is not in
  * the log, so pick the smallest standard window whose budget holds what was
- * rendered — a rendered listing never exceeds its budget.
+ * rendered — a rendered listing never exceeds its budget. Only trustworthy as
+ * an exact figure when the listing overflowed; otherwise it is a lower bound.
  */
 export function inferBudgetChars(m: MeasuredStartup, s: BudgetSettings): InferredBudget {
-  const bytesPerToken = bytesPerTokenForModel(m.model);
-  const fromEnv = listingBudgetChars({ bytesPerToken, envOverride: s.env, contextWindowTokens: 1 });
   const envValue = Number.parseInt(s.env ?? '', 10);
-  if (Number.isFinite(envValue) && envValue > 0) return { chars: fromEnv, basis: 'env' };
-  const rendered = m.skillListing?.chars ?? 0;
+  if (Number.isFinite(envValue) && envValue > 0) return { chars: envValue, basis: 'env' };
+  const bytesPerToken = bytesPerTokenForModel(m.model);
+  const rendered = m.skillListing?.width ?? m.skillListing?.chars ?? 0;
   const candidates = STANDARD_WINDOWS.map((w) =>
     listingBudgetChars({ contextWindowTokens: w, bytesPerToken, fraction: s.fraction ?? DEFAULT_BUDGET_FRACTION }),
   );
@@ -72,15 +79,24 @@ export interface ListingVisibility {
   sessionFile: string;
   sessionDate?: string;
   claudeCodeVersion?: string;
+  entrypoint?: string;
   fromOtherProject: boolean;
   skillCount: number;
   listingChars: number;
+  listingWidth: number;
   listingTokens: number;
   budgetChars: number;
   budgetBasis: InferredBudget['basis'];
-  /** Rendered listing expressed in tokens at the budget — the listing's ceiling. */
-  budgetTokens: number;
+  /** Skills shown without a description because the budget ran out. */
   collapsed: CollapsedSkill[];
+  /** Skills the user set to `name-only` — shown that way by choice, not by the budget. */
+  nameOnlyByChoice: number;
+  /**
+   * Present only when the listing overflowed: what it costs at the budget, and
+   * what it would cost with every hidden description shown. Below the budget
+   * neither applies — the listing costs exactly what its lines add up to.
+   */
+  overBudget?: { capTokens: number; fullTokens: number };
   /** Descriptions that would come back if every skill flagged unused were cleaned. */
   restoredIfFlaggedCleaned: number;
 }
@@ -128,65 +144,77 @@ export function analyzeListingVisibility(
   const listing = m?.skillListing;
   if (!m || !listing) return null;
   const budget = inferBudgetChars(m, ctx.settings);
-  const tokensPerChar = listing.chars > 0 ? listing.tokens / listing.chars : 1 / 3;
+  const width = listing.width || listing.chars;
+  const tokensPerWidth = width > 0 ? listing.tokens / width : 1 / 3;
   const disk = indexDisk(ctx);
-
-  const collapsed: CollapsedSkill[] = listing.entries
-    .filter((e) => e.collapsed)
-    .map((e) => {
-      const hit = disk.get(e.name);
-      if (!hit) return { name: e.name, source: 'unknown' as const, flaggedUnused: false };
-      const owner = hit.skill.source === 'plugin' ? hit.skill.plugin ?? hit.skill.pluginName : undefined;
-      return {
-        name: e.name,
-        source: hit.skill.source,
-        ...(owner ? { plugin: owner } : {}),
-        flaggedUnused: hit.flaggedUnused,
-      };
-    });
-
-  // Rebuild the listing for the simulator. Shown entries carry their exact
-  // description length; collapsed ones get an estimate from the disk listing
-  // cost. Unknown names that were shown are bundled or MCP skills — fixed.
   const overrides = ctx.settings.skillOverrides ?? {};
-  const charsPerToken = 1 / tokensPerChar;
-  const rebuilt: Array<ListingSkill & { flagged: boolean }> = listing.entries.map((e) => {
-    const hit = disk.get(e.name);
-    const nameLine = `- ${e.name}`.length;
-    const descLen = e.collapsed
-      ? Math.max(0, Math.round((hit?.skill.listingTokens ?? 30) * charsPerToken) - nameLine - 2)
-      : Math.max(0, e.chars - nameLine - 2);
-    return {
-      name: e.name,
-      description: 'x'.repeat(descLen),
-      nameOnly: overrides[e.name] === 'name-only',
-      bundled: !hit && !e.collapsed,
-      flagged: hit?.flaggedUnused ?? false,
-    };
-  });
-  const priority = (name: string): number => skillPriority(ctx.skillUsage[name], ctx.now);
-  const before = simulateListing(rebuilt, { budgetChars: budget.chars, priority });
-  const after = simulateListing(
-    rebuilt.filter((s) => !s.flagged),
-    { budgetChars: budget.chars, priority },
+  const byChoice = (name: string): boolean => overrides[name] === 'name-only';
+
+  const describe = (name: string): CollapsedSkill => {
+    const hit = disk.get(name);
+    if (!hit) return { name, source: 'unknown', flaggedUnused: false };
+    const owner = hit.skill.source === 'plugin' ? hit.skill.plugin ?? hit.skill.pluginName : undefined;
+    return { name, source: hit.skill.source, ...(owner ? { plugin: owner } : {}), flaggedUnused: hit.flaggedUnused };
+  };
+  const collapsedEntries = listing.entries.filter((e) => e.collapsed && !byChoice(e.name));
+  const collapsed = collapsedEntries.map((e) => describe(e.name));
+
+  // Tokens a hidden description would add back: the disk listing line minus
+  // its name. Unmatched skills get a flat estimate.
+  const hiddenTokens = (name: string): number => {
+    const hit = disk.get(name);
+    const line = hit?.skill.listingTokens ?? UNKNOWN_SKILL_TOKENS;
+    return Math.max(1, Math.round(line - displayWidth(`- ${name}: `) * tokensPerWidth));
+  };
+
+  // What cleaning every flagged skill would free, in budget width: the unused
+  // slack, each flagged line in full, and its newline. Then hand the room back
+  // to collapsed skills in Claude Code's priority order, greedily, as it does.
+  const flagged = new Set(
+    listing.entries.filter((e) => disk.get(e.name)?.flaggedUnused).map((e) => e.name),
   );
-  // Flagged skills that were collapsed leave with the cleanup; they are not "restored".
-  const flaggedNames = new Set(rebuilt.filter((s) => s.flagged).map((s) => s.name));
-  const keptCollapsedBefore = before.collapsed.filter((n) => !flaggedNames.has(n)).length;
-  const restored = Math.max(0, keptCollapsedBefore - after.collapsed.length);
+  let room =
+    Math.max(0, budget.chars - width) +
+    listing.entries
+      .filter((e) => flagged.has(e.name))
+      .reduce((sum, e) => sum + e.width + 1, 0);
+  const priority = (name: string): number => skillPriority(ctx.skillUsage[name], ctx.now);
+  const candidates = collapsedEntries
+    .filter((e) => !flagged.has(e.name))
+    .sort((a, b) => priority(b.name) - priority(a.name));
+  let restored = 0;
+  for (const e of candidates) {
+    const need = Math.round(hiddenTokens(e.name) / tokensPerWidth) + 2;
+    if (need <= room) {
+      room -= need;
+      restored += 1;
+    }
+  }
+
+  const overBudget =
+    collapsed.length > 0
+      ? (() => {
+          const capTokens = Math.round(budget.chars * tokensPerWidth);
+          const hidden = collapsedEntries.reduce((sum, e) => sum + hiddenTokens(e.name), 0);
+          return { capTokens, fullTokens: capTokens + hidden };
+        })()
+      : undefined;
 
   return {
     sessionFile: m.sessionFile,
     ...(m.timestamp ? { sessionDate: m.timestamp.slice(0, 10) } : {}),
     ...(m.version ? { claudeCodeVersion: m.version } : {}),
+    ...(m.entrypoint ? { entrypoint: m.entrypoint } : {}),
     fromOtherProject: m.fromOtherProject,
     skillCount: listing.skillCount,
     listingChars: listing.chars,
+    listingWidth: width,
     listingTokens: listing.tokens,
     budgetChars: budget.chars,
     budgetBasis: budget.basis,
-    budgetTokens: Math.round(budget.chars * tokensPerChar),
     collapsed,
+    nameOnlyByChoice: listing.entries.filter((e) => byChoice(e.name)).length,
+    ...(overBudget ? { overBudget } : {}),
     restoredIfFlaggedCleaned: restored,
   };
 }

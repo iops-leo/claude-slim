@@ -276,19 +276,25 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     issues,
     skillUsage: listingSettings.skillUsage,
     settings: {
-      env: process.env.SLASH_COMMAND_TOOL_CHAR_BUDGET,
+      // Claude Code applies settings `env` over the inherited environment.
+      env: listingSettings.envBudget ?? process.env.SLASH_COMMAND_TOOL_CHAR_BUDGET,
       fraction: listingSettings.fraction,
       skillOverrides: listingSettings.skillOverrides,
     },
     now: Date.now(),
   });
-  const listingCapTokens = listingVisibility?.budgetTokens;
-  const skillListingTokens = cappedListingTokens(skillListingUncappedTokens, listingCapTokens);
+  // User commands share the skill listing and its budget. The cap applies only
+  // when the measured listing overflowed — below the budget it is merely a
+  // lower bound and would understate a listing that fits.
+  const listingCapTokens = listingVisibility?.overBudget?.capTokens;
+  const listingFamilyTokens = cappedListingTokens(
+    skillListingUncappedTokens + commandListingTokens,
+    listingCapTokens,
+  );
 
   const totalTokensBefore =
-    skillListingTokens +
+    listingFamilyTokens +
     agentListingTokens +
-    commandListingTokens +
     claudeMdTokens +
     claudeMdImportTokens +
     rulesStartupTokens +
@@ -314,7 +320,10 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     // memory is on and not redirected; otherwise cleaning it recovers nothing.
     memoryLocation.disabled || memoryLocation.customDir ? '\u0000' : currentProjectSlug,
     pluginSkillListingTokens,
-    { fullTokens: skillListingUncappedTokens, capTokens: listingCapTokens },
+    {
+      fullTokens: listingVisibility?.overBudget?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
+      capTokens: listingCapTokens,
+    },
   );
 
   // Labels below are authored by whoever wrote each skill, plugin, or memory
@@ -359,7 +368,8 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
       effectiveDays: sessionUsage.effectiveLookbackDays,
       cleanupPeriodDays,
     },
-    skillListingUncappedTokens,
+    skillListingUncappedTokens:
+      listingVisibility?.overBudget?.fullTokens ?? skillListingUncappedTokens + commandListingTokens,
     ...(measuredStartup ? { measuredStartup } : {}),
     ...(listingVisibility ? { listingVisibility } : {}),
   });

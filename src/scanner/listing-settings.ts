@@ -8,6 +8,8 @@ type Json = Record<string, unknown>;
 
 export interface ListingSettings {
   fraction?: number;
+  /** `SLASH_COMMAND_TOOL_CHAR_BUDGET` from a settings `env` block. */
+  envBudget?: string;
   skillOverrides: Record<string, unknown>;
   skillUsage: Record<string, SkillUsageRecord>;
 }
@@ -37,14 +39,18 @@ export function listingSettingsFrom(src: SettingsSources): ListingSettings {
     src.managedSettings,
   ].filter(isObject);
   let fraction: number | undefined;
+  let envBudget: string | undefined;
   let skillOverrides: Record<string, unknown> = {};
   for (const layer of layers) {
     const f = layer.skillListingBudgetFraction;
     if (typeof f === 'number' && f > 0) fraction = f;
     if (isObject(layer.skillOverrides)) skillOverrides = { ...skillOverrides, ...layer.skillOverrides };
+    const env = isObject(layer.env) ? layer.env.SLASH_COMMAND_TOOL_CHAR_BUDGET : undefined;
+    if (typeof env === 'string' || typeof env === 'number') envBudget = String(env);
   }
   return {
     ...(fraction !== undefined ? { fraction } : {}),
+    ...(envBudget !== undefined ? { envBudget } : {}),
     skillOverrides,
     skillUsage: readUsage(src.claudeJson),
   };

@@ -54,7 +54,7 @@ export function formatMeasuredSection(result: ScanResult): string[] {
   }
   lines.push(
     row('Skill listing', v.listingTokens,
-      `${v.listingChars.toLocaleString()} / ${v.budgetChars.toLocaleString()} chars budget · ${v.skillCount} skills`),
+      `${v.listingWidth.toLocaleString()} / ${v.budgetChars.toLocaleString()} columns budget · ${v.skillCount} skills`),
   );
   const d = m.deferredTools;
   if (d && d.count > 0) {
@@ -96,6 +96,9 @@ export function formatMeasuredSection(result: ScanResult): string[] {
       lines.push(
         `    Cleaning the skills flagged unused below would bring back ~${v.restoredIfFlaggedCleaned} descriptions.`,
       );
+    }
+    if (v.nameOnlyByChoice > 0) {
+      lines.push(`    ${DIM}(${v.nameOnlyByChoice} more are name-only by your skillOverrides — not counted here)${RESET}`);
     }
     lines.push(
       `    ${DIM}Also: set skills you only call by hand to "name-only" in skillOverrides, ` +

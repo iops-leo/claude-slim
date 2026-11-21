@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   listingBudgetChars,
   skillPriority,
-  simulateListing,
-  renderedDescription,
-  MAX_DESC_CHARS,
+  displayWidth,
 } from '../scanner/listing-budget.js';
 
 const DAY = 86_400_000;
@@ -55,74 +53,12 @@ describe('skillPriority', () => {
   });
 });
 
-describe('renderedDescription', () => {
-  it('appends when_to_use after " - "', () => {
-    expect(renderedDescription({ name: 'a', description: 'Does X.', whenToUse: 'When Y.' })).toBe(
-      'Does X. - When Y.',
-    );
-  });
-
-  it('truncates past the per-skill cap with an ellipsis', () => {
-    const out = renderedDescription({ name: 'a', description: 'x'.repeat(MAX_DESC_CHARS + 50) });
-    expect(out.length).toBe(MAX_DESC_CHARS);
-    expect(out.endsWith('…')).toBe(true);
-  });
-});
-
-describe('simulateListing', () => {
-  const skill = (name: string, descLen: number) => ({ name, description: 'd'.repeat(descLen) });
-
-  it('keeps every description when the listing fits', () => {
-    const r = simulateListing([skill('a', 10), skill('b', 10)], {
-      budgetChars: 1_000,
-      priority: () => 0,
-    });
-    expect(r.mode).toBe('fits');
-    expect(r.collapsed).toEqual([]);
-    // "- a: dddddddddd" is 15 chars, two lines plus one newline.
-    expect(r.fullChars).toBe(31);
-    expect(r.renderedChars).toBe(31);
-  });
-
-  it('collapses the lowest-priority skills to their names when over budget', () => {
-    const skills = [skill('hot', 40), skill('cold', 40), skill('warm', 40)];
-    const pri: Record<string, number> = { hot: 10, warm: 5, cold: 0 };
-    // name-only floor: "- hot"(5)+"- cold"(6)+"- warm"(6)+2 newlines = 19.
-    // Each description adds 42 (": " + 40). Budget 110 leaves 91 → two fit.
-    const r = simulateListing(skills, { budgetChars: 110, priority: (n) => pri[n] });
-    expect(r.mode).toBe('priority');
-    expect(r.collapsed).toEqual(['cold']);
-    expect(r.renderedChars).toBe(19 + 42 + 42);
-  });
-
-  it('keeps a lower-priority short description when a higher one does not fit (greedy)', () => {
-    const skills = [skill('big', 200), skill('small', 5)];
-    const r = simulateListing(skills, {
-      budgetChars: 40,
-      priority: (n) => (n === 'big' ? 10 : 1),
-    });
-    expect(r.collapsed).toEqual(['big']);
-  });
-
-  it('never collapses name-only or bundled skills and counts them in full', () => {
-    const skills = [
-      { name: 'manual', description: 'd'.repeat(100), nameOnly: true },
-      { name: 'builtin', description: 'd'.repeat(30), bundled: true },
-      skill('user', 30),
-    ];
-    const r = simulateListing(skills, { budgetChars: 60, priority: () => 0 });
-    expect(r.collapsed).toEqual(['user']);
-    expect(r.nameOnly).toEqual(['manual']);
-  });
-
-  it('reports how many descriptions come back when skills are removed', () => {
-    const skills = [skill('a', 40), skill('b', 40), skill('c', 40)];
-    const before = simulateListing(skills, { budgetChars: 70, priority: () => 0 });
-    const after = simulateListing(
-      skills.filter((s) => s.name !== 'a'),
-      { budgetChars: 70, priority: () => 0 },
-    );
-    expect(before.collapsed.length).toBe(2);
-    expect(after.collapsed.length).toBe(1);
+describe('displayWidth', () => {
+  it('counts Hangul, CJK and emoji as two columns', () => {
+    expect(displayWidth('abc')).toBe(3);
+    expect(displayWidth('한글')).toBe(4);
+    expect(displayWidth('日本')).toBe(4);
+    expect(displayWidth('🚀')).toBe(2);
+    expect(displayWidth('é')).toBe(1);
   });
 });

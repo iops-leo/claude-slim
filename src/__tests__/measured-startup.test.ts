@@ -128,6 +128,23 @@ describe('readStartupAttachments', () => {
     expect(await readStartupAttachments(f)).toBeNull();
   });
 
+  it('takes the model from the first real reply, not a <synthetic> notice', async () => {
+    const f = join(dir, 's.jsonl');
+    const synthetic = { type: 'assistant', message: { model: '<synthetic>', role: 'assistant', content: [{ type: 'text', text: 'notice' }] } };
+    await writeFile(f, sessionLines({ extra: [synthetic] }));
+    const m = await readStartupAttachments(f);
+    expect(m!.model).toBe('claude-opus-5-5');
+    expect(m!.firstTurnInputTokens).toBe(152);
+  });
+
+  it('records the listing display width alongside its length', async () => {
+    const f = join(dir, 's.jsonl');
+    await writeFile(f, sessionLines({ listing: { content: '- k: 한글', names: ['k'] } }));
+    const m = await readStartupAttachments(f);
+    expect(m!.skillListing!.chars).toBe(7);
+    expect(m!.skillListing!.width).toBe(9);
+  });
+
   it('skips unparseable lines', async () => {
     const f = join(dir, 's.jsonl');
     await writeFile(f, '{not json\n' + sessionLines());
@@ -152,17 +169,19 @@ describe('findMeasuredSession', () => {
     await utimes(f, t, t);
   }
 
-  it('prefers the newest interactive session in the current project over headless ones', async () => {
+  it('takes the newest session with a listing, whatever its entrypoint', async () => {
     await put('proj', 'old-cli.jsonl', sessionLines({ entrypoint: 'cli' }), 300);
     await put('proj', 'new-sdk.jsonl', sessionLines({ entrypoint: 'sdk-cli' }), 10);
     const m = await findMeasuredSession(projects, 'proj');
-    expect(m?.sessionFile.endsWith('old-cli.jsonl')).toBe(true);
+    expect(m?.sessionFile.endsWith('new-sdk.jsonl')).toBe(true);
+    expect(m?.entrypoint).toBe('sdk-cli');
   });
 
-  it('falls back to a headless session when there is no interactive one', async () => {
-    await put('proj', 'only-sdk.jsonl', sessionLines({ entrypoint: 'sdk-cli' }), 10);
+  it('skips a newer log that has no skill listing', async () => {
+    await put('proj', 'with.jsonl', sessionLines(), 300);
+    await put('proj', 'without.jsonl', line({ type: 'user', message: { content: 'x' } }), 10);
     const m = await findMeasuredSession(projects, 'proj');
-    expect(m?.entrypoint).toBe('sdk-cli');
+    expect(m?.sessionFile.endsWith('with.jsonl')).toBe(true);
   });
 
   it('falls back to the newest session in any project', async () => {

@@ -37,11 +37,13 @@ describe('formatMeasuredSection', () => {
             claudeCodeVersion: '2.1.323',
             fromOtherProject: false,
             skillCount: 5,
-            listingChars: 5_900,
+            listingChars: 5_700,
+            listingWidth: 5_900,
             listingTokens: 1_900,
             budgetChars: 6_000,
             budgetBasis: 'inferred',
-            budgetTokens: 1_950,
+            nameOnlyByChoice: 1,
+            overBudget: { capTokens: 1_950, fullTokens: 2_400 },
             collapsed: [
               { name: 'omc:ralph', source: 'plugin', plugin: 'omc', flaggedUnused: false },
               { name: 'omc:plan', source: 'plugin', plugin: 'omc', flaggedUnused: false },
@@ -55,7 +57,8 @@ describe('formatMeasuredSection', () => {
     expect(out).toContain('MEASURED AT SESSION START');
     expect(out).toContain('2026-11-20 · Claude Code 2.1.323 · this project');
     expect(out).toContain('80,430 tok');
-    expect(out).toContain('5,900 / 6,000 chars budget · 5 skills');
+    expect(out).toContain('5,900 / 6,000 columns budget · 5 skills');
+    expect(out).toContain('1 more are name-only by your skillOverrides');
     expect(out).toContain('3 of 5 skills are listed by name only');
     expect(out).toMatch(/plugin omc\s+2\s+ralph, plan/);
     expect(out).toMatch(/local\s+1\s+idle \(unused\)/);

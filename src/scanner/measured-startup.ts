@@ -12,10 +12,13 @@ import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { countTokens } from '../tokenizer.js';
+import { displayWidth } from './listing-budget.js';
 
 export interface ListingEntry {
   name: string;
   chars: number;
+  /** Display width of the entry, the unit Claude Code budgets in. */
+  width: number;
   /** Rendered as a bare name: the model sees no description for it. */
   collapsed: boolean;
 }
@@ -45,7 +48,14 @@ export interface MeasuredStartup {
   timestamp?: string;
   /** input + cache creation + cache read on the first assistant turn. */
   firstTurnInputTokens?: number;
-  skillListing?: { chars: number; tokens: number; skillCount: number; entries: ListingEntry[] };
+  /** `chars` is string length; `width` is display width, the unit the budget is spent in. */
+  skillListing?: {
+    chars: number;
+    width: number;
+    tokens: number;
+    skillCount: number;
+    entries: ListingEntry[];
+  };
   agentListing?: { chars: number; tokens: number; count: number };
   mcpInstructions?: { chars: number; tokens: number; servers: Array<{ name: string; chars: number }> };
   deferredTools?: DeferredToolsSummary;
@@ -55,9 +65,6 @@ export interface MeasuredStartup {
 const BUILT_IN = '(built-in)';
 const MCP_TOOL = /^mcp__(.+?)__(.+)$/;
 const ALIAS_ONLY = /^ \([^)\n]*\)$/;
-/** Headless SDK sessions run with their own prompts; prefer anything else. */
-const isHeadless = (entrypoint: string | undefined): boolean =>
-  entrypoint !== undefined && entrypoint.startsWith('sdk');
 const MAX_CANDIDATES = 40;
 
 /**
@@ -88,11 +95,16 @@ export function parseSkillListing(content: string, names: readonly string[]): Li
   }
   return names.map((name, i) => {
     const start = starts[i];
-    if (start === -1) return { name, chars: 0, collapsed: false };
+    if (start === -1) return { name, chars: 0, width: 0, collapsed: false };
     const next = starts.slice(i + 1).find((s) => s !== -1);
     const end = next === undefined ? content.length : next - 1;
     const rest = content.slice(start + 2 + name.length, end);
-    return { name, chars: end - start, collapsed: rest === '' || ALIAS_ONLY.test(rest) };
+    return {
+      name,
+      chars: end - start,
+      width: displayWidth(content.slice(start, end)),
+      collapsed: rest === '' || ALIAS_ONLY.test(rest),
+    };
   });
 }
 
@@ -169,6 +181,7 @@ function applyAttachment(m: MeasuredStartup, a: Json): void {
       const names = asStrings(a.names);
       m.skillListing = {
         chars: a.content.length,
+        width: displayWidth(a.content),
         tokens: countTokens(a.content),
         skillCount: names.length,
         entries: parseSkillListing(a.content, names),
@@ -257,6 +270,9 @@ export async function readStartupAttachments(
         applyAttachment(m, o.attachment as Json);
       } else if (o.type === 'assistant' && o.isSidechain !== true) {
         const msg = (o.message ?? {}) as Json;
+        // A `<synthetic>` reply (a local notice, not a model turn) carries no
+        // real model or usage; the first real turn follows it.
+        if (msg.model === '<synthetic>') continue;
         if (typeof msg.model === 'string') m.model = msg.model;
         m.firstTurnInputTokens = sumUsage(msg.usage);
         break;
@@ -292,20 +308,21 @@ async function pick(
   logs: Array<{ file: string }>,
   fromOtherProject: boolean,
 ): Promise<MeasuredStartup | null> {
-  let headless: MeasuredStartup | null = null;
+  // Newest first, whatever the entrypoint. Many people drive Claude Code
+  // through an SDK-based front end, so `sdk-cli` sessions are their real
+  // sessions; automation that runs without skills has no listing and is
+  // skipped by readStartupAttachments returning null.
   for (const { file } of logs) {
     const m = await readStartupAttachments(file, fromOtherProject);
-    if (!m) continue;
-    if (!isHeadless(m.entrypoint)) return m;
-    headless ??= m;
+    if (m) return m;
   }
-  return headless;
+  return null;
 }
 
 /**
- * The newest session in `slug` that recorded its startup context, preferring
- * interactive sessions. Falls back to the newest such session in any project
- * (flagged `fromOtherProject`, since memory and project CLAUDE.md differ).
+ * The newest session in `slug` that recorded its startup context. Falls back
+ * to the newest such session in any project (flagged `fromOtherProject`,
+ * since memory and project CLAUDE.md differ).
  */
 export async function findMeasuredSession(
   projectsDir: string,

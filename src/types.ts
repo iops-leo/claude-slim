@@ -207,9 +207,10 @@ export interface ScanResult {
    */
   usageWindow?: UsageWindow;
   /**
-   * Skill-listing tokens before the listing budget is applied. Equal to the
-   * listing share of `totalTokensBefore` unless the listing is over budget,
-   * in which case Claude Code renders only `listingVisibility.budgetTokens`.
+   * The skill listing (skills and user commands) with every description
+   * shown. When the measured listing overflowed, this is the whole listing —
+   * built-in and MCP skills included — and Claude Code renders only
+   * `listingVisibility.overBudget.capTokens` of it.
    */
   skillListingUncappedTokens?: number;
   /** Session-start context as recorded in the newest session log, if any. */
