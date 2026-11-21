@@ -224,7 +224,10 @@ export function formatScanSummary(result: ScanResult): string {
   const sortedPlugins = [...result.plugins].sort((a, b) => b.skillCount - a.skillCount);
   for (const plugin of sortedPlugins) {
     const status = plugin.status === 'disabled' ? ' \x1b[33m(disabled)\x1b[0m' : '';
-    lines.push(`    ${plugin.name.padEnd(28)} ${String(plugin.skillCount).padStart(3)} skills${status}`);
+    const market = plugin.marketplace && plugin.marketplace !== plugin.name
+      ? `  \x1b[90m@${plugin.marketplace}\x1b[0m`
+      : '';
+    lines.push(`    ${plugin.name.padEnd(28)} ${String(plugin.skillCount).padStart(3)} skills${market}${status}`);
   }
 
   // --- CLAUDE.MD ---

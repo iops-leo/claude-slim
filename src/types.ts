@@ -22,8 +22,8 @@ export interface SkillInfo {
   source: 'local' | 'plugin' | 'synced';
   /**
    * Cache directory this skill was found under — the *marketplace*, not the
-   * plugin. Kept as-is because `plugins[]` and the `disabled_plugin` detector
-   * match cache directories by this name (see parseDisabledPlugins).
+   * plugin. Together with `plugin` it forms the `<plugin>@<marketplace>`
+   * identity enable state is keyed by.
    */
   pluginName?: string;
   /**
@@ -61,7 +61,10 @@ export interface MemoryFile {
 }
 
 export interface PluginInfo {
+  /** Plugin name; the cache entry's name when it has no plugin level. */
   name: string;
+  /** Marketplace (cache directory) the plugin was installed from. */
+  marketplace?: string;
   skillCount: number;
   skills: string[];
   status?: 'enabled' | 'disabled';

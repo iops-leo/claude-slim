@@ -17,7 +17,7 @@ import { scanSyncedSkills } from './synced-skills.js';
 import { resolveProjectMemory } from './project-memory.js';
 import { scanMcpServers, getClaudeJsonPath } from './mcp.js';
 import { parseClaudeMdSections } from './claude-md.js';
-import { getDisabledPlugins, getInstalledPlugins } from './disabled-plugins.js';
+import { getDisabledPlugins, getInstalledPlugins, pluginIdentity as pluginIdentityOf } from './disabled-plugins.js';
 import { scanSessionUsage, readCleanupPeriodDays } from './sessions.js';
 import { readUsageRecord } from './usage-record.js';
 import { classifyIssues } from './detectors.js';
@@ -78,9 +78,10 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
 
   const pluginSurfaces = scanPluginSurfaces();
 
-  // Annotate plugin status
+  // Annotate plugin status, per `<plugin>@<marketplace>`.
   for (const plugin of plugins) {
-    plugin.status = disabledPlugins.has(plugin.name) ? 'disabled' : 'enabled';
+    const id = pluginIdentityOf(plugin.name, plugin.marketplace ?? plugin.name);
+    plugin.status = disabledPlugins.has(id) ? 'disabled' : 'enabled';
   }
 
   // Build enabled plugin list for unused_plugin detector. `plugins[].name` from

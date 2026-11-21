@@ -1,26 +1,26 @@
 import { runCommand } from './fs-walk.js';
 
+/** `<plugin>@<marketplace>` — the unit Claude Code enables and disables. */
+export function pluginIdentity(plugin: string, marketplace: string): string {
+  return `${plugin}@${marketplace}`;
+}
+
+/**
+ * Plugins `claude plugin list` reports disabled, as `<plugin>@<marketplace>`.
+ *
+ * Per plugin, not per marketplace: collapsing to the marketplace (pre-2.17)
+ * marked every plugin from it disabled as soon as one was. The list has one
+ * row per scope, so an identity enabled in any scope counts as enabled.
+ */
 export function parseDisabledPlugins(output: string): Set<string> {
-  const disabled = new Set<string>();
-  if (!output) return disabled;
-
-  let currentName: string | null = null;
-
-  for (const line of output.split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('❯')) {
-      const full = trimmed.split('❯')[1]?.trim() || '';
-      // Format: sub-plugin@marketplace — extract marketplace name for cache dir matching
-      currentName = full.includes('@') ? full.split('@')[1] : full;
-    } else if (trimmed.toLowerCase().includes('disabled') && currentName) {
-      disabled.add(currentName);
-      currentName = null;
-    } else if (trimmed.toLowerCase().includes('enabled')) {
-      currentName = null;
-    }
-  }
-
-  return disabled;
+  const rows = parseInstalledPlugins(output);
+  const enabled = new Set(rows.filter((p) => p.enabled).map((p) => pluginIdentity(p.name, p.marketplace)));
+  return new Set(
+    rows
+      .filter((p) => !p.enabled)
+      .map((p) => pluginIdentity(p.name, p.marketplace))
+      .filter((id) => !enabled.has(id)),
+  );
 }
 
 export async function getDisabledPlugins(): Promise<Set<string>> {
@@ -33,10 +33,8 @@ export interface InstalledPlugin {
   enabled: boolean;
 }
 
-// Parse `claude plugin list` output into per-plugin entries. Unlike
-// parseDisabledPlugins (which collapses to marketplace name for cache-dir
-// matching), this preserves the full <plugin>@<marketplace> pair so callers
-// can match against plugin surface scanning by exact plugin name.
+// Parse `claude plugin list` output into per-plugin entries, preserving the
+// full <plugin>@<marketplace> pair.
 export function parseInstalledPlugins(output: string): InstalledPlugin[] {
   const plugins: InstalledPlugin[] = [];
   if (!output) return plugins;

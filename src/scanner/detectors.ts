@@ -21,6 +21,7 @@ export interface DetectorContext {
   memoryFiles: MemoryFile[];
   tempCaches: TempCache[];
   staleProjects: StaleProject[];
+  /** Disabled plugins as `<plugin>@<marketplace>`. */
   disabledPlugins: Set<string>;
   plugins: PluginInfo[];
   // SKILL.md content keyed by absolute path, populated during local-skill scan.
@@ -390,16 +391,20 @@ const disabledPluginDetector: Detector = {
   detect({ plugins, disabledPlugins }) {
     const issues: Issue[] = [];
     for (const plugin of plugins) {
-      if (disabledPlugins.has(plugin.name)) {
-        issues.push({
-          type: 'disabled_plugin',
-          tier: 2,
-          name: plugin.name,
-          detail: `${plugin.skillCount} skills`,
-          tokens: plugin.skillCount * SKILL_PROMPT_OVERHEAD_TOKENS,
-          path: join(getPluginsDir(), plugin.name),
-        });
-      }
+      // `disabledPlugins` holds `<plugin>@<marketplace>` identities.
+      const marketplace = plugin.marketplace ?? plugin.name;
+      if (!disabledPlugins.has(`${plugin.name}@${marketplace}`)) continue;
+      issues.push({
+        type: 'disabled_plugin',
+        tier: 2,
+        name: plugin.name,
+        marketplace,
+        detail: `${plugin.skillCount} skills, ${marketplace}`,
+        tokens: plugin.skillCount * SKILL_PROMPT_OVERHEAD_TOKENS,
+        path: plugin.name === marketplace
+          ? join(getPluginsDir(), marketplace)
+          : join(getPluginsDir(), marketplace, plugin.name),
+      });
     }
     return issues;
   },
