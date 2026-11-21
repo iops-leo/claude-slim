@@ -19,6 +19,7 @@ import { scanMcpServers, getClaudeJsonPath } from './mcp.js';
 import { parseClaudeMdSections } from './claude-md.js';
 import { getDisabledPlugins, getInstalledPlugins } from './disabled-plugins.js';
 import { scanSessionUsage } from './sessions.js';
+import { readUsageRecord } from './usage-record.js';
 import { classifyIssues } from './detectors.js';
 import { scanPluginSurfaces } from './plugin-surfaces.js';
 import { computePluginBreakdown } from './plugin-breakdown.js';
@@ -57,6 +58,7 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     sessionUsage,
     userSurfaces,
     userRules,
+    usageRecord,
   ] = await Promise.all([
     scanLocalSkills(),
     scanPluginSkills(),
@@ -66,7 +68,12 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     scanSessionUsage(lookbackDays),
     scanUserSurfaces(),
     scanUserRules(),
+    readUsageRecord(lookbackDays),
   ]);
+
+  // Skills seen in a surviving transcript, plus those Claude Code's own usage
+  // record (`skillUsage`, which outlives log cleanup) saw inside the lookback.
+  const invokedSkills = new Set([...sessionUsage.invokedSkills, ...usageRecord.skills]);
 
   const pluginSurfaces = scanPluginSurfaces();
 
@@ -127,7 +134,8 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
     localSkills, pluginSkills, brokenSymlinks, memoryFiles,
     tempCaches, staleProjects, disabledPlugins, plugins,
     contents,
-    recentSkillInvocations: sessionUsage.invokedSkills,
+    recentSkillInvocations: invokedSkills,
+    usedPlugins: usageRecord.plugins,
     sessionDataAvailable: sessionUsage.dataAvailable,
     lookbackDays,
     pluginSurfaces,
@@ -146,7 +154,8 @@ export async function scan(opts: ScanOptions = {}): Promise<ScanResult> {
   const pluginBreakdown = computePluginBreakdown({
     surfaces: pluginSurfaces,
     installedPlugins: installed,
-    invokedSkills: sessionUsage.invokedSkills,
+    invokedSkills,
+    usedPlugins: usageRecord.plugins,
     mcpPrefixesInvoked: sessionUsage.mcpPrefixesInvoked,
     commandsInvoked: sessionUsage.commandsInvoked,
     totalUserCallableInvocations: sessionUsage.totalUserCallableInvocations,

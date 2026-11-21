@@ -9,6 +9,8 @@ export interface PluginBreakdownOptions {
   surfaces: PluginSurfaces[];
   installedPlugins: InstalledPlugin[];
   invokedSkills: Set<string>;
+  /** `plugin@marketplace` identities `.claude.json` `pluginUsage` saw used inside the lookback. */
+  usedPlugins?: Set<string>;
   mcpPrefixesInvoked: Set<string>;
   commandsInvoked: Set<string>;
   totalUserCallableInvocations: number;
@@ -21,13 +23,15 @@ const MIN_SESSIONS = 3;
 function classifyStatus(opts: {
   surface: PluginSurfaces | undefined;
   enabled: boolean;
+  /** `.claude.json` `pluginUsage` recorded a use inside the lookback. */
+  recordedUse: boolean;
   invokedSkills: Set<string>;
   mcpPrefixesInvoked: Set<string>;
   commandsInvoked: Set<string>;
   totalUserCallableInvocations: number;
   sessionsInWindow: number;
 }): PluginBreakdown['status'] {
-  const { surface, enabled, invokedSkills, mcpPrefixesInvoked, commandsInvoked,
+  const { surface, enabled, recordedUse, invokedSkills, mcpPrefixesInvoked, commandsInvoked,
     totalUserCallableInvocations, sessionsInWindow } = opts;
 
   if (!enabled) return 'disabled';
@@ -38,6 +42,10 @@ function classifyStatus(opts: {
     surface.skills.length + surface.mcpServerKeys.length + surface.commands.length;
 
   if (userCallableSurfaces === 0) return 'agent-only';
+
+  // Claude Code's own record outlives the transcripts, so it settles "used"
+  // even when too few logs survive to judge.
+  if (recordedUse) return 'used';
 
   // Suppression: not enough session data
   if (sessionsInWindow < MIN_SESSIONS || totalUserCallableInvocations === 0) {
@@ -55,7 +63,7 @@ function classifyStatus(opts: {
 
 export function computePluginBreakdown(opts: PluginBreakdownOptions): PluginBreakdown[] {
   const {
-    surfaces, installedPlugins, invokedSkills, mcpPrefixesInvoked,
+    surfaces, installedPlugins, invokedSkills, usedPlugins, mcpPrefixesInvoked,
     commandsInvoked, totalUserCallableInvocations, sessionsInWindow, claudeMdSections,
   } = opts;
 
@@ -103,6 +111,7 @@ export function computePluginBreakdown(opts: PluginBreakdownOptions): PluginBrea
     const status = classifyStatus({
       surface,
       enabled,
+      recordedUse: usedPlugins?.has(`${name}@${marketplace}`) ?? false,
       invokedSkills,
       mcpPrefixesInvoked,
       commandsInvoked,

@@ -39,6 +39,8 @@ export interface DetectorContext {
   enabledPlugins: Array<{ name: string; marketplace: string }>;
   recentMcpPrefixes: Set<string>;
   recentCommands: Set<string>;
+  /** `plugin@marketplace` identities `.claude.json` `pluginUsage` saw used inside the lookback. */
+  usedPlugins?: Set<string>;
   totalUserCallableInvocations: number;
   sessionsInWindow: number;
   // Per-plugin estimated token cost keyed by plugin name. Populated from
@@ -263,6 +265,7 @@ const unusedPluginDetector: Detector = {
     recentSkillInvocations,
     recentMcpPrefixes,
     recentCommands,
+    usedPlugins,
     totalUserCallableInvocations,
     sessionsInWindow,
     lookbackDays,
@@ -290,6 +293,7 @@ const unusedPluginDetector: Detector = {
       // cache mtime indiscriminately, making install age unreliable. Dropped.
       // Tier 3 (never auto-selected) lets users sanity-check any flagged plugin.
 
+      if (usedPlugins?.has(`${ps.pluginName}@${ps.marketplace}`)) continue;
       // Usage check: any skill/mcp/command from this plugin invoked?
       if (isPluginSurfaceUsed(ps, {
         skills: recentSkillInvocations,
